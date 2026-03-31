@@ -29,6 +29,7 @@ toml = "1.1.0"
 unicode-normalization = "0.1.25"
 uuid = { version = "1.23.0", features = ["v4", "serde"]}
 walkdir = "2.5.0"
+cosmic-garden-pm = { path = "../cosmicgarden-pm" }
 
 [badges]
 maintenance = { status = "experimental" }

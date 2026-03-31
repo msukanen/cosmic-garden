@@ -7,6 +7,7 @@ mod life_thread;
 use life_thread::life_thread;
 mod io; use io::*;
 mod io_thread; use io_thread::io_thread;
+mod identity;
 
 #[derive(Debug, Parser)]
 #[command(
