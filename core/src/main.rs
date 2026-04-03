@@ -1,14 +1,18 @@
 //! Cosmic Garden — a multi-threaded MUD engine.
-use std::{ops::Deref, time::Duration};
-
 use clap::Parser;
 
-mod life_thread;
-use life_thread::life_thread;
-mod io; use io::*;
-mod io_thread; use io_thread::io_thread;
-mod identity;
+mod io;             use io::*;
+mod io_thread;      use io_thread::io_thread;
+mod life_thread;    use life_thread::life_thread;
 
+mod error;
+mod identity;
+mod item;
+mod mob;
+mod string;
+mod traits;
+
+/// Command line options…
 #[derive(Debug, Parser)]
 #[command(
     version,
@@ -42,5 +46,5 @@ async fn main() {
     tokio::spawn(life_thread());
     tokio::spawn(io_thread());
 
-    tokio::time::sleep(Duration::from_secs(5)).await;
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
 }
