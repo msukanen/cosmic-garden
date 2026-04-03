@@ -221,13 +221,15 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
         let max_spaces = enum_getter!(data, max_space);
         let req_spaces = enum_getter!(data, required_space);
         let spaces = enum_getter!(data, space);
+        let try_inserts = enum_getter_w_arg!(data, try_insert);
 
         TokenStream::from(quote! {
             impl crate::item::container::Storage for #name {
-                fn can_hold(&self, value: &crate::item::Item) -> bool { match self {#(#can_holds),*}}
+                fn can_hold(&self, value: &crate::item::Item) -> Result<bool, crate::item::StorageError> { match self {#(#can_holds),*}}
                 fn max_space(&self) -> crate::item::StorageSpace { match self {#(#max_spaces),*}}
                 fn required_space(&self) -> crate::item::StorageSpace { match self {#(#req_spaces),*}}
                 fn space(&self) -> crate::item::StorageSpace { match self {#(#spaces),*}}
+                fn try_insert(&mut self, value: crate::item::Item) -> Result<(), crate::item::StorageError> { match self {#(#try_inserts),*}}
             }
         })
     } else {

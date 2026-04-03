@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, Itemized};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, container::Storage, Itemized as _}, string::{UNNAMED, Uuid}};
+use crate::{identity::IdentityQuery, item::{Item, Itemized as _, container::{Storage, StorageError}}, string::{UNNAMED, Uuid}};
 
 pub type StorageSpace = u16;
 
@@ -77,12 +77,6 @@ impl ContainerSpec {
 }
 
 impl Storage for ContainerSpec {
-    fn can_hold(&self, item: &Item) -> bool {
-        item.required_space() as usize
-        + self.contents_size() as usize
-        <= self.max_space as usize
-    }
-
     fn max_space(&self) -> StorageSpace {
         self.max_space
     }
@@ -93,5 +87,30 @@ impl Storage for ContainerSpec {
     
     fn space(&self) -> StorageSpace {
         self.max_space - self.contents_size()
+    }
+
+    fn can_hold(&self, item: &Item) -> Result<bool, StorageError> {
+        let ok = item.required_space() as usize
+            + self.contents_size() as usize
+            <= self.max_space as usize;
+        if ok {
+            Ok(true)
+        } else {
+            Err(StorageError::NoSpaceQ)
+        }
+    }
+
+    fn try_insert(&mut self, item: Item) -> Result<(), StorageError> {
+        if let Err(e) = self.can_hold(&item) {
+            // map q-variants into matter-holders
+            return Err(match e {
+                StorageError::NoSpaceQ => StorageError::NoSpace(item),
+                StorageError::InvalidHierarchyQ => StorageError::InvalidHierarchy(item),
+                StorageError::NotContainerQ => StorageError::NotContainer(item),
+                _ => e
+            });
+        }
+        self.contents.insert(item.id().into(), item);
+        Ok(())
     }
 }

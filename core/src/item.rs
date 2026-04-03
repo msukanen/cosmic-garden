@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use serde::{Deserialize, Serialize};
 
-use crate::item::container::{Storage, specs::StorageSpace, variants::ContainerVariant};
+use crate::item::container::{Storage, StorageError, specs::StorageSpace, variants::ContainerVariant};
 
 pub mod owner;
 pub mod container;
@@ -33,10 +33,10 @@ pub enum Item {
 }
 
 impl Storage for Item {
-    fn can_hold(&self, item: &Item) -> bool {
+    fn can_hold(&self, item: &Item) -> Result<bool, StorageError> {
         match self {
             Self::Container(c) => c.can_hold(item),
-            _ => false
+            _ => Ok(false)
         }
     }
 
@@ -58,6 +58,13 @@ impl Storage for Item {
         match self {
             Self::Container(c) => c.space(),
             _ => 0
+        }
+    }
+
+    fn try_insert(&mut self, item: Item) -> Result<(), container::StorageError> {
+        match self {
+            Self::Container(c) => c.try_insert(item),
+            _ => Err(container::StorageError::NotContainer(item))
         }
     }
 }
