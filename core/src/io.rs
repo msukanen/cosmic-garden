@@ -1,14 +1,12 @@
 //! I/O related stuff lives here…
 
-use std::{fmt::Display, fs, ops::Deref, path::{Path, PathBuf}, sync::{Arc, Weak}};
+use std::{net::SocketAddr, ops::Deref, path::PathBuf, sync::Arc};
 
-use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_hash::{SaltString, rand_core::OsRng}};
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
-use serde::{Deserialize, Serialize};
-use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
+use tokio::{net::tcp::OwnedWriteHalf, sync::{RwLock, broadcast}};
 
-use crate::{edit::EditorMode, error::Error, get_prompt, identity::{IdError, IdentityMut, IdentityQuery}, password::{PasswordError, validate_passwd}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, world::World};
+use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::Error, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, user::UserInfo, world::World};
 
 /// ImmutablePath to appease lazy-init file system access…
 pub(crate) struct ImmutablePath; impl ImmutablePath {
@@ -66,87 +64,6 @@ impl PartialEq for ClientState {
     }
 }
 
-/// Generic user info.
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct UserInfo {
-    id: String,
-    /// User's players by file-system ID and printable character name.
-    #[serde(default)]
-    players: Vec<(String, String)>,
-    argon2: String,
-}
-
-impl UserInfo {
-    async fn load(id: &str, pwd: &str) -> Result<UserInfo, Error> {
-        let info: UserInfo = serde_json::from_str(
-            &fs::read_to_string(&format!("{}/{}", SAVE_PATH.display(), id.as_id()?))?
-        )?;
-        if info.verify_passwd(pwd) {
-            return Ok(info);
-        }
-        Err(Error::from(IdError::PasswordMismatch))
-    }
-
-    async fn save(&self) -> Result<(), Error> {
-        fs::write(format!("{}/{}", SAVE_PATH.display(), self.id), serde_json::to_string_pretty(self)?)?;
-        Ok(())
-    }
-
-    /// Set password.
-    /// 
-    /// # Arguments
-    /// - `plaintext_password`— new password.
-    /// 
-    /// # Returns
-    /// Most likely `Ok`…
-    async fn set_passwd<S>(&mut self, plaintext_passwd: S) -> Result<(), PasswordError>
-    where S: Display,
-    {
-        self.argon2 = Self::argonize_passwd(plaintext_passwd).await?;
-        Ok(())
-    }
-
-    /// Argonize password.
-    /// 
-    /// # Arguments
-    /// - `plaintext_password`— new password.
-    /// 
-    /// # Returns
-    /// Most likely `Ok`…
-    async fn argonize_passwd<S>(plaintext_passwd: S) -> Result<String, PasswordError>
-    where S: Display,
-    {
-        validate_passwd(&plaintext_passwd.to_string()).await?;
-        let salt = SaltString::generate(&mut OsRng);
-        let pw_hash = Argon2::default()
-            .hash_password(plaintext_passwd.to_string().as_bytes(), &salt)?
-            .to_string();
-        Ok(pw_hash)
-    }
-
-    /// Verify given password vs stored password.
-    /// 
-    /// # Arguments
-    /// - `plaintext_passwd`— some passwordlike thing.
-    fn verify_passwd<S>(&self, plaintext_passwd: S) -> bool
-    where S: Display,
-    {
-        if self.argon2.is_empty() {
-            return false;
-        }
-
-        // parse stored hash
-        let parsed_hash = match PasswordHash::new(&self.argon2) {
-            Ok(hash) => hash,
-            Err(_) => return false,
-        };
-
-        Argon2::default()
-            .verify_password(plaintext_passwd.to_string().as_bytes(), &parsed_hash)
-            .is_ok()
-    }
-}
-
 impl ClientState {
     /// Is the player actually in game yet (or going away)?
     pub fn is_in_game(&self) -> bool {
@@ -154,7 +71,7 @@ impl ClientState {
     }
 
     /// Big state handler…
-    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, input: &str) -> Self {
+    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, tx: &broadcast::Sender<Broadcast>, input: &str) -> Self {
         match self {
             Self::EnteringLogin => {
                 let state = match input.as_id() {
@@ -200,26 +117,22 @@ impl ClientState {
 
             Self::EnteringPasswordV { name, pw1 } => {
                 if input == pw1 {
-                    let info = UserInfo {
-                        players: vec![],
-                        argon2: match UserInfo::argonize_passwd(pw1).await {
-                            Ok(argon2) => argon2,
-                            Err(e) => {
-                                log::warn!("Argonizing… {e:?}");
-                                tell_user!(&mut writer, "{}\n{}", e, get_prompt!(world, PromptType::Password1));
-                                return Self::EnteringPassword1 { name };
-                            }
-                        },
-                        id: name,
-
-                    };
-                    if let Err(e) = info.save().await {
-                        log::error!("FATAL: {e:?}");
-                        tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
-                        return Self::Logout;
+                    return match UserInfo::new(&name, &pw1).await {
+                        Err(Error::Password(e)) => {
+                            log::warn!("Argonizing… {e:?}");
+                            tell_user!(&mut writer, "{}\n{}", e, get_prompt!(world, PromptType::Password1));
+                            Self::EnteringPassword1 { name }
+                        }
+                        Err(e) => {
+                            log::error!("FATAL: {e:?}");
+                            tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
+                            Self::Logout
+                        }
+                        Ok(info) => {
+                            tell_user!(&mut writer, "{}: ", get_prompt!(world, PromptType::PlayerChooser0));
+                            Self::ChoosingPlayer { info }
+                        }
                     }
-                    tell_user!(&mut writer, "{}: ", get_prompt!(world, PromptType::PlayerChooser0));
-                    return Self::ChoosingPlayer { info }
                 }
 
                 tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::PasswordVFail));
@@ -254,6 +167,7 @@ impl ClientState {
                             tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
                             return Self::Logout;
                         }
+                        World::insert_player(world.clone(), addr, lock.id(), p.clone()).await;
                     }
                     return state;
                 }
@@ -273,6 +187,7 @@ impl ClientState {
                     if let Ok(player) = Player::load(&info.id, &p_id).await {
                         let state = Self::Playing { player: player.clone() };
                         tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
+                        World::insert_player(world.clone(), addr, player.read().await.id().into(), player.clone()).await;
                         return state;
                     } else {
                         log::error!("UserInfo of user '{}' mismatch - Player file '{}' missing (or broken)!", info.id, p_id);
@@ -294,6 +209,7 @@ impl ClientState {
                         }
                         Ok(player) => {
                             let state = Self::Playing { player: player.clone() };
+                            World::insert_player(world.clone(), addr, player.read().await.id().into(), player.clone()).await;
                             tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
                             state
                         }
@@ -318,6 +234,7 @@ impl ClientState {
                 let state = Self::Playing { player: p.clone() };
                 {
                     let lock = p.read().await;
+                    World::insert_player(world.clone(), addr, lock.id().into(), p.clone()).await;
                     tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
                     info.players.push((lock.id().into(), lock.name.clone()));
                     if let Err(e) = info.save().await {
@@ -331,8 +248,21 @@ impl ClientState {
 
             Self::Editing { ref player, .. } |
             Self::Playing { ref player }     => {
-                tell_user!(&mut writer, "{}", player.read().await.prompt(&self).unwrap_or_default());
-                self
+                // Time to whip up command context…
+                let ctx = CommandCtx {
+                    state: self.clone(),
+                    world: world.clone(),
+                    tx: &tx,
+                    writer: &mut writer,
+                    args: input,
+                };
+                let state = parse_and_exec(ctx).await;
+                let prompt = {
+                    let lock = player.read().await;
+                    lock.prompt(&state)
+                };
+                tell_user!(&mut writer, "{}", prompt.unwrap_or("".into()));
+                state
             },
 
             Self::Logout => self,

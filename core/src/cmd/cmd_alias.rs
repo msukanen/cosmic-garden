@@ -1,0 +1,32 @@
+//! Command aliasing.
+
+use std::{collections::HashMap, fs};
+
+use lazy_static::lazy_static;
+
+use crate::io::DATA_PATH;
+
+lazy_static! {
+    /// Command aliasing lives here…
+    pub(crate) static ref CMD_ALIASES: HashMap<String, String> = {
+        let map: HashMap<String, String> = serde_json::from_str(
+            &fs::read_to_string(format!("{}/cmd_alias.json", *DATA_PATH))
+                .unwrap_or_else(|e| panic!("{e:?}"))
+        ).unwrap_or_else(|e| panic!("{e:?}"));
+
+        map
+    };
+}
+
+#[cfg(test)]
+mod cmd_alias_tests {
+    use std::env;
+
+    use crate::{DATA, cmd::cmd_alias::CMD_ALIASES};
+
+    #[test]
+    fn cmd_alias_reads() {
+        let _ = DATA.set(env::var("COSMIC_GARDEN_DATA").unwrap());
+        assert_eq!("inventory".to_string(), *CMD_ALIASES.get("inv").unwrap());
+    }
+}

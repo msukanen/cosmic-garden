@@ -1,6 +1,6 @@
 //! Errors ad hominis…
 
-use crate::{identity::IdError, item::container::StorageError, password::PasswordError};
+use crate::{identity::IdError, item::container::StorageError, password::PasswordError, room::RoomError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -18,4 +18,7 @@ pub enum Error {
 
     #[error("Need more argon… {0}")]
     Password(#[from] PasswordError),
+
+    #[error("Room fail! {0}")]
+    Room(#[from] RoomError),
 }

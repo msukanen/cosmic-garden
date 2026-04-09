@@ -28,10 +28,13 @@ tokio = { version = "1.50.0", features = ["full"]}
 toml = "1.1.0"
 unicode-normalization = "0.1.25"
 uuid = { version = "1.23.0", features = ["v4", "serde"]}
-walkdir = "2.5.0"
 cosmic-garden-pm = { path = "../cosmicgarden-pm" }
 thiserror = "2.0.18"
 hex = "0.4.3"
+
+[build-dependencies]
+walkdir = "2.5.0"
+heck = "0.5.0"
 
 [badges]
 maintenance = { status = "experimental" }
@@ -39,3 +42,4 @@ maintenance = { status = "experimental" }
 [features]
 default = []
 no-hibp = []
+localtest = []

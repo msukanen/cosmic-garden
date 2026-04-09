@@ -10,6 +10,7 @@ use tokio::{io::{BufReader, AsyncBufReadExt}, net::TcpListener, sync::{RwLock, b
 
 use crate::{identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
 
+mod cmd;
 mod edit;
 mod error;
 mod identity;
@@ -17,19 +18,23 @@ mod item;
 mod mob;
 mod password;
 mod player;
+mod room;
 mod string;
 mod traits;
+mod user;
+mod util;
 mod world;
 
 /// Command line options…
-#[derive(Debug, Parser)]
+#[derive(Debug, Parser, Clone)]
 #[command(
     version,
     about = "Cosmic Garden MUD Engine.",
 //    after_help = ""
 )]
-struct Cli {
+pub(crate) struct Cli {
     #[arg(long, default_value = "0.0.0.0")] host_listen_addr: String,
+    #[arg(long, default_value = "8080")] host_listen_port: u16,
     #[arg(long, default_value = "cosmic-garden")] world: String,
     #[arg(long, env = "COSMIC_GARDEN_DATA", default_value = "data")] data_path: String,
     #[arg(long)] bootstrap_url: Option<String>,
@@ -49,18 +54,20 @@ async fn main() {
 
     let _ = env_logger::try_init();
     let args = Cli::parse();
-    let _ = DATA.set(args.data_path);
+    let _ = DATA.set(args.data_path.clone());
 
-    let world = Arc::new(RwLock::new(World
-        ::load_or_bootstrap(&args.world).await
+    let world = World
+        ::load_or_bootstrap(&args).await
         .unwrap_or_else(|err| {
             log::error!("{err:?}");
             panic!("World dead or in fire?! See logs…");
-        })
-    ));
+        });
+    // connect some dots…
+    world.link_rooms().await;
+    let world = Arc::new(RwLock::new(world));
 
     tokio::spawn(life_thread());
-    tokio::spawn(io_thread());
+    tokio::spawn(io_thread(world.clone(), args.clone()));
 
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);
@@ -116,13 +123,17 @@ async fn main() {
                     if let Some(p) = w.players_by_sockaddr.remove(&addr) {
                         // drop the named mapping here as it's not needed for logout.
                         let lock = p.read().await;
+                        let (id, name) = 
+                            (lock.id().to_string(), lock.name.clone());
                         w.players_by_id.remove(lock.id());
                         if !abrupt_dc {
                             tell_user!(&mut writer, "\n<c cyan>Goodbye {}! See you soon again!</c>\n", lock.id());
+                            log::trace!("Clean exit by '{id}'");
                         }
                         drop(lock);
                         let mut lock = (*PLAYERS_TO_LOGOUT).write().await;
-                        lock.push_back(p);
+                        lock.push(p);
+                        log::trace!("Player '{name}' added to logout queue.");
                         drop(lock);
                     }
                     break;
@@ -148,7 +159,7 @@ async fn main() {
                             break; // not in game, cut the line, wipe the floors and take a break.
                         }
 
-                        state = state.handle(&mut writer, world.clone(), &line.trim().sanitize()).await;
+                        state = state.handle(&mut writer, world.clone(), &addr, &tx, &line.trim().sanitize()).await;
                     },
 
                     // --- Second Branch: Receive broadcast messages from other clients/system itself…
