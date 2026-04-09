@@ -53,6 +53,8 @@ pub enum IdError {
     TooLong,
     /// Input contains forbidden/reserved (e.g. any of the hardcoded bootstrap) patterns.
     ReservedName(String),
+    /// Password mismatch…
+    PasswordMismatch,
 }
 
 impl Display for IdError {
@@ -61,6 +63,7 @@ impl Display for IdError {
             Self::EmptyOrGarbage => write!(f, "Well, identity contains no readable alphanum characters. Might want to rething that…"),
             Self::ReservedName(n) => write!(f, "Sorry, but '{}' is already reserved by the system itself…", n),
             Self::TooLong => write!(f, "For file system sanity reasons the input was considered 'too long' (in excess of {} characters). Cut it down a bit, ok?", MAX_ID_LEN),
+            Self::PasswordMismatch => write!(f, "Password mismatch…"),
         }
     }
 }

@@ -1,6 +1,8 @@
 //! Storage trait(or)ing…
 
-use crate::item::{Item, container::specs::StorageSpace};
+use std::fmt::Display;
+
+use crate::{identity::IdentityQuery, item::{Item, container::specs::StorageSpace}};
 
 /// Various storage related errors.
 /// 
@@ -23,6 +25,23 @@ pub enum StorageError {
     /// Right — a pouch cannot hold a backpack, no matter how you try to compress the poor bag…
     InvalidHierarchy(Item),
 }
+
+impl Display for StorageError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::InvalidHierarchyQ => write!(f, "Invalid container hierarchy attempt…"),
+            Self::InvalidHierarchy(i) => write!(f, "Hierarchy error: {} cannot be fitted within.", i.id()),
+            
+            Self::NoSpaceQ => write!(f, "No space."),
+            Self::NoSpace(i) => write!(f, "No space for {}.", i.id()),
+
+            Self::NotContainerQ => write!(f, "That doesn't fit there!"),
+            Self::NotContainer(i) => write!(f, "Not a container, ergo {} cannot be inserted.", i.id()),
+        }
+    }
+}
+
+impl std::error::Error for StorageError {}
 
 pub trait Storage {
     /// Check how much space there is left in the container.

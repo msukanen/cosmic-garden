@@ -54,7 +54,8 @@ mod entity_tests {
         assert!(e.id().starts_with("entity-"));
         assert_eq!(UNNAMED, e.title());
         e.mp_mut().set_drain(-1.0);
-        for _ in 0..10_000 {
+        const LOOPS: u32 = 1_000_000;
+        for _ in 0..LOOPS {
             // re-UUID is heavy, and it'd never be used in a loop like this in reality, but...:
             let old_id = e.id().to_string();
             e.re_uuid();
@@ -69,6 +70,6 @@ mod entity_tests {
             assert_eq!(Ok(true), e.is_unconscious());
         }
         let elapsed = now.elapsed();
-        log::debug!("\nPERF: 10k re-UUID + drain: {elapsed:?}\nPERF: avg per cycle: {:?}", elapsed / 10_000);
+        log::debug!("\nPERF: 1M recal + drain: {elapsed:?}\nPERF: avg per cycle: {:?}", elapsed / LOOPS);
     }
 }

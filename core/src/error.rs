@@ -1,6 +1,6 @@
 //! Errors ad hominis…
 
-use crate::identity::IdError;
+use crate::{identity::IdError, item::container::StorageError, password::PasswordError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
@@ -12,4 +12,10 @@ pub enum Error {
 
     #[error("Identity Crisis: {0}")]
     Id(#[from] IdError),
+
+    #[error("Oh dear…: {0}")]
+    Storage(#[from] StorageError),
+
+    #[error("Need more argon… {0}")]
+    Password(#[from] PasswordError),
 }

@@ -31,6 +31,11 @@ uuid = { version = "1.23.0", features = ["v4", "serde"]}
 walkdir = "2.5.0"
 cosmic-garden-pm = { path = "../cosmicgarden-pm" }
 thiserror = "2.0.18"
+hex = "0.4.3"
 
 [badges]
 maintenance = { status = "experimental" }
+
+[features]
+default = []
+no-hibp = []

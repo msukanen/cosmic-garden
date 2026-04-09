@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, Itemized};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized as _, container::{Storage, StorageError}}, string::{UNNAMED, Uuid}};
+use crate::{identity::IdentityQuery, item::{Item, Itemized as _, container::{Storage, StorageError}}, string::{UNNAMED, Uuid}, traits::Reflector};
 
 pub type StorageSpace = u16;
 
@@ -63,6 +63,17 @@ impl From<&ContainerSpec> for ContainerSpec {
             max_space: value.max_space,
             size: value.size,
         }
+    }
+}
+
+impl Reflector for ContainerSpec {
+    fn reflect(&self) -> Self {
+        let mut r = Self::from(self);
+        for x in &self.contents {
+            let refl = x.1.reflect();
+            r.contents.insert(refl.id().into(), refl);
+        }
+        r
     }
 }
 
