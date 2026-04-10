@@ -34,6 +34,8 @@ pub struct Player {
     pub sn: Stat,
     #[serde(default = "player_san_default")]
     pub san: Stat,
+    #[serde(default)]
+    pub redit_buffer: Option<Room>,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -111,6 +113,7 @@ impl Default for Player {
             sn: player_sn_default(),
             san: player_san_default(),
             config: Config::default(),
+            redit_buffer: None,
         }
     }
 }
@@ -126,5 +129,9 @@ impl Accessor for Player {
 
     fn is_event_host(&self) -> bool {
         self.access.is_event_host()
+    }
+
+    fn is_true_builder(&self) -> bool {
+        self.access.is_true_builder()
     }
 }

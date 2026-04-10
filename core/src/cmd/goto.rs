@@ -50,9 +50,9 @@ impl Command for GotoCommand {
             LookCommand.exec({ctx.args = "";ctx}).await;
         }
 
-        ctx.tx.send(Broadcast::Arrival {
-            from: room.clone(),
-            to: target.clone(),
+        ctx.tx.send(Broadcast::Movement {
+            from: room.clone().into(),
+            to: target.clone().into(),
             who: plr.clone()
         }).ok();
     }

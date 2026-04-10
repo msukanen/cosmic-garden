@@ -25,7 +25,7 @@ impl Command for SayCommand {
         };
 
         let message = ctx.args.to_string();
-        tell_user!(ctx.writer, "\nYou say \"{}\"\n", message);
+        tell_user!(ctx.writer, "You say \"{}\"\n", message);
         ctx.tx.send(Broadcast::Say {
             room,
             message,

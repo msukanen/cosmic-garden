@@ -13,9 +13,14 @@ pub enum Broadcast {
         from: Arc<RwLock<Player>>,
     },
 
-    Arrival {
+    Movement {
         from: Arc<RwLock<Room>>,
         to: Arc<RwLock<Room>>,
         who: Arc<RwLock<Player>>,
+    },
+
+    Logout {
+        from: Arc<RwLock<Room>>,
+        who: String,
     }
 }

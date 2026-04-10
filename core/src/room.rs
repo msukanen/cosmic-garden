@@ -103,6 +103,25 @@ impl Room {
         self.exits.insert(dir.clone(), Weak::new());
         Err(Error::from(RoomError::NoSuchRoom(target_id.into())))
     }
+
+    pub fn shallow_clone(&self) -> Self {
+        Self {
+            id: self.id.clone(),
+            title: self.title.clone(),
+            desc: self.desc.clone(),
+            who: HashMap::new(),
+            exits: self.exits.clone(),
+            raw_exits: self.raw_exits.clone(),
+        }
+    }
+
+    pub fn copyback(&mut self, source: Self) {
+        self.id = source.id;
+        self.title = source.title;
+        self.desc = source.desc;
+        self.exits = source.exits;
+        self.raw_exits = source.raw_exits;
+    }
 }
 
 impl Describable for Room {

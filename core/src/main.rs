@@ -133,7 +133,7 @@ async fn main() {
                             (lock.id().to_string(), lock.name.clone());
                         w.players_by_id.remove(lock.id());
                         if !abrupt_dc {
-                            tell_user!(&mut writer, "\n<c cyan>Goodbye {}! See you soon again!</c>\n", lock.id());
+                            tell_user!(&mut writer, "\n<c cyan>Goodbye {}! See you soon again!</c>\n", lock.title());
                             log::trace!("Clean exit by '{id}'");
                         }
                         drop(lock);
@@ -184,7 +184,7 @@ async fn main() {
                                     }
                                 },
 
-                                Broadcast::Arrival { to, from, who } => {
+                                Broadcast::Movement { to, from, who } => {
                                     // no need to tell yourself that you just switched rooms…
                                     if Arc::ptr_eq(&who, &player) { continue; }
                                     // in the void...?
@@ -200,6 +200,14 @@ async fn main() {
                                         continue;
                                     }
                                     reprompt_playing_user!(writer, state);
+                                },
+
+                                Broadcast::Logout { from, who } => {
+                                    let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                                    if Arc::ptr_eq(&from, &ploc) {
+                                        tell_user!(&mut writer, "\n<c cyan>{}</c> vanishes into the mists…\n", who);
+                                        reprompt_playing_user!(writer, state);
+                                    }
                                 }
                             },
                             _ => ()

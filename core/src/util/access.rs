@@ -25,6 +25,8 @@ pub trait Accessor {
     fn is_admin(&self) -> bool;
     /// Do they have builder rights?
     fn is_builder(&self) -> bool;
+    /// Are they a concrete builder instead of an assisting player who's nominated as such?
+    fn is_true_builder(&self) -> bool;
     /// Are they an event host?
     fn is_event_host(&self) -> bool;
 }
@@ -39,6 +41,10 @@ impl Accessor for Access {
             Self::Player { builder: false,.. } => false,
             _ => true
         }
+    }
+
+    fn is_true_builder(&self) -> bool {
+        matches!(self, Self::Admin | Self::Builder)
     }
 
     fn is_event_host(&self) -> bool {
