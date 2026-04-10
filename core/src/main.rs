@@ -8,7 +8,7 @@ mod io_thread;      use io_thread::io_thread;
 mod life_thread;    use life_thread::life_thread;
 use tokio::{io::{BufReader, AsyncBufReadExt}, net::TcpListener, sync::{RwLock, broadcast}};
 
-use crate::{identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
+use crate::{cmd::cmd_alias::CMD_ALIASES, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
 
 mod cmd;
 mod edit;
@@ -56,7 +56,13 @@ async fn main() {
     let args = Cli::parse();
     let _ = DATA.set(args.data_path.clone());
 
-    let world = World
+    if (*CMD_ALIASES).is_empty() {
+        log::info!("No command aliases defined yet.");
+    } else {
+        log::info!("Command aliases instantiated.");
+    };
+
+    let mut world = World
         ::load_or_bootstrap(&args).await
         .unwrap_or_else(|err| {
             log::error!("{err:?}");
@@ -163,7 +169,43 @@ async fn main() {
                     },
 
                     // --- Second Branch: Receive broadcast messages from other clients/system itself…
-                    result = rx.recv() => (),
+                    result = rx.recv() => match &state {
+                        ClientState::Playing { player } |
+                        ClientState::Editing { player, .. } => match result {
+                            Ok(bcast) => match bcast {
+                                Broadcast::Say { room, message, from } => {
+                                    if !Arc::ptr_eq(&from, &player) {
+                                        let Some(ploc) = player.read().await.location.upgrade() else {continue;};
+                                        if Arc::ptr_eq(&room, &ploc) {
+                                            let title = from.read().await.title().to_string();
+                                            tell_user!(&mut writer, "\n<c blue>[<c cyan>{}</c>]</c> says: \"{}\"\n", title, message);
+                                            reprompt_playing_user!(writer, state);
+                                        }
+                                    }
+                                },
+
+                                Broadcast::Arrival { to, from, who } => {
+                                    // no need to tell yourself that you just switched rooms…
+                                    if Arc::ptr_eq(&who, &player) { continue; }
+                                    // in the void...?
+                                    let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                                    if Arc::ptr_eq(&to, &ploc) {
+                                        let who = who.read().await.title().to_string();
+                                        tell_user!(&mut writer, "\n<c cyan>{}</c> arrives…\n", who);
+                                    } else if Arc::ptr_eq(&from, &ploc) {
+                                        let who = who.read().await.title().to_string();
+                                        tell_user!(&mut writer, "\n<c cyan>{}</c> departs…\n", who);
+                                    } else {
+                                        // were weren't at either end-point...
+                                        continue;
+                                    }
+                                    reprompt_playing_user!(writer, state);
+                                }
+                            },
+                            _ => ()
+                        },
+                        _ => (/* only actively playing Players get broadcasts. */)
+                    },
                 }
             }
         });

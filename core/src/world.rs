@@ -1,10 +1,10 @@
 //! When worlds collide…
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, path::PathBuf, rc::Weak, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, player::Player, room::Room, string::{Slugger, prompt::PromptType}};
+use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, player::Player, room::Room, string::{Slugger, UNNAMED, prompt::PromptType}, util::direction::Direction};
 
 /// The world!
 #[derive(Debug, Deserialize, Serialize)]
@@ -33,6 +33,10 @@ pub struct World {
 
     #[serde(rename = "rooms", with = "room_id_sieve")]
     pub rooms: HashMap<String, Arc<RwLock<Room>>>,
+    #[serde(default = "default_root_room_id")]
+    pub root_room_id: String,
+    #[serde(skip)]
+    pub root_room: Option<Arc<RwLock<Room>>>,
 }
 
 mod room_id_sieve {
@@ -64,6 +68,10 @@ mod room_id_sieve {
     }
 }
 
+fn default_root_room_id() -> String {
+    "room-1".into()
+}
+
 impl World {
     /// Load or bootstrap the world.
     pub async fn load_or_bootstrap(args: &Cli) -> Result<Self, Error> {
@@ -84,12 +92,28 @@ impl World {
                     fixed_prompts: HashMap::new(),
                     players_by_id: HashMap::new(),
                     players_by_sockaddr: HashMap::new(),
+                    root_room_id: default_root_room_id(),
+                    root_room: None,
                     rooms: {
                         let mut rooms = HashMap::new();
-                        let room = Room::new("room 1", "Room #1").await?;
-                        rooms.insert(room.read().await.id().into(), room.clone());
-                        let room = Room::new("room 2!", "Room #2").await?;
-                        rooms.insert(room.read().await.id().into(), room.clone());
+                        
+                        let r1 = Room::new(default_root_room_id().as_str(), "Room #1").await?;
+                        let r1_id = r1.read().await.id().to_string();
+                        rooms.insert(r1_id.clone(), r1.clone());
+
+                        let r2 = Room::new("room 2!", "Room #2").await?;
+                        let r2_id = r2.read().await.id().to_string();
+                        rooms.insert(r2_id.clone(), r2.clone());
+                        
+                        {
+                            let mut l1 = r1.write().await;
+                            l1.raw_exits.insert(Direction::North, r2_id);
+                            l1.save().await?;
+                            
+                            let mut l2 = r2.write().await;
+                            l2.raw_exits.insert(Direction::South, r1_id);
+                            l2.save().await?;
+                        }
                         rooms
                     }
                 };
@@ -109,15 +133,52 @@ impl World {
 
     /// Insert [Player] to mappings.
     pub async fn insert_player(world: Arc<RwLock<World>>, addr: &SocketAddr, id: &str, arc: Arc<RwLock<Player>>) {
-        let mut w = world.write().await;
-        w.players_by_sockaddr.insert(addr.clone(), arc.clone());
-        w.players_by_id.insert(id.into(), arc.clone());
+        {// map the soul…
+            let mut w = world.write().await;
+            w.players_by_sockaddr.insert(addr.clone(), arc.clone());
+            w.players_by_id.insert(id.into(), arc.clone());
+        }
+
+        let (root_id, current_loc, p_id) = {
+            let w = world.read().await;
+            let p = arc.read().await;
+            (w.root_room_id.clone(), p.location_id.clone(), p.id().to_string())
+        };
+
+        log::trace!("Some soul transplanting…");
+        let target_id = if current_loc == UNNAMED { &root_id} else { &current_loc };
+        let room_to_place_in = {
+            let w = world.read().await;
+            w.rooms.get(target_id).cloned()
+        };
+        log::debug!("Acquired room (Option)");
+        let Some(room) = room_to_place_in else {
+            log::warn!("Cannot place '{p_id}' where they wanted to go; room '{target_id}' does not exist.");
+            log::debug!("Translocating '{p_id}' to root.");
+            let target_arc = world.read().await.root_room.clone().expect("Root room evaporated?!");
+            if let Err(e) = Player::place_direct(arc, target_arc).await {
+                log::error!("Facepalming here; {e:?}");
+            }
+            return
+        };
+        log::debug!("Bracing for place_direct()…");
+        if let Err(e) = Player::place_direct(arc, room.clone()).await {
+            log::error!("Facepalming here; {e:?}");
+            return;
+        }
+        log::trace!("Done translocating…");
     }
 
-    pub async fn link_rooms(&self) {
+    pub async fn link_rooms(&mut self) {
         let rooms = self.rooms.clone();
         for room_arc in rooms.values() {
             let mut room = room_arc.write().await;
+            log::trace!("Room id '{}' vs sought for '{}'…", room.id(), self.root_room_id);
+            // weld the root room in place
+            if room.id() == self.root_room_id {
+                log::trace!("Welding '{}' as root room.", room.id());
+                self.root_room = room_arc.clone().into();
+            }
             let mut linked = HashMap::new();
             for (dir, target_id) in &room.raw_exits {
                 if let Some(target_arc) = self.rooms.get(target_id) {
@@ -128,5 +189,13 @@ impl World {
             }
             room.exits = linked;
         }
+
+        if self.root_room.is_none() {
+            let msg = format!("FATAL: root room not found! Attempted '{}'… no match.", self.root_room_id);
+            log::error!("{msg}");
+            panic!("{msg}");
+        };
+            
+        log::info!("Root room established as '{}'", self.root_room_id)
     }
 }

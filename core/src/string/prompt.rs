@@ -59,3 +59,18 @@ macro_rules! get_prompt {
         { $w.read().await.fixed_prompts.get(&$ptype).cloned().unwrap_or_else(|| $ptype.to_string()) }
     };
 }
+
+#[macro_export]
+macro_rules! reprompt_playing_user {
+    ($writer:ident, $state:ident) => {{
+        let prompt = match &$state {
+            ClientState::Playing {player}|
+            ClientState::Editing {player,..}=> {
+                let r = player.read().await;
+                r.prompt(&$state)
+            }
+            _=> None
+        };
+        tell_user!(&mut $writer, "{}", prompt.unwrap_or("".into()));
+    }};
+}

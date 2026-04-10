@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::{IdentityMut, IdentityQuery}, mob::*, string::{UNNAMED, Uuid, as_id_with_uuid}, traits::Tickable};
+use crate::{identity::{IdentityMut, IdentityQuery}, mob::{traits::MobMut, *}, string::{UNNAMED, Uuid, as_id_with_uuid}, traits::Tickable};
 
 #[derive(Debug, Deserialize, Serialize, IdentityMut, MobMut)]
 pub struct Entity {
@@ -13,6 +13,7 @@ pub struct Entity {
     hp: Stat,
     mp: Stat,
     san: Stat,
+    sn: Stat,
 }
 
 impl Default for Entity {
@@ -23,15 +24,8 @@ impl Default for Entity {
             hp: Stat::new(StatType::HP),
             mp: Stat::new(StatType::MP),
             san: Stat::new(StatType::San),
+            sn: Stat::new(StatType::SN),
         }
-    }
-}
-
-impl Tickable for Entity {
-    fn tick(&mut self) {
-        self.hp.tick();
-        self.mp.tick();
-        self.san.tick();
     }
 }
 
@@ -64,7 +58,9 @@ mod entity_tests {
             e.mp_mut().set_curr(next_val);
             while next_val > 0.0 {
                 next_val -= 1.0;
-                e.tick();
+                if !e.tick() {
+                    panic!("No tick?!");
+                }
                 assert_eq!(next_val, e.mp());
             }
             assert_eq!(Ok(true), e.is_unconscious());

@@ -4,9 +4,11 @@ use std::{net::SocketAddr, ops::Deref, path::PathBuf, sync::Arc};
 
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
-use tokio::{net::tcp::OwnedWriteHalf, sync::{RwLock, broadcast}};
+use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
 
 use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::Error, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, user::UserInfo, world::World};
+
+pub mod broadcast; pub use broadcast::*;
 
 /// ImmutablePath to appease lazy-init file system access…
 pub(crate) struct ImmutablePath; impl ImmutablePath {
@@ -71,7 +73,7 @@ impl ClientState {
     }
 
     /// Big state handler…
-    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, tx: &broadcast::Sender<Broadcast>, input: &str) -> Self {
+    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, tx: &tokio::sync::broadcast::Sender<Broadcast>, input: &str) -> Self {
         match self {
             Self::EnteringLogin => {
                 let state = match input.as_id() {
@@ -167,7 +169,12 @@ impl ClientState {
                             tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
                             return Self::Logout;
                         }
-                        World::insert_player(world.clone(), addr, lock.id(), p.clone()).await;
+                        let id = {
+                            let id = lock.id().to_string();
+                            drop(lock);
+                            id
+                        };
+                        World::insert_player(world.clone(), addr, &id, p.clone()).await;
                     }
                     return state;
                 }
@@ -187,7 +194,8 @@ impl ClientState {
                     if let Ok(player) = Player::load(&info.id, &p_id).await {
                         let state = Self::Playing { player: player.clone() };
                         tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
-                        World::insert_player(world.clone(), addr, player.read().await.id().into(), player.clone()).await;
+                        let id = player.read().await.id().to_string();
+                        World::insert_player(world.clone(), addr, &id, player.clone()).await;
                         return state;
                     } else {
                         log::error!("UserInfo of user '{}' mismatch - Player file '{}' missing (or broken)!", info.id, p_id);
@@ -209,7 +217,8 @@ impl ClientState {
                         }
                         Ok(player) => {
                             let state = Self::Playing { player: player.clone() };
-                            World::insert_player(world.clone(), addr, player.read().await.id().into(), player.clone()).await;
+                            let id = player.read().await.id().to_string();
+                            World::insert_player(world.clone(), addr, &id, player.clone()).await;
                             tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
                             state
                         }
@@ -233,8 +242,12 @@ impl ClientState {
                 let p = Arc::new(RwLock::new(p));
                 let state = Self::Playing { player: p.clone() };
                 {
+                    let p_id = {
+                        let p = p.read().await;
+                        p.id().to_string()
+                    };
+                    World::insert_player(world.clone(), addr, &p_id, p.clone()).await;
                     let lock = p.read().await;
-                    World::insert_player(world.clone(), addr, lock.id().into(), p.clone()).await;
                     tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
                     info.players.push((lock.id().into(), lock.name.clone()));
                     if let Err(e) = info.save().await {
@@ -267,15 +280,5 @@ impl ClientState {
 
             Self::Logout => self,
         }
-    }
-}
-
-/// Various broadcast types.
-#[derive(Debug, Clone)]
-pub enum Broadcast {
-    Say {
-        //room: Weak<RwLock<Room>>,
-        message: String,
-        //from: Weak<RwLock<>>
     }
 }

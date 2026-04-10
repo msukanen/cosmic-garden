@@ -1,6 +1,6 @@
 //! Command aliasing.
 
-use std::{collections::HashMap, fs};
+use std::{collections::HashMap};
 
 use lazy_static::lazy_static;
 
@@ -9,12 +9,8 @@ use crate::io::DATA_PATH;
 lazy_static! {
     /// Command aliasing lives here…
     pub(crate) static ref CMD_ALIASES: HashMap<String, String> = {
-        let map: HashMap<String, String> = serde_json::from_str(
-            &fs::read_to_string(format!("{}/cmd_alias.json", *DATA_PATH))
-                .unwrap_or_else(|e| panic!("{e:?}"))
-        ).unwrap_or_else(|e| panic!("{e:?}"));
-
-        map
+        let contents = std::fs::read_to_string(&format!("{}/cmd_alias.json", *DATA_PATH)).unwrap_or_default();
+        serde_json::from_str(&contents).unwrap_or_default()
     };
 }
 

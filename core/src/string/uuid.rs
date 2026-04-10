@@ -3,8 +3,6 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
-use crate::identity::IdError;
-
 lazy_static! {
     pub(crate) static ref UUID_RE: Regex = Regex::new(
         r"(?P<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"

@@ -9,6 +9,7 @@ use crate::{Cli, DATA_PATH, identity::IdentityQuery, player::Player, world::Worl
 
 lazy_static! {
     pub static ref PLAYERS_TO_LOGOUT: Arc<RwLock<Vec<Arc<RwLock<Player>>>>> = Arc::new(RwLock::new(Vec::new()));
+    pub static ref WORLD_NEEDS_SAVING: Arc<RwLock<bool>> = Arc::new(RwLock::new(false));
 }
 
 /// Disk I/O thread thing.
@@ -17,9 +18,11 @@ pub(super) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
 
     let mut autosave_queue_interval = time::interval(Duration::from_secs(args.autosave_queue_interval.unwrap_or(300)));
     let mut logout_purge_interval = time::interval(Duration::from_secs(1));
+    let mut world_save_interval = time::interval(Duration::from_secs(30));
 
     loop {
         tokio::select! {
+            // Logout handling.
             _ = logout_purge_interval.tick() => {
                 let players_to_save = {
                     let mut qlock = (*PLAYERS_TO_LOGOUT).write().await;
@@ -42,6 +45,7 @@ pub(super) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
                 }
             }
 
+            // Auto-saving the meningfully active Players.
             _ = autosave_queue_interval.tick() => {
                 let mut players_to_save = {
                     let w = world.read().await;
@@ -67,6 +71,22 @@ pub(super) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
                 }
                 if any_saved {
                     log::info!("Autosave cycle complete.");
+                }
+            }
+
+            _ = world_save_interval.tick() => {
+                let ws_req = {
+                    let w = (*WORLD_NEEDS_SAVING).write().await;
+                    *w
+                };
+                if ws_req {
+                    *((*WORLD_NEEDS_SAVING).write().await) = false;
+                    if let Err(e) = world.write().await.save().await {
+                        log::error!("World save failed?! {e:?}");
+                        *((*WORLD_NEEDS_SAVING).write().await) = true
+                    } else {
+                        log::info!("World save cycle complete.");
+                    }
                 }
             }
         }

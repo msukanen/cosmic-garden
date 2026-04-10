@@ -6,7 +6,7 @@ use cosmic_garden_pm::IdentityMut;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, player::Player, string::Slugger, util::direction::Direction, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, player::Player, string::{Describable, Slugger}, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -27,6 +27,8 @@ impl std::error::Error for RoomError {}
 pub struct Room {
     id: String,
     title: String,
+    #[serde(default = "empty_room_desc")]
+    desc: String,
     #[serde(default, skip)]
     pub who: HashMap<String, Weak<RwLock<Player>>>,
 
@@ -36,6 +38,8 @@ pub struct Room {
     #[serde(default)]
     pub raw_exits: HashMap<Direction, String>,
 }
+
+fn empty_room_desc() -> String { "A room.".into() }
 
 impl Room {
     pub fn load_sync(id: &str) -> Result<Self, Error> {
@@ -51,11 +55,11 @@ impl Room {
         let room = Self {
             id: id.as_id()?,
             title: title.into(),
+            desc: empty_room_desc(),
             who: HashMap::new(),
             exits: HashMap::new(),
             raw_exits: HashMap::new(),
         };
-        room.save().await?;
 
         Ok(Arc::new(RwLock::new(room)))
     }
@@ -68,9 +72,10 @@ impl Room {
     }
 
     pub async fn link_exit(&mut self, world: Arc<RwLock<World>>, dir: Direction, target_id: &str) -> Result<(), Error> {
-        // Exits are allowed to point to non-existing ways…
         log::debug!("Linking '{}'({dir}) to '{target_id}'…", self.id());
-        self.raw_exits.insert(dir.clone(), target_id.into());
+        if let Some(_) = self.raw_exits.insert(dir.clone(), target_id.into()) {
+            log::warn!("Overriding already existing '{dir}'.");
+        }
         // Find the target room, hopefully.
         let w = world.read().await;
         let my_lock = if let Some(my_arc) = w.rooms.get(self.id()) {
@@ -94,7 +99,15 @@ impl Room {
             return Ok(())
         }
 
+        // Exits are allowed to point to non-existing ways… Mirage entrances, etc.
+        self.exits.insert(dir.clone(), Weak::new());
         Err(Error::from(RoomError::NoSuchRoom(target_id.into())))
+    }
+}
+
+impl Describable for Room {
+    fn desc<'a>(&'a self) -> &'a str {
+        &self.desc
     }
 }
 
@@ -110,7 +123,7 @@ mod room_tests {
     async fn world_room_linking() {
         let _ = env_logger::try_init();
         let _ = DATA.set(std::env::var("COSMIC_GARDEN_DATA").unwrap());
-        let mut args = Cli {
+        let args = Cli {
             autosave_queue_interval: None,
             host_listen_addr: "0.0.0.0".into(),
             host_listen_port: 8080,
@@ -118,7 +131,7 @@ mod room_tests {
             data_path: (*DATA_PATH).clone(),
             bootstrap_url: None,
         };
-        let w = World::load_or_bootstrap(&args).await.unwrap_or_else(|e| panic!("Oh noes! Not the dreaded {e:?}"));
+        let mut w = World::load_or_bootstrap(&args).await.unwrap_or_else(|e| panic!("Oh noes! Not the dreaded {e:?}"));
         w.link_rooms().await;
         let rooms = w.rooms.clone();
         let w_arc = Arc::new(RwLock::new(w));
@@ -136,6 +149,16 @@ mod room_tests {
             let mut r = r_arc.write().await;
             if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "room-2_".into()).await {
                 panic!("Bummer… {e:?}");
+            }
+        }
+        for r in &rooms {
+            log::debug!("Room {r:?}")
+        }
+        // this should create a "mirage" and override an old entry:
+        if let Some(r_arc) = rooms.get("room-1") {
+            let mut r = r_arc.write().await;
+            if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "room-3".into()).await {
+                log::error!("Bummer… {e:?}");
             }
         }
         for r in &rooms {

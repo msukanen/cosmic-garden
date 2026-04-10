@@ -38,6 +38,7 @@ pub enum StatType {
     HP,
     MP,
     San,
+    SN,
 }
 
 /// Stat core.
@@ -49,6 +50,8 @@ pub enum Stat {
     MP { curr: StatValue, max: StatValue, drain: StatValue },
     /// Sanity, or insanity…
     San { curr: StatValue, max: StatValue, drain: StatValue },
+    /// Stamina.
+    SN { curr: StatValue, max: StatValue, drain: StatValue },
 }
 
 impl Stat {
@@ -57,6 +60,7 @@ impl Stat {
             StatType::HP => Self::HP { curr: 100.0, max: 100.0 },
             StatType::MP => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
             StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0 },
+            StatType::SN => Self::SN { curr: 100.0, max: 100.0, drain: 0.0 },
         }
     }
 }
@@ -69,8 +73,9 @@ impl AddAssign<StatValue> for Stat {
             // * -10+ = unconscious
             // * <-10 = dead, deader, a smear on the floor (at -100)…
             Self::HP { curr, max }     => *curr = (*curr + rhs).clamp(SMR_THRESHOLD, *max),
-            // MP & San clamp to 0..max range
+            // others clamp to 0..max range
             Self::MP { curr, max, ..}  |
+            Self::SN { curr, max, ..}  |
             Self::San { curr, max, ..} => *curr = (*curr + rhs).clamp(0.0, *max)
         }
     }
@@ -110,8 +115,9 @@ impl Stat {
         let delta = value - self.max();
         match self {
             Self::HP { max, ..} |
-            Self::MP { max, ..} => *max = value,
-            Self::San { max, ..} => *max = value.min(100.0)
+            Self::MP { max, ..} |
+            Self::SN { max, ..} => *max = value,
+            Self::San { max, ..} => *max = value.min(100.0),
         }
 
         if self.current() > self.max() {
@@ -137,7 +143,8 @@ impl Stat {
     pub fn set_drain(&mut self, value: StatValue) -> &mut Self {
         match self {
             Self::MP { drain, max, ..}|
-            Self::San { max, drain, ..}
+            Self::San { max, drain, ..}|
+            Self::SN { max, drain, ..}
             => {
                 let abs_drain = value.abs().min(*max / TICKS_BETWEEN_DRAIN);
                 *drain = if value >= 0.0 { abs_drain } else { -abs_drain }
@@ -157,7 +164,8 @@ impl Stat {
         match self {
             Self::HP { curr, max }    |
             Self::MP { curr, max, ..} |
-            Self::San { curr, max, ..}
+            Self::San { curr, max, ..}|
+            Self::SN { curr, max, ..}
             => *curr = value.min(*max),
         }
         self
@@ -168,8 +176,14 @@ impl Stat {
         match self {
             Self::HP { max, ..} |
             Self::MP { max, ..} |
+            Self::SN { max, ..} |
             Self::San { max, ..}=> *max
         }
+    }
+
+    /// We're already capped?
+    pub fn capped(&self) -> bool {
+        self.current() >= self.max()
     }
 
     /// Get [Stat] current value.
@@ -177,6 +191,7 @@ impl Stat {
         match self {
             Self::HP { curr, ..} |
             Self::MP { curr, ..} |
+            Self::SN { curr, ..} |
             Self::San { curr, ..}=> *curr
         }
     }
@@ -185,6 +200,7 @@ impl Stat {
     pub fn drain(&self) -> Result<StatValue, StatError> {
         match self {
             Self::MP { drain, ..}  |
+            Self::SN { drain, ..}  |
             Self::San { drain, ..} => Ok(*drain),
             
             _ => Err(StatError::NoDrain)
@@ -238,11 +254,19 @@ impl Display for Stat {
             Self::HP { curr, max } => write!(f, "HP: ({:.0}/{:.0})", curr, max),
 
             // MP: (12/34)[-1.1]
-            // HP: (12/34)
+            // MP: (12/34)
             Self::MP { curr, max, drain } => if *drain != 0.0 {
                 write!(f, "MP: ({:.0}/{:.0})[{:+.1}/t]", curr, max, drain)
             } else {
                 write!(f, "MP: ({:.0}/{:.0})", curr, max)
+            }
+
+            // SN: (12/34)[-1.1]
+            // SN: (12/34)
+            Self::SN { curr, max, drain } => if *drain != 0.0 {
+                write!(f, "SN: ({:.0}/{:.0})[{:+.1}/t]", curr, max, drain)
+            } else {
+                write!(f, "SN: ({:.0}/{:.0})", curr, max)
             }
 
             // San: (12/34)
@@ -261,13 +285,21 @@ impl Display for Stat {
 }
 
 impl Tickable for Stat {
-    fn tick(&mut self) {
-        let drain = match self {
-            Self::MP { drain, .. }  |
-            Self::San { drain, .. } => *drain,
-            _ => 0.0
+    fn tick(&mut self) -> bool {
+        let Ok(drain) = self.drain() else {
+            // no drain, nothing to tick
+            return false;
         };
+        if drain.abs() < 0.001 {
+            // no meaningful drain; nothing to tick
+            return false;
+        }
+        if self.capped() && drain > 0.0 {
+            return false;
+        }
+        let old = self.current();
         self.add_assign(drain);
+        (self.current() - old).abs() > 0.001
     }
 }
 

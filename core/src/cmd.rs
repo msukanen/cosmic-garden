@@ -7,12 +7,16 @@ use tokio::{net::tcp::OwnedWriteHalf, sync::{RwLock, broadcast}};
 
 use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::{Broadcast, ClientState}, player::Player, tell_user_unk, util::direction::Directional, world::World};
 
-mod cmd_alias;
+pub mod cmd_alias;
 mod dummy;
+
+mod dig;
 mod goto;
+mod look;
 mod hedit;
 mod quit;
 mod redit;
+mod say;
 
 pub struct CommandCtx<'a> {
     pub state: ClientState,

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player::Player, tell_user, util::direction::Direction};
+use crate::{cmd::{Command, CommandCtx, look::LookCommand}, identity::IdentityQuery, io::Broadcast, player::Player, tell_user, util::direction::Direction};
 
 pub struct GotoCommand;
 
@@ -43,11 +43,17 @@ impl Command for GotoCommand {
             return
         };
 
-        if let Err(e) = Player::place_direct(plr.clone(), ctx.world.clone(), target.clone()).await {
+        if let Err(e) = Player::place_direct(plr.clone(), target.clone()).await {
             log::error!("Translocation failure: {e:?}");
             tell_user!(ctx.writer, "Strangely enough you cannot go there…\n");
         } else {
-            // TODO: auto LookCommand
+            LookCommand.exec({ctx.args = "";ctx}).await;
         }
+
+        ctx.tx.send(Broadcast::Arrival {
+            from: room.clone(),
+            to: target.clone(),
+            who: plr.clone()
+        }).ok();
     }
 }

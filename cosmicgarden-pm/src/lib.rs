@@ -154,12 +154,14 @@ pub fn mob_derive(input: TokenStream) -> TokenStream {
     let fields = get_identity_fields!(input);
     let hp_field = &(get_identity_ident!(fields, "hp").ident);
     let mp_field = &(get_identity_ident!(fields, "mp").ident);
+    let sn_field = &(get_identity_ident!(fields, "sn").ident);
     let san_field = &(get_identity_ident!(fields, "san").ident);
 
     TokenStream::from(quote! {
         impl crate::mob::traits::Mob for #name {
             fn hp(&self) -> &Stat { &self.#hp_field }
             fn mp(&self) -> &Stat { &self.#mp_field }
+            fn sn(&self) -> &Stat { &self.#sn_field }
             fn san(&self) -> &Stat { &self.#san_field }
         }
     })
@@ -173,18 +175,21 @@ pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
     let fields = get_identity_fields!(input);
     let hp_field = &(get_identity_ident!(fields, "hp").ident);
     let mp_field = &(get_identity_ident!(fields, "mp").ident);
+    let sn_field = &(get_identity_ident!(fields, "sn").ident);
     let san_field = &(get_identity_ident!(fields, "san").ident);
 
     TokenStream::from(quote! {
         impl crate::mob::traits::Mob for #name {
             fn hp(&self) -> &Stat { &self.#hp_field }
             fn mp(&self) -> &Stat { &self.#mp_field }
+            fn sn(&self) -> &Stat { &self.#sn_field }
             fn san(&self) -> &Stat { &self.#san_field }
         }
 
         impl crate::mob::traits::MobMut for #name {
             fn hp_mut(&mut self) -> &mut Stat { &mut self.#hp_field }
             fn mp_mut(&mut self) -> &mut Stat { &mut self.#mp_field }
+            fn sn_mut(&mut self) -> &mut Stat { &mut self.#sn_field }
             fn san_mut(&mut self) -> &mut Stat { &mut self.#san_field }
         }
     })
