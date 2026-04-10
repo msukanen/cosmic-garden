@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, mob::{Stat, StatType, traits::MobMut}, room::Room, string::UNNAMED, traits::Tickable, util::{access::{Access, Accessor}, config::Config}, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, mob::{Stat, StatType}, room::Room, string::UNNAMED, util::{access::{Access, Accessor}, config::Config}, world::World};
 
 /// A player's character contained here…
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut)]

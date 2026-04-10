@@ -22,5 +22,10 @@ pub enum Broadcast {
     Logout {
         from: Arc<RwLock<Room>>,
         who: String,
-    }
+    },
+
+    System {
+        rooms: Vec<Arc<RwLock<Room>>>,
+        message: String,
+    },
 }

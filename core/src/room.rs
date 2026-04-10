@@ -28,7 +28,7 @@ pub struct Room {
     id: String,
     title: String,
     #[serde(default = "empty_room_desc")]
-    desc: String,
+    pub desc: String,
     #[serde(default, skip)]
     pub who: HashMap<String, Weak<RwLock<Player>>>,
 
@@ -136,7 +136,7 @@ mod room_tests {
 
     use tokio::sync::RwLock;
 
-    use crate::{Cli, DATA, io::DATA_PATH, util::direction::Direction, world::{self, World}};
+    use crate::{Cli, DATA, io::DATA_PATH, util::direction::Direction, world::World};
 
     #[tokio::test]
     async fn world_room_linking() {

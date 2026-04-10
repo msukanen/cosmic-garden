@@ -1,6 +1,6 @@
 //! Commanding core.
 
-use std::sync::Arc;
+use std::{borrow::Cow, sync::Arc};
 
 use async_trait::async_trait;
 use tokio::{net::tcp::OwnedWriteHalf, sync::{RwLock, broadcast}};
@@ -12,6 +12,8 @@ mod dummy;
 
 mod dig;
 mod goto;
+pub mod help;
+mod invis;
 mod look;
 mod hedit;
 mod quit;
@@ -73,8 +75,8 @@ pub async fn parse_and_exec<'a>(mut ctx: CommandCtx<'_>) -> ClientState {
     let table = match ctx.state {
         ClientState::Playing { .. } => &COMMANDS,
         ClientState::Editing { ref mode, .. } => match mode {
-            EditorMode::Room => &REDIT_COMMANDS,
-            EditorMode::Help => &HEDIT_COMMANDS,
+            EditorMode::Room{..} => &REDIT_COMMANDS,
+            EditorMode::Help{..} => &HEDIT_COMMANDS,
         },
         _ => {// should not happen, but…
             log::error!("Player state '{:?}' invalid for cmd processing?!", ctx.state);

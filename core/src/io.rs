@@ -1,6 +1,6 @@
 //! I/O related stuff lives here…
 
-use std::{net::SocketAddr, ops::Deref, path::PathBuf, sync::Arc};
+use std::{borrow::Cow, net::SocketAddr, ops::Deref, path::PathBuf, sync::Arc};
 
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
@@ -279,6 +279,22 @@ impl ClientState {
             },
 
             Self::Logout => self,
+        }
+    }
+
+    /// Any pending edits etc. around?
+    pub fn is_dirty(&self) -> bool {
+        match self {
+            Self::Editing { mode, .. } => mode.is_dirty(),
+            _ => false
+        }
+    }
+
+    /// Set/clear dirt.
+    pub fn set_dirty(&mut self, state: bool) {
+        match self {
+            Self::Editing { mode,.. } => mode.set_dirty(state),
+            _ => ()
         }
     }
 }

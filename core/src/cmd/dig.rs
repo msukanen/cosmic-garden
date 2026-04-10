@@ -1,8 +1,10 @@
 //! Diggy, diggy.
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, io_thread::WORLD_NEEDS_SAVING, player_or_bust, room::Room, string::Slugger, tell_user, tell_user_unk, util::{access::Accessor, direction::Direction}};
+use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, identity::IdentityQuery, io_thread::WORLD_NEEDS_SAVING, player_or_bust, room::Room, string::Slugger, tell_user, tell_user_unk, translocate, util::{access::Accessor, direction::Direction}};
 
 pub struct DigCommand;
 
@@ -63,10 +65,13 @@ impl Command for DigCommand {
             tell_user!(ctx.writer, "Symmetry-solder failed: {:?}\n", e);
         } else {
             // persist both rooms
-            let _ = origin_arc.write().await.save().await;
-            let _ = target_arc.write().await.save().await;
+            let _ = origin_arc.read().await.save().await;
+            let _ = target_arc.read().await.save().await;
             *((*WORLD_NEEDS_SAVING).write().await) = true;
             tell_user!(ctx.writer, "Diggy diggy to {} - success!\n", dir);
+            translocate!(plr, origin_arc, target_arc);
+            // and redit
+            ReditCommand.exec({ctx.args = "this";ctx}).await;
         }
     }
 }

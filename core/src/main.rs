@@ -208,6 +208,17 @@ async fn main() {
                                         tell_user!(&mut writer, "\n<c cyan>{}</c> vanishes into the mists…\n", who);
                                         reprompt_playing_user!(writer, state);
                                     }
+                                },
+
+                                Broadcast::System { rooms, message } => {
+                                    let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                                    for room in rooms {
+                                        if Arc::ptr_eq(&room, &ploc) {
+                                            tell_user!(&mut writer, "\n{}\n", message);
+                                            reprompt_playing_user!(writer, state);
+                                            break;
+                                        }
+                                    }
                                 }
                             },
                             _ => ()

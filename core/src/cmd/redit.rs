@@ -4,9 +4,12 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, player_or_bust, string::Slugger, tell_user, tell_user_unk, util::access::Accessor};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, player_or_bust, show_help_if_needed, string::Slugger, tell_user, tell_user_unk, translocate, util::access::Accessor};
 
 pub mod abort;
+pub mod desc;
+pub mod title;
+pub mod weave;
 
 pub struct ReditCommand;
 
@@ -22,7 +25,8 @@ impl Command for ReditCommand {
             let p = plr.read().await;
             (p.access.clone(), p.id().to_string(), p.location.upgrade())
         };
-        if show_help_if_needed(ctx, "redit") { return; }
+        show_help_if_needed!(ctx, "redit");
+        
         // a bit of shortcuts:
         let lc = ctx.args.to_lowercase();
         let room = match lc.as_str() {
@@ -46,9 +50,7 @@ impl Command for ReditCommand {
                     if let Some(ploc) = ploc {
                         if !Arc::ptr_eq(&target_arc, &ploc) {
                             if access.is_true_builder() {
-                                ploc.write().await.who.remove(&p_id);
-                                target_arc.write().await.who.insert(p_id.clone(), Arc::downgrade(&plr));
-                                plr.write().await.location = Arc::downgrade(&target_arc);
+                                translocate!(plr, p_id, ploc, target_arc);
                                 tell_user!(ctx.writer, "<c cyan>You phase through the cosmic mists to your destination…</c>\n");
                             } else {
                                 tell_user!(ctx.writer, "Unfortunately you have to walk there first… No teleport cheesing with <c red>redit</c>\n");
@@ -66,18 +68,7 @@ impl Command for ReditCommand {
         {
             let mut w = plr.write().await;
             w.redit_buffer = Some(room);
-            ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Room }
+            ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Room{ dirty: false } }
         }
-
-        tell_user!(ctx.writer, "TODO\n")// TODO
     }
-}
-
-fn show_help_if_needed(ctx: &mut CommandCtx<'_>, topic: &str) -> bool {
-    if !ctx.args.is_empty() && !ctx.args.starts_with('?') {
-        return false;
-    }
-
-    //TODO invoke help topic rendering
-    true
 }
