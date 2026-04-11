@@ -3,7 +3,7 @@ use std::i32;
 use cosmic_garden_pm::{IdentityMut, Itemized, Storage};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{Item, container::{specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC}}}, traits::Reflector};
+use crate::{item::{Item, container::specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC}}, string::Describable, traits::Reflector};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum ContainerVariantType {
@@ -41,6 +41,26 @@ pub enum ContainerVariant {
     Backpack(ContainerSpec),
     PlayerInventory(ContainerSpec),
     Room(ContainerSpec),
+}
+
+impl Describable for ContainerVariant {
+    fn desc<'a>(&'a self) -> &'a str {
+        match self {
+            Self::Backpack(v) |
+            Self::PlayerInventory(v) |
+            Self::Pouch(v) |
+            Self::Room(v) => v.desc()
+        }
+    }
+
+    fn set_desc(&mut self, text: &str) -> bool {
+        match self {
+            Self::Backpack(v) |
+            Self::PlayerInventory(v) |
+            Self::Pouch(v) |
+            Self::Room(v) => v.set_desc(text)
+        }
+    }
 }
 
 impl ContainerVariant {

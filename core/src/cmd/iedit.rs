@@ -2,9 +2,10 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, io::ClientState, item::container::Storage, player, show_help_if_needed, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{Item, TemporaryStructToAppeaseAnalyzerDuringWIP, container::Storage, primordial::PrimordialItem}, player, show_help_if_needed, string::Uuid, tell_user, validate_access};
 
 pub mod abort;
+pub mod iex;
 
 pub struct IeditCommand;
 
@@ -35,12 +36,14 @@ impl Command for IeditCommand {
             }
         };
 
-        if target_item.is_some() {
-            {   // tuck it into safety of iedit_buffer which will be stored on disk the moment io_thread sez so.
-                let mut w = plr.write().await;
-                w.iedit_buffer = target_item;
-            }
-            ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Item { dirty: true } };
+        match &target_item {
+            Some(i) => tell_user!(ctx.writer, "You found '{}', let see about what it's made of…\n", i.id()),
+            _ => tell_user!(ctx.writer, "No such item was found. So, lets create new stuff!\n")
         }
+        {   // tuck it into safety of iedit_buffer which will be stored on disk the moment io_thread sez so.
+            let mut w = plr.write().await;
+            w.iedit_buffer = target_item.or_else(|| Some(PrimordialItem::new(id)));
+        }
+        ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Item { dirty: true } };
     }
 }

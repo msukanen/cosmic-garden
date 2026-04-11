@@ -137,6 +137,11 @@ impl Describable for Room {
     fn desc<'a>(&'a self) -> &'a str {
         &self.desc
     }
+
+    fn set_desc(&mut self, text: &str) -> bool {
+        self.desc = text.to_string();
+        true
+    }
 }
 
 #[cfg(test)]

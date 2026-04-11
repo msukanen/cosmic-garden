@@ -3,11 +3,12 @@
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::container::{Storage, StorageError, specs::StorageSpace, variants::ContainerVariant}, string::Uuid, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{container::{Storage, StorageError, specs::StorageSpace, variants::ContainerVariant}, primordial::PrimordialItem}, string::{Describable, Uuid}, traits::Reflector};
 
 pub mod owner;
 pub mod container;
 pub mod key;
+pub mod primordial;
 pub mod tool;
 pub mod weapon;
 
@@ -16,7 +17,11 @@ pub trait Itemized {
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut)]
-pub struct TemporaryStructToAppeaseAnalyzerDuringWIP {id:String,title:String}
+pub struct TemporaryStructToAppeaseAnalyzerDuringWIP {
+    pub(crate) id:String,
+    pub(crate) title:String
+}
+
 impl Itemized for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn size(&self) -> StorageSpace {
         1
@@ -28,6 +33,16 @@ impl Reflector for TemporaryStructToAppeaseAnalyzerDuringWIP {
     }
 }
 
+impl Describable for TemporaryStructToAppeaseAnalyzerDuringWIP {
+    fn desc<'a>(&'a self) -> &'a str {
+        "nothing to see here"
+    }
+
+    fn set_desc(&mut self, text: &str) -> bool {
+        false
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Itemized)]
 /// Root [Item] types.
 pub enum Item {
@@ -35,6 +50,7 @@ pub enum Item {
     Weapon(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Tool(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Key(TemporaryStructToAppeaseAnalyzerDuringWIP),
+    Primordial(PrimordialItem),
 }
 
 impl Reflector for Item {
@@ -44,6 +60,7 @@ impl Reflector for Item {
             Self::Key(k) => Self::Key(k.reflect()),
             Self::Tool(t) => Self::Tool(t.reflect()),
             Self::Weapon(w) => Self::Weapon(w.reflect()),
+            Self::Primordial(p) => Self::Primordial(p.reflect()),
         }
     }
 }
@@ -109,6 +126,28 @@ impl Storage for Item {
         match self {
             Self::Container(c) => c.take(id),
             _ => None
+        }
+    }
+}
+
+impl Describable for Item {
+    fn desc<'a>(&'a self) -> &'a str {
+        match self {
+            Self::Container(v) => v.desc(),
+            Self::Key(v) => v.desc(),
+            Self::Primordial(v) => v.desc(),
+            Self::Tool(v) => v.desc(),
+            Self::Weapon(v) => v.desc(),
+        }
+    }
+
+    fn set_desc(&mut self, text: &str) -> bool {
+        match self {
+            Self::Container(v) => v.set_desc(text),
+            Self::Key(v) => v.set_desc(text),
+            Self::Primordial(v) => v.set_desc(text),
+            Self::Tool(v) => v.set_desc(text),
+            Self::Weapon(v) => v.set_desc(text),
         }
     }
 }

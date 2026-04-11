@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, Itemized};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized as _, container::{Storage, StorageError, variants::ContainerVariant}}, string::{UNNAMED, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{Item, Itemized as _, container::{Storage, StorageError, variants::ContainerVariant}}, string::{Describable, UNNAMED, Uuid}, traits::Reflector};
 
 pub type StorageSpace = u16;
 
@@ -17,6 +17,8 @@ lazy_static! {
         contents: HashMap::new(),
         max_space: 30,
         size: 2,
+        desc: "a backpack".into(),
+        desc_can_be_modified: true,
     };
 
     pub(super) static ref DEFAULT_POUCH_SPEC: ContainerSpec = ContainerSpec {
@@ -25,6 +27,8 @@ lazy_static! {
         contents: HashMap::new(),
         max_space: 10,
         size: 1,
+        desc: "a pouch".into(),
+        desc_can_be_modified: true,
     };
 
     pub(super) static ref DEFAULT_PLR_INV_SPEC: ContainerSpec = ContainerSpec {
@@ -33,6 +37,8 @@ lazy_static! {
         contents: HashMap::new(),
         max_space: 50,
         size: 0,
+        desc: "player-inventory".into(),
+        desc_can_be_modified: false,
     };
 
     pub(super) static ref DEFAULT_ROOM_SPACE_SPEC: ContainerSpec = ContainerSpec {
@@ -41,6 +47,8 @@ lazy_static! {
         contents: HashMap::new(),
         max_space: 1_000,
         size: 0,
+        desc: "room-space".into(),
+        desc_can_be_modified: false,
     };
 }
 
@@ -52,6 +60,21 @@ pub struct ContainerSpec {
     contents: HashMap<String, Item>,
     max_space: StorageSpace,
     size: StorageSpace,
+    desc: String,
+    desc_can_be_modified: bool,
+}
+
+impl Describable for ContainerSpec {
+    fn desc<'a>(&'a self) -> &'a str {
+        &self.desc
+    }
+
+    fn set_desc(&mut self, text: &str) -> bool {
+        if self.desc_can_be_modified {
+            self.desc = text.to_string();
+        }
+        self.desc_can_be_modified
+    }
 }
 
 impl From<&ContainerSpec> for ContainerSpec {
@@ -62,6 +85,8 @@ impl From<&ContainerSpec> for ContainerSpec {
             contents: HashMap::new(),
             max_space: value.max_space,
             size: value.size,
+            desc: value.desc.clone(),
+            desc_can_be_modified: value.desc_can_be_modified,
         }
     }
 }
