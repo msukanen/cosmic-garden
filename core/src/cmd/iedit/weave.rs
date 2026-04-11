@@ -12,7 +12,8 @@ macro_rules! bye_weave {
             let mut p = $plr.write().await;
             p.iedit_buffer = None;
         }
-        $ctx.state = ClientState::Playing { player: $plr.clone() }
+        $ctx.state = ClientState::Playing { player: $plr.clone() };
+        return;
     };
 }
 
