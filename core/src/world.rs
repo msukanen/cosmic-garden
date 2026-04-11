@@ -1,5 +1,5 @@
 //! When worlds collide…
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, rc::Weak, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
