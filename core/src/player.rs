@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{edit::state::EditorState, error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, io_thread::{SAVE_ASAP, SAVE_ASAP_THRESHOLD}, item::{Item, container::{specs::ContainerSpec, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType}, room::Room, string::UNNAMED, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, io_thread::{SAVE_ASAP, SAVE_ASAP_THRESHOLD}, item::{Item, container::{variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType}, room::Room, string::UNNAMED, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -62,7 +62,7 @@ pub struct Player {
     pub san: Stat,
     #[serde(default)]
     pub redit_buffer: Option<Room>,
-    #[serde(default = "player_default_atype")]
+    #[serde(default = "player_default_atype", skip)]
     pub activity_type: ActivityType,
 }
 
