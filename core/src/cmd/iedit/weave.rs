@@ -6,17 +6,6 @@ use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::Id
 
 pub struct WeaveCommand;
 
-macro_rules! bye_weave {
-    ($ctx:ident, $plr:ident) => {
-        {
-            let mut p = $plr.write().await;
-            p.iedit_buffer = None;
-        }
-        $ctx.state = ClientState::Playing { player: $plr.clone() };
-        return;
-    };
-}
-
 #[async_trait]
 impl Command for WeaveCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
@@ -33,34 +22,36 @@ impl Command for WeaveCommand {
             (p_id, p_loc.clone())
         };
 
-        let mut p = plr.write().await;
-        let Some(item) = p.iedit_buffer.take() else {
-            tell_user!(ctx.writer, "Surprisingly enough, there's nothing to weave in your pockets, just dust bunnies.\n");
-            AbortCommand.exec({ctx.args = "q";ctx}).await;
-            return;
+        let item = {
+            let mut p = plr.write().await;
+            let Some(item) = p.iedit_buffer.take() else {
+                drop(p);
+                tell_user!(ctx.writer, "Surprisingly enough, there's nothing to weave in your pockets, just dust bunnies.\n");
+                AbortCommand.exec({ctx.args = "q";ctx}).await;
+                return;
+            };
+            item
         };
 
         let final_item = item.metamorph();
-        if let Err(uhoh) = p.inventory.try_insert(final_item) {
-            tell_user!(ctx.writer, "No space in your inventory! Dropping into room, maybe…\n");
-            drop(p);
-            let mut r = p_loc.write().await;
-            if let Some(item) = uhoh.extract_item() {
-                if let Err(uhoh) = r.contents.try_insert(item) {
-                    drop(r);
-                    log::error!("Item in {uhoh:?} too large to be contained by even a Room! Eww!");
-                    tell_user!(ctx.writer, "Yikes?! Room cannot hold on to that? What's this buggery?\n");
-                    // TODO: lost-and-found mechanics for io_thread
-                    //     - store such items on World level?
-                    bye_weave!(ctx,plr);
-                }
-                tell_user!(ctx.writer, "Well, too large for your inventory. So, you set it down on the ground…\n");
-                bye_weave!(ctx,plr);
-            }
-            log::error!("Item evaporated during transit?! DEV! FIX! StorageError *should* have had it!");
-            tell_user!(ctx.writer, "Uh, where'd it go? Probably should check the logs…\n");
+        log::trace!("Builder metamorph: {final_item:?}");
+        let Err(storage_error) = plr.write().await.inventory.try_insert(final_item) else {
+            tell_user!(ctx.writer, "You successfully created something - check your inventory…\n");
+            AbortCommand.exec({ctx.args = "q";ctx}).await;
+            return;
         };
-
-        bye_weave!(ctx,plr);
+        // trusting the system...
+        let item = storage_error.extract_item().unwrap();
+        // too big for player inv. Room?
+        let Err(storage_error) = p_loc.write().await.contents.try_insert(item) else {
+            tell_user!(ctx.writer, "Well, too large for your inventory. So, you set it down on the ground…\n");
+            AbortCommand.exec({ctx.args = "q";ctx}).await;
+            return;
+        };
+        // trusting the system again...
+        let item = storage_error.extract_item().unwrap();
+        // TODO couldn't fit in room - lost-and-found
+        tell_user!(ctx.writer, "Well… you made something, but have no clue where it went…\n");
+        AbortCommand.exec({ctx.args = "q";ctx}).await;
     }
 }
