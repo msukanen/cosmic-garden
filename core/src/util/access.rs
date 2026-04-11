@@ -67,3 +67,25 @@ macro_rules! player_or_bust {
         plr
     }};
 }
+
+#[macro_export]
+macro_rules! validate_access {
+    ($ctx:ident, $type:ident) => {
+        {
+            let Some(plr) = $ctx.get_player_arc() else {
+                crate::tell_user_unk!($ctx.writer);
+                return;
+            };
+            let p = plr.read().await;
+            use crate::util::access::Accessor;
+            paste::paste! {
+            if !p.access.[<is_ $type>]() {
+                crate::tell_user_unk!($ctx.writer);
+                return;
+            }
+            }
+            drop(p);
+            plr
+        }
+    };
+}
