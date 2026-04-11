@@ -66,6 +66,9 @@ pub struct Player {
     
     #[serde(default = "player_default_atype", skip)]
     pub activity_type: ActivityType,
+
+    #[serde(default = "player_inv_default")]
+    pub inventory: Item,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -162,6 +165,7 @@ impl Default for Player {
             redit_buffer: None,
             iedit_buffer: None,
             activity_type: ActivityType::Other,
+            inventory: player_inv_default(),
         }
     }
 }
@@ -181,5 +185,13 @@ impl Accessor for Player {
 
     fn is_true_builder(&self) -> bool {
         self.access.is_true_builder()
+    }
+}
+
+#[cfg(test)]
+mod player_tests {
+    #[test]
+    fn player_inventory() {
+
     }
 }
