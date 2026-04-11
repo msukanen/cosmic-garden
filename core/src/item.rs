@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::container::{Storage, StorageError, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}, string::Uuid, traits::Reflector};
+use crate::{identity::IdentityQuery, item::container::{Storage, StorageError, specs::StorageSpace, variants::ContainerVariant}, string::Uuid, traits::Reflector};
 
 pub mod owner;
 pub mod container;
@@ -115,13 +115,15 @@ impl Storage for Item {
 
 #[cfg(test)]
 mod item_tests {
+    use crate::item::container::variants::ContainerVariantType;
+
     use super::*;
 
     #[test]
     fn test_vessel_hierarchy_and_volume() {
         let _ = env_logger::try_init();
         // 1. GENESIS: Create the World-Space (Room) and the Player
-        let mut room = ContainerVariant::new(ContainerVariantType::Room);
+        //let mut room = ContainerVariant::new(ContainerVariantType::Room);
         let mut player_inv = ContainerVariant::new(ContainerVariantType::PlayerInventory);
         
         // 2. MATTER: Create a Backpack and a "Heavy" Key
