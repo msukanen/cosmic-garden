@@ -52,14 +52,17 @@ impl Room {
     }
 
     pub async fn new(id: &str, title: &str) -> Result<Arc<RwLock<Self>>, Error> {
-        let room = Self {
+        // check if there is pre-existing file...
+        let room = Room::load_sync(id).unwrap_or({
+            log::info!("No archælogy possible, thus creating new room '{}'", id);
+            Self {
             id: id.as_id()?,
             title: title.into(),
             desc: empty_room_desc(),
             who: HashMap::new(),
             exits: HashMap::new(),
             raw_exits: HashMap::new(),
-        };
+        }});
 
         Ok(Arc::new(RwLock::new(room)))
     }
