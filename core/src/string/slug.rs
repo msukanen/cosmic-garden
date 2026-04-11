@@ -1,10 +1,8 @@
 //! Sluggery!
 
-use lazy_static::lazy_static;
-use regex::Regex;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{identity::{IdError, MAX_ID_LEN}, string::{UUID_RE, Uuid}};
+use crate::{identity::{IdError, MAX_ID_LEN}, string::Uuid};
 
 /// A trait for all the slugs…
 pub trait Slugger {
@@ -133,7 +131,10 @@ pub fn as_id_with_uuid(value: &str) -> Result<String, IdError> {
 
 #[cfg(test)]
 mod slug_tests {
+    use crate::string::UUID_RE;
+
     use super::*;
+
 
     #[test]
     fn as_id() {
