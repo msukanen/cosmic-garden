@@ -9,15 +9,23 @@ pub enum EditorMode {
     Item { dirty: bool },
 }
 
+const DIRTY_FLAG: &'static str = "<c red>^<c yellow>*</c></c>";
+const fn dirty_flag(state:bool) -> &'static str {
+    if state { DIRTY_FLAG } else {""}
+}
+
 impl EditorMode {
     pub fn prompt(&self, player: &Player) -> String {
         match self {
             Self::Help{dirty} => "[HEDIT ()]: ".to_string(),
-            Self::Item{dirty} => "[IEDIT ()]: ".to_string(),
-            Self::Room{dirty} => format!("<c blue>[<c cyan>REDIT</c>@<c green>{} ({})</c>]</c>{}: ",
+            Self::Item{dirty} => format!("<c blue>[<c cyan>IEDIT</c>@<c green> {}</c>]</c>{}: ",
+                if let Some(item) = &player.iedit_buffer { item.id() } else {"***"},
+                dirty_flag(*dirty)
+            ),
+            Self::Room{dirty} => format!("<c blue>[<c cyan>REDIT</c>@<c green> {} ({})</c>]</c>{}: ",
                 if let Some(room) = &player.redit_buffer { room.id() } else {"***"},
                 if let Some(room) = &player.redit_buffer { room.title() } else {"***"},
-                if *dirty {"<c red>^<c yellow>*</c></c>"} else {""}
+                dirty_flag(*dirty)
             ),
         }
     }

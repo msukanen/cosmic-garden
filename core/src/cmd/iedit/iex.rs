@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::Itemized, string::Describable, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::{Itemized, container::Storage}, string::Describable, tell_user, validate_access};
 
 pub struct IexCommand;
 
@@ -22,12 +22,13 @@ impl Command for IexCommand {
         };
 
         tell_user!(ctx.writer, "<c cyan>--- Item Examination Gantry ---</c>\n");
-        tell_user!(ctx.writer, "ID:       <c white>{}</c>\n", item.id());
-        tell_user!(ctx.writer, "Title:    <c white>{}</c>\n", item.title());
-        tell_user!(ctx.writer, "Type:     <c green>{:?}</c>\n", item); // Show the Enum Variant (Primordial, Vessel, etc)
+        tell_user!(ctx.writer, "       ID: <c white>{}</c>\n", item.id());
+        tell_user!(ctx.writer, "    Title: <c white>{}</c>\n", item.title());
+        tell_user!(ctx.writer, "     Type: <c green>{:?}</c>\n", item); // Show the Enum Variant (Primordial, Vessel, etc)
             
         // Access the storage interface if applicable
-        tell_user!(ctx.writer, "Size:     <c yellow>{}</c>\n", item.size());
+        tell_user!(ctx.writer, "     Size: <c yellow>{}</c>\n", item.size());
+        tell_user!(ctx.writer, "Max space: <c yellow>{}</c>\n", item.max_space());
             
         tell_user!(ctx.writer, "<c gray>Description:</c>\n{}\n", item.desc());
         tell_user!(ctx.writer, "<c cyan>-------------------------------</c>\n");
