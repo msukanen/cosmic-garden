@@ -55,6 +55,10 @@ pub trait Storage {
     /// Try insert an [`item`][Item].
     #[must_use = "Item is contained within StorageError"]
     fn try_insert(&mut self, _item: Item) -> Result<(), StorageError>;
+    fn contains(&self, id: &str) -> bool;
+    fn peek_at(&self, id: &str) -> Option<&Item>;
+    #[must_use = "Item taken out will require handling"]
+    fn take(&mut self, id: &str) -> Option<Item>;
 }
 
 impl StorageError {

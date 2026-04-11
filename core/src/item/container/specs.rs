@@ -1,12 +1,12 @@
 //! Container specs themselves.
 
-use std::collections::HashMap;
+use std::{cmp::Ordering, collections::HashMap};
 
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized as _, container::{Storage, StorageError}}, string::{UNNAMED, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{Item, Itemized as _, container::{Storage, StorageError, variants::ContainerVariant}}, string::{UNNAMED, Uuid}, traits::Reflector};
 
 pub type StorageSpace = u16;
 
@@ -44,7 +44,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Deserialize, Serialize, IdentityMut, Itemized)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Itemized)]
 pub struct ContainerSpec {
     id: String,
     #[identity(title)]
@@ -87,6 +87,46 @@ impl ContainerSpec {
     }
 }
 
+impl PartialEq<ContainerSpec> for ContainerSpec {
+    fn eq(&self, other: &ContainerSpec) -> bool {
+        self.max_space == other.max_space
+    }
+}
+
+impl PartialEq<Item> for ContainerSpec {
+    fn eq(&self, other: &Item) -> bool {
+        match other {
+            Item::Container(v) => match v {
+                ContainerVariant::Backpack(v)|
+                ContainerVariant::PlayerInventory(v) |
+                ContainerVariant::Pouch(v) |
+                ContainerVariant::Room(v)  => v.eq(self)
+            },
+            _ => false
+        }
+    }
+}
+
+impl PartialOrd<Item> for ContainerSpec {
+    fn partial_cmp(&self, other: &Item) -> Option<Ordering> {
+        match other {
+            Item::Container(v) => match v {
+                ContainerVariant::Backpack(v) |
+                ContainerVariant::PlayerInventory(v) |
+                ContainerVariant::Pouch(v) |
+                ContainerVariant::Room(v) => self.partial_cmp(v),
+            },
+            _ => Some(Ordering::Greater)
+        }
+    }
+}
+
+impl PartialOrd<ContainerSpec> for ContainerSpec {
+    fn partial_cmp(&self, other: &ContainerSpec) -> Option<Ordering> {
+        self.max_space.partial_cmp(&other.max_space)
+    }
+}
+
 impl Storage for ContainerSpec {
     fn max_space(&self) -> StorageSpace {
         self.max_space
@@ -101,6 +141,9 @@ impl Storage for ContainerSpec {
     }
 
     fn can_hold(&self, item: &Item) -> Result<bool, StorageError> {
+        if self < item {
+            return Err(StorageError::InvalidHierarchyQ);
+        }
         let ok = item.required_space() as usize
             + self.contents_size() as usize
             <= self.max_space as usize;
@@ -123,5 +166,37 @@ impl Storage for ContainerSpec {
         }
         self.contents.insert(item.id().into(), item);
         Ok(())
+    }
+
+    fn contains(&self, id: &str) -> bool {
+        if self.max_space < 1 { return false; }
+        for c in self.contents.values() {
+            if c.id() == id || c.contains(id) { return true; }
+        }
+        true
+    }
+
+    fn peek_at(&self, id: &str) -> Option<&Item> {
+        if self.max_space < 1 { return None; }
+        for c in self.contents.values() {
+            if c.id() == id { return Some(c); }
+            if let Some(item) = c.peek_at(id) {
+                return Some(item);
+            }
+        }
+        None
+    }
+
+    fn take(&mut self, id: &str) -> Option<Item> {
+        if self.max_space < 1 { return None; }
+        if let Some(item) = self.contents.remove(id) {
+            return Some(item);
+        }
+        for c in self.contents.values_mut() {
+            if let Some(item) = c.take(id) {
+                return Some(item);
+            }
+        }
+        None
     }
 }
