@@ -52,8 +52,6 @@ pub struct Player {
     pub(crate) location_id: String,
     #[serde(skip)]
     pub location: Weak<RwLock<Room>>,
-    #[serde(default)]
-    pub access: Access,
     #[serde(default = "player_hp_default")]
     pub hp: Stat,
     #[serde(default = "player_mp_default")]
@@ -64,6 +62,8 @@ pub struct Player {
     pub san: Stat,
     #[serde(default)]
     pub redit_buffer: Option<Room>,
+    #[serde(default = "player_default_atype")]
+    pub activity_type: ActivityType,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -158,6 +158,7 @@ impl Default for Player {
             san: player_san_default(),
             config: Config::default(),
             redit_buffer: None,
+            activity_type: ActivityType::Other,
         }
     }
 }

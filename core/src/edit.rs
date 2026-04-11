@@ -6,12 +6,14 @@ use crate::{identity::IdentityQuery, player::Player};
 pub enum EditorMode {
     Room { dirty: bool },
     Help { dirty: bool },
+    Item { dirty: bool },
 }
 
 impl EditorMode {
     pub fn prompt(&self, player: &Player) -> String {
         match self {
             Self::Help{dirty} => "[HEDIT ()]: ".to_string(),
+            Self::Item{dirty} => "[IEDIT ()]: ".to_string(),
             Self::Room{dirty} => format!("<c blue>[<c cyan>REDIT</c>@<c green>{} ({})</c>]</c>{}: ",
                 if let Some(room) = &player.redit_buffer { room.id() } else {"***"},
                 if let Some(room) = &player.redit_buffer { room.title() } else {"***"},
@@ -23,6 +25,7 @@ impl EditorMode {
     pub fn is_dirty(&self) -> bool {
         match self {
             Self::Help { dirty } |
+            Self::Item { dirty } |
             Self::Room { dirty } => *dirty
         }
     }
@@ -30,6 +33,7 @@ impl EditorMode {
     pub fn set_dirty(&mut self, state: bool) {
         match self {
             Self::Help { dirty } |
+            Self::Item { dirty } |
             Self::Room { dirty } => *dirty = state,
         }
     }

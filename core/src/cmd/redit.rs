@@ -3,9 +3,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use serde::{Deserialize, Serialize};
 
-use crate::{cmd::{Command, CommandCtx}, edit::{EditorMode, state::EditorState}, identity::IdentityQuery, io::ClientState, player::ActivityType, room::Room, show_help_if_needed, string::Slugger, tell_user, translocate, util::access::Accessor, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, player::ActivityType, room::Room, show_help_if_needed, string::Slugger, tell_user, translocate, util::access::Accessor, validate_access};
 
 pub mod abort;
 pub mod desc;
