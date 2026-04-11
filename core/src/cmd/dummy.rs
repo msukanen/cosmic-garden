@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::cmd::{Command, CommandCtx};
+use crate::{cmd::{Command, CommandCtx}, tell_user_unk};
 
 pub struct DummyCommand;
 
@@ -16,6 +16,8 @@ impl Command for DummyCommand {
             let mut p = p.write().await;
             p.actions_taken += 1;
             tell_user!(ctx.writer, "Actions... {}\n", p.actions_taken);
+            return;
         }
+        tell_user_unk!(ctx.writer);
     }
 }
