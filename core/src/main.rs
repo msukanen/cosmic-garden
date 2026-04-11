@@ -254,7 +254,7 @@ async fn main() {
                                     match who {
                                         ForceTarget::All => {
                                             state = cmd::parse_and_exec(ctx).await;
-                                            let prompt = player.read().await.prompt(&state).await.unwrap_or_else(||"#> ".into());
+                                            let prompt = player.read().await.prompt(&state).unwrap_or_else(||"#> ".into());
                                             tell_user!(&mut writer, "\n{}\n{}", delivery, prompt);
                                         },
 
@@ -265,7 +265,7 @@ async fn main() {
                                             if !Arc::ptr_eq(&ploc, &id) { continue; }
 
                                             state = cmd::parse_and_exec(ctx).await;
-                                            let prompt = player.read().await.prompt(&state).await.unwrap_or_else(||"#> ".into());
+                                            let prompt = player.read().await.prompt(&state).unwrap_or_else(||"#> ".into());
                                             tell_user!(&mut writer, "\n{}\n{}", delivery, prompt);
                                         }
 
@@ -273,7 +273,7 @@ async fn main() {
                                             if !Arc::ptr_eq(&player, &id) { continue; }
 
                                             state = cmd::parse_and_exec(ctx).await;
-                                            let prompt = player.read().await.prompt(&state).await.unwrap_or_else(||"#> ".into());
+                                            let prompt = player.read().await.prompt(&state).unwrap_or_else(||"#> ".into());
                                             tell_user!(&mut writer, "\n{}\n{}", delivery, prompt);
                                         }
                                     }
