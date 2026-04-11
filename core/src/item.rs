@@ -15,7 +15,7 @@ pub trait Itemized {
     fn size(&self) -> StorageSpace;
 }
 
-#[derive(Debug, Deserialize, Serialize, IdentityMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut)]
 pub struct TemporaryStructToAppeaseAnalyzerDuringWIP {id:String,title:String}
 impl Itemized for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn size(&self) -> StorageSpace {
@@ -28,7 +28,7 @@ impl Reflector for TemporaryStructToAppeaseAnalyzerDuringWIP {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize, IdentityMut, Itemized)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Itemized)]
 /// Root [Item] types.
 pub enum Item {
     Container(ContainerVariant),
@@ -90,6 +90,27 @@ impl Storage for Item {
             _ => Err(container::StorageError::NotContainer(item))
         }
     }
+
+    fn contains(&self, id: &str) -> bool {
+        match self {
+            Self::Container(c) => c.contains(id),
+            _ => false
+        }
+    }
+
+    fn peek_at(&self, id: &str) -> Option<&Item> {
+        match self {
+            Self::Container(c) => c.peek_at(id),
+            _ => None
+        }
+    }
+
+    fn take(&mut self, id: &str) -> Option<Item> {
+        match self {
+            Self::Container(c) => c.take(id),
+            _ => None
+        }
+    }
 }
 
 #[cfg(test)]
@@ -98,6 +119,7 @@ mod item_tests {
 
     #[test]
     fn test_vessel_hierarchy_and_volume() {
+        let _ = env_logger::try_init();
         // 1. GENESIS: Create the World-Space (Room) and the Player
         let mut room = ContainerVariant::new(ContainerVariantType::Room);
         let mut player_inv = ContainerVariant::new(ContainerVariantType::PlayerInventory);
@@ -109,21 +131,21 @@ mod item_tests {
             title: "Heavy Iron Key".to_string(),
         });
 
-        // 3. THE HIERARCHY LAW: Try to put the Player in the Backpack (Should fail)
-        // A Rank 100 cannot enter a Rank 10.
+        // 3. THE HIERARCHY LAW: Try to put the Player inv in the Backpack (Should fail)
         let result = backpack.try_insert(player_inv.reflect()); 
-        assert!(matches!(result, Err(StorageError::InvalidHierarchyQ)));
+        log::debug!("{result:?}");
+        assert!(matches!(result, Err(StorageError::InvalidHierarchy(_))));
 
         // 4. THE VOLUME LAW: Stomping the flat matter
         // Put the Key (size 1) into the Backpack (max 30).
         backpack.try_insert(key).expect("Key should fit in backpack");
         
         // 5. THE RECURSIVE RELAY: Put the full Backpack into the Player Inventory
-        // Backpack size (2) + Key size (1) = 3 total units taken from Player (60).
+        // Backpack size (2) + Key size (1) = 3 total units taken from Player (50).
         player_inv.try_insert(backpack).expect("Backpack should fit in player inventory");
 
         if let Item::Container(v) = &player_inv {
-            assert_eq!(v.space(), 3); // The "Butcher" calculated the nested grit!
+            assert_eq!(v.space(), 47); // The "Butcher" calculated the nested grit!
         }
     }
 }
