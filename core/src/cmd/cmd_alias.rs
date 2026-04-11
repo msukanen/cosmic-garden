@@ -23,6 +23,7 @@ mod cmd_alias_tests {
     #[test]
     fn cmd_alias_reads() {
         let _ = DATA.set(env::var("COSMIC_GARDEN_DATA").unwrap());
+        let _ = (*CMD_ALIASES).clone();
         assert_eq!("inventory".to_string(), *CMD_ALIASES.get("inv").unwrap());
     }
 }
