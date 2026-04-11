@@ -44,13 +44,19 @@ pub enum ContainerVariant {
 }
 
 impl ContainerVariant {
+    /// Get new [ContainerVariant] as [Item].
     pub fn new(variant: ContainerVariantType) -> Item {
-        Item::Container(match variant {
+        Item::Container(Self::raw(variant))
+    }
+
+    /// Get new pure [ContainerVariant].
+    pub fn raw(variant: ContainerVariantType) -> Self {
+        match variant {
             ContainerVariantType::Backpack => Self::Backpack(ContainerSpec::from(&*DEFAULT_BACKPACK_SPEC)),
             ContainerVariantType::PlayerInventory => Self::PlayerInventory(ContainerSpec::from(&*DEFAULT_PLR_INV_SPEC)),
             ContainerVariantType::Pouch => Self::Pouch(ContainerSpec::from(&*DEFAULT_POUCH_SPEC)),
             ContainerVariantType::Room => Self::Room(ContainerSpec::from(&*DEFAULT_ROOM_SPACE_SPEC)),
-        })
+        }
     }
 
     pub fn rank(&self) -> i32 {
