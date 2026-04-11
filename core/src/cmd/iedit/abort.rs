@@ -13,7 +13,7 @@ impl Command for AbortCommand {
         let plr = player_or_bust!(ctx);
         plr.write().await.activity_type = ActivityType::Playing;
         ctx.state = ClientState::Playing { player: plr.clone() };
-        plr.write().await.editor = None;
+        plr.write().await.iedit_buffer = None;
         if !ctx.args.starts_with('q') {
             tell_user!(ctx.writer, "Edits erased. Resuming normal life…\n");
         }

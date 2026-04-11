@@ -60,8 +60,10 @@ pub struct Player {
     pub sn: Stat,
     #[serde(default = "player_san_default")]
     pub san: Stat,
-    #[serde(default)]
-    pub redit_buffer: Option<Room>,
+    
+    #[serde(default)] pub redit_buffer: Option<Room>,
+    #[serde(default)] pub iedit_buffer: Option<Item>,
+    
     #[serde(default = "player_default_atype", skip)]
     pub activity_type: ActivityType,
 }
@@ -158,6 +160,7 @@ impl Default for Player {
             san: player_san_default(),
             config: Config::default(),
             redit_buffer: None,
+            iedit_buffer: None,
             activity_type: ActivityType::Other,
         }
     }
