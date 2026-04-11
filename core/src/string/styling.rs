@@ -26,6 +26,8 @@ pub const RULER_LINE: &str = "|___\
 <c cyan>70</c>___\
 <c cyan>75</c>___|";
 
+pub const RULER_LINE_PLAIN: &str = "-------------------------------------------------------------------------------";
+
 /// Parses a color name string into an ansi_term::Colour.
 fn parse_color(name: &str) -> Option<Colour> {
     match name.to_lowercase().as_str() {
