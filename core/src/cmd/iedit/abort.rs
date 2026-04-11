@@ -1,4 +1,4 @@
-//! Room editor - abort!
+//! Item editor - abort!
 
 use async_trait::async_trait;
 
