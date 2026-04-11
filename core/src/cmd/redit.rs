@@ -3,8 +3,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use serde::{Deserialize, Serialize};
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, player_or_bust, show_help_if_needed, string::Slugger, tell_user, tell_user_unk, translocate, util::access::Accessor};
+use crate::{cmd::{Command, CommandCtx}, edit::{EditorMode, state::EditorState}, identity::IdentityQuery, io::ClientState, player::ActivityType, room::Room, show_help_if_needed, string::Slugger, tell_user, translocate, util::access::Accessor, validate_access};
 
 pub mod abort;
 pub mod desc;
@@ -16,9 +17,9 @@ pub struct ReditCommand;
 #[async_trait]
 impl Command for ReditCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
-        let plr = player_or_bust!(ctx);
-        if !plr.read().await.access.is_builder() {
-            tell_user_unk!(ctx.writer);
+        let plr = validate_access!(ctx, builder);
+        if ctx.state.is_editing() {
+            tell_user!(ctx.writer, "You're already in one or other editor. Finish work there first.\n");
             return;
         }
         let (access, p_id, ploc) = {
