@@ -6,7 +6,7 @@ use cosmic_garden_pm::IdentityMut;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, player::Player, string::{Describable, Slugger}, util::direction::Direction, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::{Describable, Slugger}, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -37,9 +37,13 @@ pub struct Room {
     
     #[serde(default)]
     pub raw_exits: HashMap<Direction, String>,
+
+    #[serde(default = "room_inventory")]
+    pub contents: ContainerVariant,
 }
 
 fn empty_room_desc() -> String { "A room.".into() }
+fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
 
 impl Room {
     pub fn load_sync(id: &str) -> Result<Self, Error> {
@@ -62,6 +66,7 @@ impl Room {
             who: HashMap::new(),
             exits: HashMap::new(),
             raw_exits: HashMap::new(),
+            contents: room_inventory(),
         }});
 
         Ok(Arc::new(RwLock::new(room)))
@@ -115,6 +120,7 @@ impl Room {
             who: HashMap::new(),
             exits: self.exits.clone(),
             raw_exits: self.raw_exits.clone(),
+            contents: room_inventory(),
         }
     }
 
