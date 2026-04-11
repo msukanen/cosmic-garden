@@ -1,5 +1,5 @@
 //! Everything has an identity, let's deal with that…
-use std::{collections::HashSet, fmt::Display, fs::{self, read_to_string}, sync::Arc};
+use std::{collections::HashSet, fmt::Display, fs, sync::Arc};
 
 use lazy_static::lazy_static;
 use tokio::sync::RwLock;
