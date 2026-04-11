@@ -1,26 +1,31 @@
 //! Commanding core.
 
-use std::{borrow::Cow, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::{net::tcp::OwnedWriteHalf, sync::{RwLock, broadcast}};
 
-use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::{Broadcast, ClientState}, player::Player, tell_user_unk, util::direction::Directional, world::World};
+use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::{Broadcast, ClientState}, player::Player, tell_user, tell_user_unk, util::direction::Directional, world::World};
 
 pub mod cmd_alias;
 mod dummy;
 
 mod dig;
+mod force;
 mod goto;
 pub mod help;
+mod iedit;
 mod invis;
 mod look;
 mod hedit;
 mod quit;
 mod redit;
 mod say;
+mod teleport;
+mod who;
 
 pub struct CommandCtx<'a> {
+    pub pre_pad_n: bool,
     pub state: ClientState,
     pub world: Arc<RwLock<World>>,
     pub tx: &'a broadcast::Sender<Broadcast>,
@@ -75,8 +80,9 @@ pub async fn parse_and_exec<'a>(mut ctx: CommandCtx<'_>) -> ClientState {
     let table = match ctx.state {
         ClientState::Playing { .. } => &COMMANDS,
         ClientState::Editing { ref mode, .. } => match mode {
-            EditorMode::Room{..} => &REDIT_COMMANDS,
-            EditorMode::Help{..} => &HEDIT_COMMANDS,
+            EditorMode::Room { .. } => &REDIT_COMMANDS,
+            EditorMode::Help { .. } => &HEDIT_COMMANDS,
+            EditorMode::Item { .. } => &IEDIT_COMMANDS,
         },
         _ => {// should not happen, but…
             log::error!("Player state '{:?}' invalid for cmd processing?!", ctx.state);
@@ -84,6 +90,10 @@ pub async fn parse_and_exec<'a>(mut ctx: CommandCtx<'_>) -> ClientState {
         }
     };
 
+    if ctx.pre_pad_n {
+        tell_user!(ctx.writer, "\n");
+        ctx.pre_pad_n = false;
+    }
     let cmd = cmd.to_lowercase();
     if let Some(cmd) = table.get(&cmd) {
         cmd.exec(&mut ctx).await
