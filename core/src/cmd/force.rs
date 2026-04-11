@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, io::{Broadcast, ClientState, ForceTarget}, tell_user, tell_user_unk, util::access::Accessor, validate_access};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, io::{Broadcast, ClientState, ForceTarget}, tell_user, validate_access};
 
 pub struct ForceCommand;
 
