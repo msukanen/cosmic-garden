@@ -29,9 +29,10 @@ impl Command for WeaveCommand {
             (*ROOMS_TO_SAVE).write().await.push(room_arc.clone());
         }
 
-        tell_user!(ctx.writer, "<c green>The threads snap into place. Reality is rewritten…\n");
+        tell_user!(ctx.writer, "<c green>Reality is being rewritten…\n");
         let rooms: Vec<_> = vec![room_arc.clone()];
         ctx.tx.send(Broadcast::System {
+            sender: None,
             rooms,
             message: "<c yellow>The reality shifts around you!</c>".into(),
         }).ok();
