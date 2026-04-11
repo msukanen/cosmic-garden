@@ -39,6 +39,11 @@ impl Entity {
 mod entity_tests {
     use crate::{identity::IdentityQuery, mob::{core::Entity, traits::{Mob, MobMut}}, string::{UNNAMED, UUID_RE}, traits::Tickable};
 
+    #[cfg(feature = "stresstest")]
+    const LOOPS: u32 = 1_000_000;
+    #[cfg(not(feature = "stresstest"))]
+    const LOOPS: u32 = 1_000;
+
     #[test]
     fn entity_default() {
         let _ = env_logger::try_init();
@@ -48,7 +53,6 @@ mod entity_tests {
         assert!(e.id().starts_with("entity-"));
         assert_eq!(UNNAMED, e.title());
         e.mp_mut().set_drain(-1.0);
-        const LOOPS: u32 = 1_000_000;
         for _ in 0..LOOPS {
             // re-UUID is heavy, and it'd never be used in a loop like this in reality, but...:
             let old_id = e.id().to_string();
