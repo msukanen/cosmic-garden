@@ -50,6 +50,7 @@ pub enum Item {
     Weapon(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Tool(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Key(TemporaryStructToAppeaseAnalyzerDuringWIP),
+    Consumable(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Primordial(PrimordialItem),
 }
 
@@ -61,6 +62,7 @@ impl Reflector for Item {
             Self::Tool(t) => Self::Tool(t.reflect()),
             Self::Weapon(w) => Self::Weapon(w.reflect()),
             Self::Primordial(p) => Self::Primordial(p.reflect()),
+            Self::Consumable(c) => Self::Consumable(c.reflect()),
         }
     }
 }
@@ -138,6 +140,7 @@ impl Describable for Item {
             Self::Primordial(v) => v.desc(),
             Self::Tool(v) => v.desc(),
             Self::Weapon(v) => v.desc(),
+            Self::Consumable(v) => v.desc(),
         }
     }
 
@@ -148,6 +151,7 @@ impl Describable for Item {
             Self::Primordial(v) => v.set_desc(text),
             Self::Tool(v) => v.set_desc(text),
             Self::Weapon(v) => v.set_desc(text),
+            Self::Consumable(v) => v.set_desc(text),
         }
     }
 }

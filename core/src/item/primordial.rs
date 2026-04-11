@@ -11,6 +11,7 @@ pub enum PotentialItemType {
     Weapon,
     Tool,
     Key,
+    Consumable,
 
     Other_,
 }
