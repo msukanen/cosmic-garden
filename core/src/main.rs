@@ -8,7 +8,7 @@ mod io_thread;      use io_thread::io_thread;
 mod life_thread;    use life_thread::life_thread;
 use tokio::{io::{BufReader, AsyncBufReadExt}, net::TcpListener, sync::{RwLock, broadcast}};
 
-use crate::{cmd::cmd_alias::CMD_ALIASES, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
+use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
 
 mod cmd;
 mod edit;
@@ -47,10 +47,6 @@ async fn main() {
     // some const to deal with [World]-specific choices that aren't present for a reason or other…
     const GREETING: &'static str = "Welcome to Cosmic Garden!";
     const PROMPT_LOGIN: &'static str = "Login: ";
-    const PROMPT_PWD1: &'static str = "Password: ";
-    const PROMPT_PWDV: &'static str = "Re-type same pwd: ";
-    const WELCOME_BACK: &'static str = "Welcome back!";
-    const WELCOME_NEW: &'static str = "May your adventures be prosperous!";
 
     let _ = env_logger::try_init();
     let args = Cli::parse();
@@ -169,7 +165,7 @@ async fn main() {
                     },
 
                     // --- Second Branch: Receive broadcast messages from other clients/system itself…
-                    result = rx.recv() => match &state {
+                    result = rx.recv() => match state.clone() {
                         ClientState::Playing { player } |
                         ClientState::Editing { player, .. } => match result {
                             Ok(bcast) => match bcast {
@@ -210,8 +206,12 @@ async fn main() {
                                     }
                                 },
 
-                                Broadcast::System { rooms, message } => {
+                                Broadcast::System { rooms, message, sender } => {
                                     let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                                    if let Some(sender) = sender {
+                                        // we'll ignore system messages we sent ourselves
+                                        if Arc::ptr_eq(&player, &sender) { continue; }
+                                    }
                                     for room in rooms {
                                         if Arc::ptr_eq(&room, &ploc) {
                                             tell_user!(&mut writer, "\n{}\n", message);
@@ -219,7 +219,65 @@ async fn main() {
                                             break;
                                         }
                                     }
-                                }
+                                },
+
+                                Broadcast::BiSignal { to, from, who, message_to, message_from, message_who } => {
+                                    // am I the 'who'?
+                                    if Arc::ptr_eq(&player, &who) {
+                                        tell_user!(&mut writer, "\n{}\n", message_who);
+                                        reprompt_playing_user!(writer, state);
+                                        continue;
+                                    }
+                                    // just skip if in void
+                                    let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                                    if !Arc::ptr_eq(&to, &ploc) && !Arc::ptr_eq(&from, &ploc) { continue; }
+                                    tell_user!(&mut writer, "\n{}\n", if Arc::ptr_eq(&to, &ploc) { message_to } else { message_from} );
+                                    reprompt_playing_user!(writer, state);
+                                },
+
+                                Broadcast::Force { command, who, by, delivery } => {
+                                    static UNK_FORCE: &'static str = "<c red>Unseen forces commanded your mind for a moment…!";
+                                    // ignore re-force, no matter what.
+                                    if command.trim().to_lowercase().starts_with("force") { continue; }
+                                    // nope if 'by' self
+                                    if Arc::ptr_eq(&player, &by) { continue; }
+                                    // craft synthetic command.
+                                    let ctx = CommandCtx {
+                                        pre_pad_n: true,
+                                        state: state.clone(),
+                                        world: world.clone(),
+                                        tx: &tx,
+                                        args: &command,
+                                        writer: &mut writer,
+                                    };
+                                    let delivery = delivery.unwrap_or_else(|| UNK_FORCE.to_string());
+                                    match who {
+                                        ForceTarget::All => {
+                                            state = cmd::parse_and_exec(ctx).await;
+                                            let prompt = player.read().await.prompt(&state).await.unwrap_or_else(||"#> ".into());
+                                            tell_user!(&mut writer, "\n{}\n{}", delivery, prompt);
+                                        },
+
+                                        ForceTarget::Room { id } => {
+                                            // void?
+                                            let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                                            
+                                            if !Arc::ptr_eq(&ploc, &id) { continue; }
+
+                                            state = cmd::parse_and_exec(ctx).await;
+                                            let prompt = player.read().await.prompt(&state).await.unwrap_or_else(||"#> ".into());
+                                            tell_user!(&mut writer, "\n{}\n{}", delivery, prompt);
+                                        }
+
+                                        ForceTarget::Player { id } => {
+                                            if !Arc::ptr_eq(&player, &id) { continue; }
+
+                                            state = cmd::parse_and_exec(ctx).await;
+                                            let prompt = player.read().await.prompt(&state).await.unwrap_or_else(||"#> ".into());
+                                            tell_user!(&mut writer, "\n{}\n{}", delivery, prompt);
+                                        }
+                                    }
+                                },
                             },
                             _ => ()
                         },
