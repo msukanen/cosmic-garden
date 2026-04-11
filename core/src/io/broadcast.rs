@@ -27,5 +27,29 @@ pub enum Broadcast {
     System {
         rooms: Vec<Arc<RwLock<Room>>>,
         message: String,
+        sender: Option<Arc<RwLock<Player>>>,
     },
+
+    BiSignal {
+        to: Arc<RwLock<Room>>,
+        from: Arc<RwLock<Room>>,
+        who: Arc<RwLock<Player>>,
+        message_to: String,
+        message_from: String,
+        message_who: String,
+    },
+
+    Force {
+        command: String,
+        who: ForceTarget,
+        by: Arc<RwLock<Player>>,
+        delivery: Option<String>,
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum ForceTarget {
+    Room { id: Arc<RwLock<Room>> },
+    Player { id: Arc<RwLock<Player>> },
+    All,
 }
