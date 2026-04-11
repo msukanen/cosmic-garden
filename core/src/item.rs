@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::PrimordialItem}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::{Metamorphize, PrimordialItem}}, string::{Describable, Uuid}, traits::Reflector};
 
 pub mod owner;
 pub mod container;
@@ -196,6 +196,15 @@ impl StorageMut for Item {
             Self::Container(v) => v.set_max_space(sz),
             Self::Primordial(v) => v.set_max_space(sz),
             _ => false
+        }
+    }
+}
+
+impl Metamorphize for Item {
+    fn metamorph(self) -> Item {
+        match self {
+            Self::Primordial(v) => v.metamorph(),
+            _ => self
         }
     }
 }

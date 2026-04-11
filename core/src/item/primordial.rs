@@ -1,9 +1,11 @@
 //! Primordial [Item] which is not yet "anything".
 
+use std::collections::HashMap;
+
 use cosmic_garden_pm::{IdentityMut, ItemizedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{Item, Itemized, container::{StorageMut, specs::StorageSpace}}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{item::{Item, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}}, string::{Describable, Uuid}, traits::Reflector};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -67,5 +69,43 @@ impl StorageMut for PrimordialItem {
     fn set_max_space(&mut self, sz: StorageSpace) -> bool {
         self.max_space = sz;
         true
+    }
+}
+
+pub trait Metamorphize {
+    fn metamorph(self) -> Item;
+}
+
+impl Metamorphize for PrimordialItem {
+    fn metamorph(self) -> Item {
+        // figure out the Final Form based on specs…
+
+        if self.max_space > 0 {
+            let vessel_model = MaxSpaceSpec::from(self.max_space);
+            let spec = ContainerSpec {
+                id: self.id,
+                name: self.title,
+                contents: HashMap::new(),
+                max_space: self.max_space,
+                size: self.size,
+                desc: self.desc,
+                desc_can_be_modified: true
+            };
+            Item::Container(match vessel_model {
+                MaxSpaceSpec::Backpack => ContainerVariant::Backpack(spec),
+                MaxSpaceSpec::Chest => ContainerVariant::Chest(spec),
+                MaxSpaceSpec::Pouch => ContainerVariant::Pouch(spec)
+            })
+        } else {
+            match self.potential {
+                PotentialItemType::Container => unimplemented!("Already determined by max_space"),
+                // staying as-is?
+                PotentialItemType::Other_ => Item::Primordial(self),
+                PotentialItemType::Weapon |
+                PotentialItemType::Key |
+                PotentialItemType::Tool |
+                PotentialItemType::Consumable => todo!("TODO: more item modes!")
+            }
+        }
     }
 }

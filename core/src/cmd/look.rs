@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player::Player, player_or_bust, string::Describable, tell_user};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player::Player, player_or_bust, string::Describable, tell_user, util::access::Accessor};
 
 pub struct LookCommand;
 
@@ -18,19 +18,37 @@ impl Command for LookCommand {
             tell_user!(ctx.writer, "You see absolutely nothing in the void.\n");
             return
         };
+        let (is_builder, show_id) = {
+            let p = plr.read().await;
+            (p.access.is_builder(), p.config.show_id)
+        };
 
-        let (title, desc, who, exits) = {
+        let (title, desc, who, exits, content) = {
             let lock = room.read().await;
             (
                 lock.title().to_string(),
                 lock.desc().to_string(),
                 lock.who.clone(),
-                lock.exits.clone()
+                lock.exits.clone(),
+                lock.contents.into_iter().map(|(id,item)| 
+                    (id.clone(), item.title().to_string())
+                ).collect::<Vec<(String,String)>>()
             )
         };
+        // Room lore:
         let mut output: String = format!("<c yellow>{}</c>\n\n", title);
         output.push_str(&desc);
-        output.push_str("\n\n");
+        output.push('\n');
+        // Content:
+        for (id,title) in content {
+            if is_builder && show_id {
+                output.push_str(&format!(" <c red>//</c> <c white>{}</c> <c gray>[{}]</c>\n", title, id));
+            } else {
+                output.push_str(&format!("  - {}\n", title));
+            }
+        }
+        output.push('\n');
+        // People:
         let ppl_arcs = who.iter()
             .filter_map(|(_,w)| w.upgrade())
             .collect::<Vec<Arc<RwLock<Player>>>>();
@@ -45,6 +63,7 @@ impl Command for LookCommand {
             }
             output.push_str(&format!("  <c blue>[<c cyan>{}</c>]</c>\n", lock.title()));
         }
+        // Exits:
         output.push_str("\n<c green>Exits: </c>");
         let exs = exits.iter().map(|(dir,_)| dir.to_string()).collect::<Vec<String>>().join(", ");
         tell_user!(ctx.writer, "{}{}\n\n", output, exs);

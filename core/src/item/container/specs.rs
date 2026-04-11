@@ -10,12 +10,38 @@ use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage,
 
 pub type StorageSpace = u16;
 
+pub enum MaxSpaceSpec {
+    Pouch,
+    Backpack,
+    Chest,
+}
+
+impl From<MaxSpaceSpec> for StorageSpace {
+    fn from(value: MaxSpaceSpec) -> Self {
+        match value {
+            MaxSpaceSpec::Pouch => 10,
+            MaxSpaceSpec::Backpack => 30,
+            MaxSpaceSpec::Chest => 80,
+        }
+    }
+}
+
+impl From<StorageSpace> for MaxSpaceSpec {
+    fn from(value: StorageSpace) -> Self {
+        match value {
+            _ if value > StorageSpace::from(MaxSpaceSpec::Backpack) => MaxSpaceSpec::Chest,
+            _ if value > StorageSpace::from(MaxSpaceSpec::Pouch) => MaxSpaceSpec::Backpack,
+            _ => MaxSpaceSpec::Pouch
+        }
+    }
+}
+
 lazy_static! {
     pub(super) static ref DEFAULT_BACKPACK_SPEC: ContainerSpec = ContainerSpec {
         id: "backpack".with_uuid(),
         name: "backpack".into(),
         contents: HashMap::new(),
-        max_space: 30,
+        max_space: StorageSpace::from(MaxSpaceSpec::Backpack),
         size: 2,
         desc: "a backpack".into(),
         desc_can_be_modified: true,
@@ -25,7 +51,7 @@ lazy_static! {
         id: "pouch".with_uuid(),
         name: "pouch".into(),
         contents: HashMap::new(),
-        max_space: 10,
+        max_space: StorageSpace::from(MaxSpaceSpec::Pouch),
         size: 1,
         desc: "a pouch".into(),
         desc_can_be_modified: true,
@@ -50,18 +76,28 @@ lazy_static! {
         desc: "room-space".into(),
         desc_can_be_modified: false,
     };
+
+    pub(super) static ref DEFAULT_CHEST_SPEC: ContainerSpec = ContainerSpec {
+        id: "chest".with_uuid(),
+        name: "chest".into(),
+        contents: HashMap::new(),
+        max_space: StorageSpace::from(MaxSpaceSpec::Chest),
+        size: StorageSpace::from(MaxSpaceSpec::Chest),
+        desc: "a chest".into(),
+        desc_can_be_modified: true,
+    };
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut)]
 pub struct ContainerSpec {
-    id: String,
+    pub id: String,
     #[identity(title)]
-    name: String,
-    contents: HashMap<String, Item>,
-    max_space: StorageSpace,
-    size: StorageSpace,
-    desc: String,
-    desc_can_be_modified: bool,
+    pub name: String,
+    pub contents: HashMap<String, Item>,
+    pub max_space: StorageSpace,
+    pub size: StorageSpace,
+    pub desc: String,
+    pub desc_can_be_modified: bool,
 }
 
 impl Describable for ContainerSpec {
@@ -125,6 +161,7 @@ impl PartialEq<Item> for ContainerSpec {
                 ContainerVariant::Backpack(v)|
                 ContainerVariant::PlayerInventory(v) |
                 ContainerVariant::Pouch(v) |
+                ContainerVariant::Chest(v) |
                 ContainerVariant::Room(v)  => v.eq(self)
             },
             _ => false
@@ -139,6 +176,7 @@ impl PartialOrd<Item> for ContainerSpec {
                 ContainerVariant::Backpack(v) |
                 ContainerVariant::PlayerInventory(v) |
                 ContainerVariant::Pouch(v) |
+                ContainerVariant::Chest(v) |
                 ContainerVariant::Room(v) => self.partial_cmp(v),
             },
             _ => Some(Ordering::Greater)
@@ -233,5 +271,14 @@ impl StorageMut for ContainerSpec {
         }
         self.max_space = sz;
         true
+    }
+}
+
+impl<'a> IntoIterator for &'a ContainerSpec {
+    type Item = (&'a String, &'a Item);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        Box::new(self.contents.iter())
     }
 }
