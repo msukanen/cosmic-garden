@@ -1,6 +1,6 @@
 //! I/O related stuff lives here…
 
-use std::{borrow::Cow, net::SocketAddr, ops::Deref, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, ops::Deref, path::PathBuf, sync::Arc};
 
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
@@ -263,6 +263,7 @@ impl ClientState {
             Self::Playing { ref player }     => {
                 // Time to whip up command context…
                 let ctx = CommandCtx {
+                    pre_pad_n: false,
                     state: self.clone(),
                     world: world.clone(),
                     tx: &tx,
@@ -296,5 +297,10 @@ impl ClientState {
             Self::Editing { mode,.. } => mode.set_dirty(state),
             _ => ()
         }
+    }
+
+    /// Is currently editing something?
+    pub fn is_editing(&self) -> bool {
+        matches!(self, Self::Editing { .. })
     }
 }
