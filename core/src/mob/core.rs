@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::{IdentityMut, IdentityQuery}, mob::{traits::MobMut, *}, string::{UNNAMED, Uuid, as_id_with_uuid}, traits::Tickable};
+use crate::{identity::{IdentityMut, IdentityQuery}, mob::*, string::{UNNAMED, Uuid, as_id_with_uuid}};
 
 #[derive(Debug, Deserialize, Serialize, IdentityMut, MobMut)]
 pub struct Entity {
