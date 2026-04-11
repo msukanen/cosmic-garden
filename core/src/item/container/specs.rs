@@ -2,11 +2,11 @@
 
 use std::{cmp::Ordering, collections::HashMap};
 
-use cosmic_garden_pm::{IdentityMut, Itemized};
+use cosmic_garden_pm::{IdentityMut, ItemizedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized as _, container::{Storage, StorageError, variants::ContainerVariant}}, string::{Describable, UNNAMED, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}}, string::{Describable, UNNAMED, Uuid}, traits::Reflector};
 
 pub type StorageSpace = u16;
 
@@ -52,7 +52,7 @@ lazy_static! {
     };
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Itemized)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut)]
 pub struct ContainerSpec {
     id: String,
     #[identity(title)]
@@ -223,5 +223,15 @@ impl Storage for ContainerSpec {
             }
         }
         None
+    }
+}
+
+impl StorageMut for ContainerSpec {
+    fn set_max_space(&mut self, sz: StorageSpace) -> bool {
+        if self.contents_size() > sz {
+            return false;
+        }
+        self.max_space = sz;
+        true
     }
 }

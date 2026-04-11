@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{container::{Storage, StorageError, specs::StorageSpace, variants::ContainerVariant}, primordial::PrimordialItem}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::PrimordialItem}, string::{Describable, Uuid}, traits::Reflector};
 
 pub mod owner;
 pub mod container;
@@ -14,6 +14,10 @@ pub mod weapon;
 
 pub trait Itemized {
     fn size(&self) -> StorageSpace;
+}
+
+pub trait ItemizedMut {
+    fn set_size(&mut self, sz: StorageSpace) -> bool;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut)]
@@ -27,23 +31,27 @@ impl Itemized for TemporaryStructToAppeaseAnalyzerDuringWIP {
         1
     }
 }
+impl ItemizedMut for TemporaryStructToAppeaseAnalyzerDuringWIP {
+    fn set_size(&mut self, _: StorageSpace) -> bool {
+        false
+    }
+}
 impl Reflector for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn reflect(&self) -> Self {
         Self { id: self.id().re_uuid(), title: self.title.clone() }
     }
 }
-
 impl Describable for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn desc<'a>(&'a self) -> &'a str {
         "nothing to see here"
     }
 
-    fn set_desc(&mut self, text: &str) -> bool {
+    fn set_desc(&mut self, _: &str) -> bool {
         false
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Itemized)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut)]
 /// Root [Item] types.
 pub enum Item {
     Container(ContainerVariant),
@@ -152,6 +160,42 @@ impl Describable for Item {
             Self::Tool(v) => v.set_desc(text),
             Self::Weapon(v) => v.set_desc(text),
             Self::Consumable(v) => v.set_desc(text),
+        }
+    }
+}
+
+impl Itemized for Item {
+    fn size(&self) -> StorageSpace {
+        match self {
+            Self::Consumable(v) => v.size(),
+            Self::Container(v) => v.size(),
+            Self::Key(v) => v.size(),
+            Self::Primordial(v) => v.size(),
+            Self::Tool(v) => v.size(),
+            Self::Weapon(v) => v.size(),
+        }
+    }
+}
+
+impl ItemizedMut for Item {
+    fn set_size(&mut self, sz: StorageSpace) -> bool {
+        match self {
+            Self::Consumable(v) => v.set_size(sz),
+            Self::Container(v) => v.set_size(sz),
+            Self::Key(v) => v.set_size(sz),
+            Self::Primordial(v) => v.set_size(sz),
+            Self::Tool(v) => v.set_size(sz),
+            Self::Weapon(v) => v.set_size(sz),
+        }
+    }
+}
+
+impl StorageMut for Item {
+    fn set_max_space(&mut self, sz: StorageSpace) -> bool {
+        match self {
+            Self::Container(v) => v.set_max_space(sz),
+            Self::Primordial(v) => v.set_max_space(sz),
+            _ => false
         }
     }
 }

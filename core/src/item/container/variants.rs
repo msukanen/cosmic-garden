@@ -1,9 +1,9 @@
 use std::i32;
 
-use cosmic_garden_pm::{IdentityMut, Itemized, Storage};
+use cosmic_garden_pm::{IdentityMut, Storage};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{Item, container::specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC}}, string::Describable, traits::Reflector};
+use crate::{item::{Item, Itemized, ItemizedMut, container::{StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}}, string::Describable, traits::Reflector};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum ContainerVariantType {
@@ -35,7 +35,7 @@ impl From<&ContainerVariant> for ContainerVariantType {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Storage, Itemized)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Storage)]
 pub enum ContainerVariant {
     Pouch(ContainerSpec),
     Backpack(ContainerSpec),
@@ -95,6 +95,41 @@ impl Reflector for ContainerVariant {
             Self::PlayerInventory(p) => Self::PlayerInventory(p.reflect()),
             Self::Pouch(p) => Self::Pouch(p.reflect()),
             Self::Room(r) => Self::Room(r.reflect()),
+        }
+    }
+}
+
+impl Itemized for ContainerVariant {
+    fn size(&self) -> StorageSpace {
+        match self {
+            Self::Backpack(v) |
+            Self::Pouch(v) |
+            Self::PlayerInventory(v) |
+            Self::Room(v) => v.size()
+        }
+    }
+}
+
+impl ItemizedMut for ContainerVariant {
+    fn set_size(&mut self, sz: StorageSpace) -> bool {
+        match self {
+            Self::PlayerInventory(_) |
+            Self::Room(_) => false,
+            
+            Self::Backpack(v) |
+            Self::Pouch(v) => v.set_size(sz)
+        }
+    }
+}
+
+impl StorageMut for ContainerVariant {
+    fn set_max_space(&mut self, sz: StorageSpace) -> bool {
+        match self {
+            Self::PlayerInventory(_) |
+            Self::Room(_) => false,
+
+            Self::Backpack(v) |
+            Self::Pouch(v) => v.set_max_space(sz),
         }
     }
 }

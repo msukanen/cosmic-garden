@@ -64,6 +64,14 @@ pub trait Storage {
     fn take(&mut self, id: &str) -> Option<Item>;
 }
 
+pub trait StorageMut {
+    /// Set maximum space.
+    /// 
+    /// Note that this does not succeed if:
+    /// * there's more content than new space allows.
+    fn set_max_space(&mut self, sz: StorageSpace) -> bool;
+}
+
 impl StorageError {
     pub fn extract_item(self) -> Option<Item> {
         match self {

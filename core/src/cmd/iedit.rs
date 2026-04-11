@@ -2,10 +2,13 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{Item, TemporaryStructToAppeaseAnalyzerDuringWIP, container::Storage, primordial::PrimordialItem}, player, show_help_if_needed, string::Uuid, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{container::Storage, primordial::PrimordialItem}, show_help_if_needed, tell_user, validate_access};
 
 pub mod abort;
+pub mod desc;
 pub mod iex;
+pub mod set;
+pub mod weave;
 
 pub struct IeditCommand;
 

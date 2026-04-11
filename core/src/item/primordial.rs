@@ -1,9 +1,9 @@
 //! Primordial [Item] which is not yet "anything".
 
-use cosmic_garden_pm::IdentityMut;
+use cosmic_garden_pm::{IdentityMut, ItemizedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{Item, Itemized, container::specs::StorageSpace}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{item::{Item, Itemized, container::{StorageMut, specs::StorageSpace}}, string::{Describable, Uuid}, traits::Reflector};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -23,7 +23,7 @@ impl Default for PotentialItemType {
 }
 
 /// Entirely "primordial soup" for creating other items from.
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut)]
 pub struct PrimordialItem {
     pub id: String,
     pub title: String,
@@ -46,12 +46,6 @@ impl PrimordialItem {
     }
 }
 
-impl Itemized for PrimordialItem {
-    fn size(&self) -> StorageSpace {
-        self.size
-    }
-}
-
 impl Reflector for PrimordialItem {
     fn reflect(&self) -> Self {
         self.clone()
@@ -65,6 +59,13 @@ impl Describable for PrimordialItem {
 
     fn set_desc(&mut self, text: &str) -> bool {
         self.desc = text.to_string();
+        true
+    }
+}
+
+impl StorageMut for PrimordialItem {
+    fn set_max_space(&mut self, sz: StorageSpace) -> bool {
+        self.max_space = sz;
         true
     }
 }

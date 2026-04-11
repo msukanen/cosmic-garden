@@ -216,6 +216,34 @@ pub fn itemized_derive(input: TokenStream) -> TokenStream {
     }
 }
 
+#[proc_macro_derive(ItemizedMut)]
+pub fn itemized_mut_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+    if let Data::Enum(data) = input.data {
+        let sizes = enum_getter!(data, size);
+        let set_sizes = enum_getter!(data, set_size);
+
+        TokenStream::from(quote! {
+            impl crate::item::Itemized for #name {
+                fn size(&self) -> crate::item::StorageSpace { match self {#(#sizes),*}}
+            }
+            impl crate::item::ItemizedMut for #name {
+                fn set_size(&mut self, value: crate::item::StorageSpace) -> bool { match self {#(#set_sizes),*}}
+            }
+        })
+    } else {
+        TokenStream::from(quote! {
+            impl crate::item::Itemized for #name {
+                fn size(&self) -> crate::item::StorageSpace { self.size }
+            }
+            impl crate::item::ItemizedMut for #name {
+                fn set_size(&mut self, value: crate::item::StorageSpace) -> bool { self.size = value; true }
+            }
+        })
+    }
+}
+
 #[proc_macro_derive(Storage)]
 pub fn storage_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
