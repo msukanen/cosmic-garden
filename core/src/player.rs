@@ -68,7 +68,7 @@ pub struct Player {
     pub activity_type: ActivityType,
 
     #[serde(default = "player_inv_default")]
-    pub inventory: Item,
+    pub inventory: ContainerVariant,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -77,8 +77,8 @@ fn player_mp_default() -> Stat { Stat::new(StatType::MP) }
 fn player_sn_default() -> Stat { Stat::new(StatType::SN) }
 fn player_san_default() -> Stat { Stat::new(StatType::San) }
 fn player_default_atype() -> ActivityType { ActivityType::default() }
-fn player_inv_default() -> Item {
-    ContainerVariant::new(ContainerVariantType::PlayerInventory)
+fn player_inv_default() -> ContainerVariant {
+    ContainerVariant::raw(ContainerVariantType::PlayerInventory)
 }
 
 impl Player {
