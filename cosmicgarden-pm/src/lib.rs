@@ -258,6 +258,7 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
         let contains = enum_getter_w_arg!(data, contains);
         let peek_ats = enum_getter_w_arg!(data, peek_at);
         let takes = enum_getter_w_arg!(data, take);
+        let find_id_by_names = enum_getter_w_arg!(data, find_id_by_name);
 
         TokenStream::from(quote! {
             impl crate::item::container::Storage for #name {
@@ -269,6 +270,7 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
                 fn contains(&self, value: &str) -> bool { match self {#(#contains),*}}
                 fn peek_at(&self, value: &str) -> Option<&Item> { match self {#(#peek_ats),*}}
                 fn take(&mut self, value: &str) -> Option<Item> { match self {#(#takes),*}}
+                fn find_id_by_name(&self, value: &str) -> Option<String> { match self {#(#find_id_by_names),*}}
             }
         })
     } else {

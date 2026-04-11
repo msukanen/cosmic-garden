@@ -62,6 +62,7 @@ pub trait Storage {
     /// Very literally yank out `id`, if present.
     #[must_use = "Item taken out will require handling"]
     fn take(&mut self, id: &str) -> Option<Item>;
+    fn find_id_by_name(&self, name: &str) -> Option<String>;
 }
 
 pub trait StorageMut {

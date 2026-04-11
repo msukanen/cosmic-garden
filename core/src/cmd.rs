@@ -11,7 +11,9 @@ pub mod cmd_alias;
 mod dummy;
 
 mod dig;
+mod drop;
 mod force;
+mod get;
 mod goto;
 pub mod help;
 mod iedit;

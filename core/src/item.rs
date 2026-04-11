@@ -138,6 +138,13 @@ impl Storage for Item {
             _ => None
         }
     }
+
+    fn find_id_by_name(&self, name: &str) -> Option<String> {
+        match self {
+            Self::Container(c) => c.find_id_by_name(name),
+            _ => None
+        }
+    }
 }
 
 impl Describable for Item {

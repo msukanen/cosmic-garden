@@ -262,6 +262,18 @@ impl Storage for ContainerSpec {
         }
         None
     }
+
+    fn find_id_by_name(&self, name: &str) -> Option<String> {
+        let name_lc = name.to_lowercase();
+        self.into_iter()
+            .find(|(id, item)| {
+                // match by UUID, title, or id-prefix
+                *id == name ||
+                item.title().to_lowercase().contains(&name_lc) ||
+                id.starts_with(name)
+            })
+            .map(|(id, _)| id.clone())
+    }
 }
 
 impl StorageMut for ContainerSpec {

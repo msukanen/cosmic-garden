@@ -89,3 +89,16 @@ macro_rules! validate_access {
         }
     };
 }
+
+#[macro_export]
+macro_rules! roomloc_or_bust {
+    ($plr:ident) => {
+        {
+            let p = $plr.read().await;
+            let Some(p_loc) = p.location.upgrade() else {
+                return;
+            };
+            p_loc
+        }
+    };
+}
