@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, io::ClientState, item::container::Storage, show_help_if_needed, tell_user, validate_access};
 
-mod abort;
+pub mod abort;
 
 pub struct IeditCommand;
 
