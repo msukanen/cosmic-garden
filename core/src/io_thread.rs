@@ -11,7 +11,9 @@ lazy_static! {
     pub static ref PLAYERS_TO_LOGOUT: Arc<RwLock<Vec<Arc<RwLock<Player>>>>> = Arc::new(RwLock::new(Vec::new()));
     pub static ref WORLD_NEEDS_SAVING: Arc<RwLock<bool>> = Arc::new(RwLock::new(false));
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
+    pub static ref SAVE_ASAP: Arc<RwLock<Vec<Arc<RwLock<Player>>>>> = Arc::new(RwLock::new(Vec::new()));
 }
+pub const SAVE_ASAP_THRESHOLD: usize = 100;
 
 /// Disk I/O thread thing.
 pub(super) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
@@ -21,6 +23,7 @@ pub(super) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
     let mut logout_purge_interval = time::interval(Duration::from_secs(1));
     let mut world_save_interval = time::interval(Duration::from_secs(30));
     let mut room_save_interval = time::interval(Duration::from_secs(30));
+    let mut save_asap_interval = time::interval(Duration::from_secs(2));
 
     loop {
         tokio::select! {
@@ -72,6 +75,35 @@ pub(super) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
                 if any_saved {
                     log::info!("Autosave cycle complete.");
                 }
+            }
+
+            _ = save_asap_interval.tick() => {
+                let players_to_save = {
+                    let mut qlock = (*SAVE_ASAP).write().await;
+                    qlock.drain(..).collect::<Vec<_>>()
+                };
+                if players_to_save.is_empty() { continue; }
+                
+                log::info!("Saving {} hyper-active player{}…", players_to_save.len(), if players_to_save.len() == 1 {""} else {"s"});
+                let mut fails = vec![];
+                for p in players_to_save {
+                    let p_id = {
+                        let p = p.read().await;
+                        p.id().to_string()
+                    };
+
+                    if let Err(e) = p.write().await.save().await {
+                        log::error!("Failed to save player '{p_id}': {e:?}");
+                        fails.push(p.clone());
+                        continue;
+                    }
+
+                    p.write().await.actions_taken = 0;
+                }
+                if !fails.is_empty() {
+                    (*SAVE_ASAP).write().await.extend(fails);
+                }
+                log::info!("Hyper-active save cycle complete.");
             }
 
             _ = world_save_interval.tick() => {
