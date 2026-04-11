@@ -227,6 +227,9 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
         let req_spaces = enum_getter!(data, required_space);
         let spaces = enum_getter!(data, space);
         let try_inserts = enum_getter_w_arg!(data, try_insert);
+        let contains = enum_getter_w_arg!(data, contains);
+        let peek_ats = enum_getter_w_arg!(data, peek_at);
+        let takes = enum_getter_w_arg!(data, take);
 
         TokenStream::from(quote! {
             impl crate::item::container::Storage for #name {
@@ -235,6 +238,9 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
                 fn required_space(&self) -> crate::item::StorageSpace { match self {#(#req_spaces),*}}
                 fn space(&self) -> crate::item::StorageSpace { match self {#(#spaces),*}}
                 fn try_insert(&mut self, value: crate::item::Item) -> Result<(), crate::item::StorageError> { match self {#(#try_inserts),*}}
+                fn contains(&self, value: &str) -> bool { match self {#(#contains),*}}
+                fn peek_at(&self, value: &str) -> Option<&Item> { match self {#(#peek_ats),*}}
+                fn take(&mut self, value: &str) -> Option<Item> { match self {#(#takes),*}}
             }
         })
     } else {
