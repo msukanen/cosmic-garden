@@ -1,23 +1,51 @@
 //! Player stuff!
 
-use std::sync::{Arc, Weak};
+use std::{fmt::Display, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, mob::{Stat, StatType}, room::Room, string::UNNAMED, util::{access::{Access, Accessor}, config::Config}, world::World};
+use crate::{edit::state::EditorState, error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, io_thread::{SAVE_ASAP, SAVE_ASAP_THRESHOLD}, item::{Item, container::{specs::ContainerSpec, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType}, room::Room, string::UNNAMED, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum ActivityType {
+    Building,
+    Playing,
+    Other
+}
+
+impl Default for ActivityType {
+    fn default() -> Self {
+        Self::Other
+    }
+}
+
+impl Display for ActivityType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Self::Building => "<c red>BLD</c>",
+            Self::Playing => "<c green>PLY</c>",
+            Self::Other => "<c yellow>OTH</c>",
+        })
+    }
+}
 
 /// A player's character contained here…
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut)]
 pub struct Player {
     /// ID of owner of this specific [Player] character.
     pub(super) owner_id: String,
+    
     id: String,
     #[identity(title)]
     pub(super) name: String,
+    
     #[serde(default)]
     pub config: Config,
+    #[serde(default)]
+    pub access: Access,
+    
     #[serde(default, skip)]
     pub actions_taken: usize,
     #[serde(default = "player_location_void")]
@@ -43,14 +71,19 @@ fn player_hp_default() -> Stat { Stat::new(StatType::HP) }
 fn player_mp_default() -> Stat { Stat::new(StatType::MP) }
 fn player_sn_default() -> Stat { Stat::new(StatType::SN) }
 fn player_san_default() -> Stat { Stat::new(StatType::San) }
+fn player_default_atype() -> ActivityType { ActivityType::default() }
+fn player_inv_default() -> Item {
+    ContainerVariant::new(ContainerVariantType::PlayerInventory)
+}
 
 impl Player {
     pub fn owner_id<'a>(&'a self) -> &'a str { &self.owner_id }
 
     pub async fn load(owner_id: &str, id: &str) -> Result<Arc<RwLock<Self>>, Error> {
-        let player: Self = serde_json::from_str(
+        let mut player: Self = serde_json::from_str(
             &fs::read_to_string(&format!("{}/{}-{}.player", SAVE_PATH.display(), owner_id, id)).await?
         )?;
+        player.activity_type = ActivityType::Playing;
         Ok(Arc::new(RwLock::new(player)))
     }
 
@@ -95,6 +128,17 @@ impl Player {
         }
         log::trace!("Placed player at '{}'", tgt_id);
         Ok(())
+    }
+
+    pub async fn act(&mut self, player: Arc<RwLock<Player>>, act_wt: ActionWeight) -> usize {
+        self.actions_taken += act_wt;
+        if self.actions_taken >= SAVE_ASAP_THRESHOLD {
+            let mut asap = (*SAVE_ASAP).write().await;
+            if !asap.iter().any(|existing| Arc::ptr_eq(existing, &player)) {
+                asap.push(player.clone());
+            }
+        }
+        self.actions_taken
     }
 }
 
