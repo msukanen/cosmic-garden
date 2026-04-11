@@ -32,7 +32,7 @@ impl Command for LookCommand {
                 lock.exits.clone(),
                 lock.contents.into_iter().map(|(id,item)| 
                     (id.clone(), item.title().to_string())
-                ).collect::<Vec<(String,String)>>()
+                ).collect::<Vec<_>>()
             )
         };
         // Room lore:

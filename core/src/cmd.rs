@@ -17,6 +17,7 @@ mod get;
 mod goto;
 pub mod help;
 mod iedit;
+mod inventory;
 mod invis;
 mod look;
 mod hedit;
