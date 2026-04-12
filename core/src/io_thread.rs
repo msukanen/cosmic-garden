@@ -59,6 +59,7 @@ async fn logout_purge() {
     if players_to_save.is_empty() { return ; }
     
     log::info!("Saving {} disconnected player{}…", players_to_save.len(), if players_to_save.len() == 1 {""} else {"s"});
+    let mut count = 0;
     for p in players_to_save {
         let p_id = {
             let p = p.read().await;
@@ -66,6 +67,10 @@ async fn logout_purge() {
         };
         if let Err(e) = p.write().await.save().await {
             log::error!("Failed to save player '{p_id}': {e:?}")
+        }
+        count += 1;
+        if count % 500 == 0 {
+            log::debug!("{count} saves done.");
         }
     }
     log::info!("Disconnected player save cycle complete.");
