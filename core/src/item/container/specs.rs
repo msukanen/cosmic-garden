@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, ItemizedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::{Reflector, Tickable}};
 
 pub type StorageSpace = u16;
 
@@ -313,5 +313,19 @@ impl<'a> IntoIterator for &'a ContainerSpec {
 
     fn into_iter(self) -> Self::IntoIter {
         Box::new(self.contents.iter())
+    }
+}
+
+impl Tickable for ContainerSpec {
+    fn tick(&mut self) -> bool {
+        let mut ticked = false;
+        for i in self.contents.values_mut() {
+            let t = i.tick();
+            if t { ticked = true; }
+        }
+        #[cfg(debug_assertions)]{
+            if ticked {log::debug!("{} contents ticked.", self.id)}
+        }
+        ticked
     }
 }

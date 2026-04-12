@@ -97,6 +97,7 @@ impl Player {
 
     pub async fn save(&self) -> Result<(), Error> {
         let path = format!("{}/{}-{}.player", SAVE_PATH.display(), self.owner_id, self.id);
+        #[cfg(feature = "stresstest")]
         log::debug!("Storing {path}");
         fs::write(path, serde_json::to_string_pretty(self)?).await?;
         Ok(())
@@ -231,7 +232,14 @@ impl Tickable for Player {
             self.apply_stat_change(*stat, *amount);
         }
         let ch_t = !changes.is_empty();
+        let inv_t = self.inventory.tick();
 
-        hp_t || mp_t || sn_t || san_t || ch_t
+        let meaningful = hp_t || mp_t || sn_t || san_t || ch_t || inv_t;
+        #[cfg(debug_assertions)]{
+            if meaningful {
+                log::debug!("Player-ID '{}' ticked.", self.id);
+            }
+        }
+        meaningful
     }
 }

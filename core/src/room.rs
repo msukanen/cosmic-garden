@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, util::direction::Direction, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -142,7 +142,7 @@ mod room_tests {
     use crate::{Cli, DATA, io::DATA_PATH, util::direction::Direction, world::World};
 
     #[tokio::test]
-    async fn world_room_linking() {
+    async fn room_linking() {
         let _ = env_logger::try_init();
         let _ = DATA.set(std::env::var("COSMIC_GARDEN_DATA").unwrap());
         let args = Cli {
@@ -185,6 +185,24 @@ mod room_tests {
         }
         for r in &rooms {
             log::debug!("Room {r:?}")
+        }
+    }
+}
+
+impl Room {
+    pub async fn tick(&mut self) {
+        for p_weak in self.who.values() {
+            if let Some(p_arc) = p_weak.upgrade() {
+                //tokio::spawn(async move {
+                    let mut p = p_arc.write().await;
+                    p.tick();
+                //});
+            }
+        }
+
+        self.contents.tick();
+        #[cfg(all(debug_assertions,feature = "stresstest"))]{
+            log::debug!("Room '{}' ticked.", self.id);
         }
     }
 }

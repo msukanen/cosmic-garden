@@ -3,7 +3,7 @@ use std::i32;
 use cosmic_garden_pm::{IdentityMut, Storage};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{Item, Itemized, ItemizedMut, container::{StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}}, string::{Describable, DescribableMut}, traits::Reflector};
+use crate::{item::{Item, Itemized, ItemizedMut, container::{StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}}, string::{Describable, DescribableMut}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum ContainerVariantType {
@@ -168,6 +168,18 @@ impl<'a> IntoIterator for &'a ContainerVariant {
             ContainerVariant::Pouch(v) |
             ContainerVariant::Room(v) |
             ContainerVariant::PlayerInventory(v) => v.into_iter()
+        }
+    }
+}
+
+impl Tickable for ContainerVariant {
+    fn tick(&mut self) -> bool {
+        match self {
+            Self::Backpack(c) => c.tick(),
+            Self::Chest(c) => c.tick(),
+            Self::PlayerInventory(c) => c.tick(),
+            Self::Pouch(c) => c.tick(),
+            Self::Room(c) => c.tick(),
         }
     }
 }

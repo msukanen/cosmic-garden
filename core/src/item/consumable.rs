@@ -4,7 +4,7 @@ use std::fmt::Display;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::container::specs::StorageSpace, mob::{StatType, StatValue, affect::{Affect, Affector}}, string::Uuid, traits::Reflector};
+use crate::{item::{container::specs::StorageSpace, matter::MatterState}, mob::{StatType, StatValue, affect::{Affect, Affector}}, string::Uuid, traits::{Reflector, Tickable}};
 
 /// Various nutrition types (plus not edible).
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -32,6 +32,7 @@ pub struct ConsumableMatter {
     pub size: StorageSpace,
     pub nutrition: NutritionType,
     pub desc: String,
+    pub matter_state: MatterState,
     /// Number of remaining uses.
     /// 
     /// ∞ uses is *effective* anything:
@@ -40,6 +41,7 @@ pub struct ConsumableMatter {
     pub uses: Option<usize>,
     /// How many ticks each use lasts, if any.
     pub affect_ticks: Option<usize>,
+    pub rots_in_ticks: Option<usize>,
 }
 
 impl Reflector for ConsumableMatter {
@@ -58,5 +60,17 @@ impl Affector for ConsumableMatter {
                 Some(Affect::Nutrition { kind: self.nutrition.clone(), remaining: self.affect_ticks.clone() }),
             _ => None
         }
+    }
+}
+
+impl Tickable for ConsumableMatter {
+    fn tick(&mut self) -> bool {
+        if let Some(t) = &mut self.rots_in_ticks {
+            *t = t.saturating_sub(1);
+            #[cfg(debug_assertions)]{
+                if *t==0 {log::debug!("{} rotten.", self.id)}
+            }
+            *t == 0
+        } else {false}
     }
 }

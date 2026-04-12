@@ -3,12 +3,14 @@
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::{Metamorphize, PrimordialItem}}, string::{Describable, DescribableMut, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::{Metamorphize, PrimordialItem}}, string::{Describable, DescribableMut, Uuid}, traits::{Reflector, Tickable}};
 
 pub mod owner;
 pub mod consumable;
 pub mod container;
 pub mod key;
+pub mod library;
+pub mod matter;
 pub mod primordial;
 pub mod tool;
 pub mod weapon;
@@ -257,6 +259,17 @@ impl Metamorphize for Item {
         match self {
             Self::Primordial(v) => v.metamorph(),
             _ => self
+        }
+    }
+}
+
+impl Tickable for Item {
+    fn tick(&mut self) -> bool {
+        match self {
+            Self::Consumable(c) => c.tick(),
+            Self::Container(c) => c.tick(),
+            Self::Primordial(c) => c.tick(),
+            _ => false
         }
     }
 }

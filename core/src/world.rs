@@ -4,7 +4,7 @@ use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, item::Item, player::Player, room::Room, string::{Slugger, UNNAMED, prompt::PromptType}, util::direction::Direction};
+use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, item::Item, player::Player, room::Room, string::{Slugger, UNNAMED, prompt::PromptType}, traits::Tickable, util::direction::Direction};
 
 /// The world!
 #[derive(Debug, Deserialize, Serialize)]
@@ -202,5 +202,66 @@ impl World {
         };
             
         log::info!("Root room established as '{}'", self.root_room_id)
+    }
+}
+
+impl World {
+    pub async fn tick(&mut self) {
+        for r in self.rooms.values() {
+            r.write().await.tick().await;
+        }
+    }
+}
+
+#[cfg(test)]
+mod world_tests {
+    use std::{sync::Arc, time::Duration};
+
+    use tokio::{sync::RwLock, time};
+
+    use crate::{Cli, DATA, identity::IdentityMut, io::DATA_PATH, io_thread::{io_thread, PLAYERS_TO_LOGOUT}, player::Player, world::World};
+
+    #[cfg(feature = "stresstest")]
+    #[tokio::test]
+    async fn world_spins_5000_logout() {
+        let _ = env_logger::try_init();
+        let _ = DATA.set(std::env::var("COSMIC_GARDEN_DATA").unwrap());
+        let args = Cli {
+            autosave_queue_interval: None,
+            host_listen_addr: "0.0.0.0".into(),
+            host_listen_port: 8080,
+            world: "cosmic-garden".into(),
+            data_path: (*DATA_PATH).clone(),
+            bootstrap_url: None,
+        };
+        let mut w = World::load_or_bootstrap(&args).await.unwrap_or_else(|e| panic!("Oh noes! Not the dreaded {e:?}"));
+        w.link_rooms().await;
+        let w = Arc::new(RwLock::new(w));
+        
+        tokio::spawn(io_thread(w.clone(), args.clone()));
+
+        let mut world_spins_by = time::interval(Duration::from_millis(1_000));
+        let mut done = false;
+        let mut times = 1;
+
+        loop {
+            tokio::select! {
+                _ = world_spins_by.tick() => {
+                    if !done {
+                        let mut plr = vec![];
+                        for _ in 0..5_000 {
+                            let mut p = Player::default();
+                            let _ = p.set_id("dummy");
+                            plr.push(Arc::new(RwLock::new(p)));
+                        }
+                        let mut l = (*PLAYERS_TO_LOGOUT).write().await;
+                        l.extend(plr);
+                    }
+                    log::debug!("{times}. hello from world, la-di-da...");
+                    times += 1;
+                    done = true;
+                }
+            }
+        }
     }
 }

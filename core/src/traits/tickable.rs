@@ -15,3 +15,13 @@ impl Tickable for Entity {
         hp || mp || sn || san
     }
 }
+
+/// - "What it means, what it means?"
+/// 
+/// More meaning to the tick results, of course.
+#[derive(Debug, Clone, Copy)]
+pub enum TickMeaning {
+    Nothing,
+    General,
+    StatShift,
+}
