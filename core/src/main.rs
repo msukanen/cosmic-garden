@@ -8,7 +8,7 @@ mod io_thread;      use io_thread::io_thread;
 mod life_thread;    use life_thread::life_thread;
 use tokio::{io::{BufReader, AsyncBufReadExt}, net::TcpListener, sync::{RwLock, broadcast}};
 
-use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
+use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, item::library::librarian, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
 
 mod cmd;
 mod edit;
@@ -68,8 +68,9 @@ async fn main() {
     world.link_rooms().await;
     let world = Arc::new(RwLock::new(world));
 
-    tokio::spawn(life_thread());
     tokio::spawn(io_thread(world.clone(), args.clone()));
+    tokio::spawn(life_thread(world.clone()));
+    tokio::spawn(librarian(args.world.clone()));
 
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);
