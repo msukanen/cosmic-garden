@@ -10,32 +10,40 @@ use crate::{item::consumable::NutritionType, string::Uuid, traits::Tickable};
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Affect {
     Nutrition { kind: NutritionType, remaining: Option<usize> },
-    RushNCrash { kind: NutritionType, remaining: Option<usize>, delay: Option<usize> },
-    Other,
+    DelayedAction { kind: NutritionType, remaining: Option<usize>, delay: Option<usize> },
+    RushNCrash { kind: NutritionType, remaining: Option<usize>, crash_kind: NutritionType, delay: Option<usize>, crash_remain: Option<usize> },
+    Expired,
 }
 
 impl Tickable for Affect {
     fn tick(&mut self) -> bool {
         match self {
-            Self::Nutrition { remaining: None,.. }  |
-            Self::RushNCrash { remaining: None,.. } => true,
-            Self::RushNCrash { remaining: Some(0),.. } |
-            Self::Nutrition { remaining: Some(0),.. }  => true,
-
-            Self::RushNCrash { remaining: Some(x), delay: None,.. } |
-            Self::Nutrition { remaining: Some(x),.. }
-                => { if *x > 0 {*x = *x - 1;}; true },
-
-            Self::RushNCrash { delay: Some(x), kind, remaining }
-                => {
-                    *x = x.saturating_sub(1);
-                    if *x == 0 {
-                        *self = Affect::RushNCrash { kind: kind.clone(), remaining: remaining.clone(), delay: None };
-                    }
-                    false
-                },
+            // Decays:
+            Self::Nutrition { remaining: Some(1),.. } => {
+                *self = Self::Expired;
+                true
+            },
+            Self::DelayedAction { delay: Some(1), kind, remaining } =>
+            {
+                *self = Self::Nutrition { kind: kind.clone(), remaining: remaining.clone() };
+                true
+            }
+            Self::RushNCrash { remaining: Some(1), crash_kind, delay, crash_remain, .. } =>
+            {
+                *self = Affect::DelayedAction { kind: crash_kind.clone(), remaining: crash_remain.clone(), delay: delay.clone() };
+                true
+            }
             
-            Self::Other => false,
+            // Tick-tock goes the clock…
+            Self::DelayedAction { delay: Some(x), ..}    |
+            Self::DelayedAction { remaining: Some(x),..} |
+            Self::Nutrition { remaining: Some(x),.. }    |
+            Self::RushNCrash { remaining: Some(x),.. }   => { *x = x.saturating_sub(1); true },
+
+            // Placeholder(s)…
+            Self::Expired => false,
+
+            _ => unreachable!("Ouch!")
         }
     }
 }
@@ -43,19 +51,20 @@ impl Tickable for Affect {
 impl Affect {
     pub fn expired(&self) -> bool {
         match self {
-            Self::Nutrition { remaining: None,.. }  => false,
-            Self::Nutrition { remaining: Some(x),.. } |
-            Self::RushNCrash { remaining: Some(x),.. }
-                => *x == 0,
-            Self::Other => true,
-            _ => true
+            Self::Nutrition { remaining: None,.. } => false,
+            Self::Nutrition { remaining: Some(x),.. } => *x == 0,
+            Self::DelayedAction { .. } |        // Delayed decays into Nutri
+            Self::RushNCrash { .. }    => false,// RNC will decay into DelayedAction
+            
+            Self::Expired => true,
         }
     }
 
     pub fn dormant(&self) -> bool {
         match self {
-            Self::Other => true,
-            Self::RushNCrash { delay: Some(x),.. } if *x > 0 => true,
+            Self::Nutrition { remaining: Some(x),.. } => *x == 0,
+            Self::DelayedAction { delay: Some(_),.. } |
+            Self::Expired => true,
             _ => false
         }
     }
@@ -95,7 +104,7 @@ pub fn stack_affect(item: &str, affect: &Affect, stash: &mut HashMap<String, Aff
 mod affect_tests {
     use std::collections::HashMap;
 
-    use crate::{item::consumable::NutritionType, mob::{StatType, affect::{Affect, stack_affect}}};
+    use crate::{item::consumable::NutritionType, mob::{StatType, affect::{Affect, stack_affect}}, traits::Tickable};
 
     #[test]
     fn affect_stacking() {
@@ -110,5 +119,54 @@ mod affect_tests {
             panic!("Where'd it go?");
         };
         assert_eq!(Some(6), *remaining);
+    }
+
+    #[test]
+    fn affect_decay() {
+        let _ = env_logger::try_init();
+        let mut r = Affect::RushNCrash {
+            kind: NutritionType::NotEdible,
+            remaining: Some(3),
+            crash_kind: NutritionType::NotEdible,
+            delay: Some(3),
+            crash_remain: Some(3)
+        };// this should be 9 ticks lifetime before .expired()
+
+        log::debug!("r = {r:?}");
+        assert!(!r.dormant());
+        assert!(!r.expired());
+        for _ in 0..2 {
+            r.tick();
+            log::debug!(">   {r:?}");
+            assert!(!r.dormant());
+            assert!(!r.expired());
+        }
+        r.tick();
+        log::debug!("r = {r:?}");
+        assert!(r.dormant());
+        assert!(!r.expired());
+        assert!(matches!(r, Affect::DelayedAction {..}));
+        for _ in 0..2 {
+            r.tick();
+            log::debug!(">   {r:?}");
+            assert_eq!(true, r.dormant());
+            assert_eq!(false, r.expired());
+        }
+        r.tick();
+        log::debug!("r = {r:?}");
+        assert!(!r.dormant());
+        assert!(!r.expired());
+        assert!(matches!(r, Affect::Nutrition {..}));
+        for _ in 0..2 {
+            r.tick();
+            log::debug!(">   {r:?}");
+            assert_eq!(false, r.dormant());
+            assert_eq!(false, r.expired());
+        }
+        r.tick();
+        assert!(matches!(r, Affect::Expired));
+        assert_eq!(true, r.dormant());
+        assert_eq!(true, r.expired());
+        log::debug!("r = {r:?}");
     }
 }
