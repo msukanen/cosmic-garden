@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::container::Storage, player_or_bust, roomloc_or_bust, tell_user, util::activity::ActionWeight};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, io_thread::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, tell_user, util::activity::ActionWeight};
 
 pub struct DropCommand;
 
@@ -42,8 +42,7 @@ impl Command for DropCommand {
             let mut p = plr.write().await;
             // if the try_insert fails - something's really wrong...
             if let Err(e) = p.inventory.try_insert(item) {
-                log::error!("Handing item over to lost-and-found. It doesn't fit in the room and it cannot be given back to the player. {e:?}");
-                // TODO - lost and found.
+                add_item_to_lnf(e.extract_item().unwrap()).await;
                 tell_user!(ctx.writer, "You dropped it, and it instantly vanished? Huh?!\n");
             } else {
                 tell_user!(ctx.writer, "The room is too cluttered! You can't find a place for {}.\n", item_name);

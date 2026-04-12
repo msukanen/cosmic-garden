@@ -2,9 +2,18 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::{IdentityMut, IdentityQuery}, item::{ItemizedMut, container::{StorageMut, specs::StorageSpace}}, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::{IdentityMut, IdentityQuery}, item::{Item, ItemizedMut, container::{StorageMut, specs::StorageSpace}, primordial::PotentialItemType}, tell_user, validate_access};
 
 pub struct SetCommand;
+
+macro_rules! no_can_do {
+    ($ctx:ident, $what:expr) => {
+        {
+            tell_user!($ctx.writer, "Item's {} is immutable, sorry.\n", $what);
+            return;
+        }
+    };
+}
 
 #[async_trait]
 impl Command for SetCommand {
@@ -22,7 +31,8 @@ impl Command for SetCommand {
             tell_user!(ctx.writer,r#"Valid settable fields:
  * title
  * size
- * max
+ * max_space / max
+ * potential / pot
 
 For description, use 'desc' command instead.
 "#);
@@ -31,10 +41,7 @@ For description, use 'desc' command instead.
 
         let mut p = plr.write().await;
         let Some(ed) = p.iedit_buffer.as_mut() else {
-            log::error!("Builder '{p_id}'.iedit_buffer evaporated mid-edit?!");
-            drop(p);
-            tell_user!(ctx.writer, "Uh-oh, editor buffer evaporated?!\n");
-            return;
+            err_iedit_buffer_inaccessible!(ctx,p,p_id);
         };
 
         match field {
@@ -53,6 +60,7 @@ For description, use 'desc' command instead.
                 }
             },
 
+            "max_space"|
             "max" => {
                 if let Ok(sz) = value.parse::<StorageSpace>() {
                     if !ed.set_max_space(sz) {
@@ -61,6 +69,21 @@ For description, use 'desc' command instead.
                     }
                     tell_user!(ctx.writer, "Max space set to: {}\n", sz);
                 }
+            },
+
+            "potential"|
+            "pot" => {
+                if !matches!(ed, Item::Primordial(_)) {
+                    no_can_do!(ctx, "potential");
+                }
+                let err = PotentialItemType::from(value);
+                if err.is_err() {
+                    tell_user!(ctx.writer, "That doesn't work, the variants are: {}\n", err.err().unwrap());
+                    return;
+                };
+                let pot = err.ok().unwrap();
+                ed.set_potential(pot.clone());
+                tell_user!(ctx.writer, "Item potential set as '{}'\n", pot);
             },
 
             _ => tell_user!(ctx.writer, "No such field to alter, and I can't just whip up new fields out of nothing…\n")

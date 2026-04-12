@@ -1,11 +1,11 @@
 //! Primordial [Item] which is not yet "anything".
 
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use cosmic_garden_pm::{IdentityMut, ItemizedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{Item, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage, StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}}, string::{Describable, Uuid}, traits::Reflector};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -21,6 +21,52 @@ pub enum PotentialItemType {
 impl Default for PotentialItemType {
     fn default() -> Self {
         Self::Other_
+    }
+}
+
+impl Display for PotentialItemType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Self::Consumable => "consumable",
+            Self::Container => "container",
+            Self::Key => "key",
+            Self::Other_ => "other/primordial",
+            Self::Tool => "tool",
+            Self::Weapon => "weapon"
+        })
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum PotentialItemTypeError {
+    ListAll,
+    Ambiguous,
+}
+
+impl Display for PotentialItemTypeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Self::Ambiguous => "<c yellow>cons</c>umable, <c yellow>cont</c>ainer",
+            Self::ListAll => "<c yellow>cons</c>umable, <c yellow>cont</c>ainer, <c yellow>k</c>ey, <c yellow>t</c>ool, <c yellow>w</c>eapon"
+        })
+    }
+}
+
+impl PotentialItemType {
+    pub fn from(value: &str) -> Result<Self, PotentialItemTypeError> {
+        if value.len() < 4 && value.starts_with("con") { return Err(PotentialItemTypeError::Ambiguous);}
+        if value.starts_with("cont") { return Ok(Self::Container); }
+        if value.starts_with("cons") { return Ok(Self::Consumable);}
+        match value.chars().nth(0) {
+            None => Err(PotentialItemTypeError::ListAll),
+            Some(c) => Ok(match c {
+                'w' => Self::Weapon,
+                't' => Self::Tool,
+                'k' => Self::Weapon,
+                'o' => Self::Other_,// TODO might need to disable this later
+                _ => return Err(PotentialItemTypeError::ListAll)
+            })
+        }
     }
 }
 
@@ -45,6 +91,27 @@ impl PrimordialItem {
             max_space: 0,
             potential: PotentialItemType::default(),
         })
+    }
+
+    pub fn set_potential(&mut self, pot: PotentialItemType) -> bool {
+        self.potential = pot;
+        true
+    }
+
+    pub fn atomize(item: &Item) -> Item {
+        match item {
+            Item::Primordial(_) => item.clone(),
+            _ => Item::Primordial(
+                PrimordialItem {
+                    id: item.id().to_string(),
+                    title: item.title().to_string(),
+                    size: item.size(),
+                    desc: item.desc().to_string(),
+                    max_space: item.max_space(),
+                    potential: PotentialItemType::Other_,
+                }
+            )
+        }
     }
 }
 

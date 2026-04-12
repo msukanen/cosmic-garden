@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::container::Storage, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, io_thread::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user};
 
 pub struct GetCommand;
 
@@ -33,6 +33,7 @@ impl Command for GetCommand {
         };
         // bugger, no space in inventory, lets put it back...
         let Some(item) = storage_error.extract_item() else {
+            // StorageError-error.
             log::error!("How can matter evaporate. Dig the logs!");
             tell_user!(ctx.writer, "There's something seriously wrong in timespace continuum…\n");
             return;
@@ -41,9 +42,8 @@ impl Command for GetCommand {
             tell_user!(ctx.writer, "Way too big or heavy. You set it back before you break your back.\n");
             return;
         };
-        let r_id = p_loc.read().await.id().to_string();
-        log::error!("Item '{thing_id}' belonged to room '{r_id}', but it can't be put back. Why? {storage_error:?}\n");
-        // TODO fire up lost and found!
-        tell_user!(ctx.writer, "... the world is being weird ...\n");
+
+        add_item_to_lnf(storage_error.extract_item().unwrap()).await;
+        tell_user!(ctx.writer, "… the world is being weird …\n");
     }
 }

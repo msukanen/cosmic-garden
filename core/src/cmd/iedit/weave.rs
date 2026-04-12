@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::IdentityQuery, io::ClientState, item::{container::Storage, primordial::Metamorphize}, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::IdentityQuery, io::ClientState, io_thread::add_item_to_lnf, item::{container::Storage, primordial::Metamorphize}, tell_user, validate_access};
 
 pub struct WeaveCommand;
 
@@ -10,7 +10,7 @@ pub struct WeaveCommand;
 impl Command for WeaveCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
-        let (p_id, p_loc) = {
+        let p_loc = {
             let p = plr.read().await;
             let p_id = p.id().to_string();
             let Some(p_loc) = p.location.upgrade() else {
@@ -19,7 +19,7 @@ impl Command for WeaveCommand {
                 ctx.state = ClientState::Logout;
                 return;
             };
-            (p_id, p_loc.clone())
+            p_loc.clone()
         };
 
         let item = {
@@ -36,7 +36,7 @@ impl Command for WeaveCommand {
         let final_item = item.metamorph();
         log::trace!("Builder metamorph: {final_item:?}");
         let Err(storage_error) = plr.write().await.inventory.try_insert(final_item) else {
-            tell_user!(ctx.writer, "You successfully created something - check your inventory…\n");
+            tell_user!(ctx.writer, "You successfully created something — check your inventory…\n");
             AbortCommand.exec({ctx.args = "q";ctx}).await;
             return;
         };
@@ -48,9 +48,8 @@ impl Command for WeaveCommand {
             AbortCommand.exec({ctx.args = "q";ctx}).await;
             return;
         };
-        // trusting the system again...
-        let item = storage_error.extract_item().unwrap();
-        // TODO couldn't fit in room - lost-and-found
+        
+        add_item_to_lnf(storage_error.extract_item().unwrap()).await;
         tell_user!(ctx.writer, "Well… you made something, but have no clue where it went…\n");
         AbortCommand.exec({ctx.args = "q";ctx}).await;
     }

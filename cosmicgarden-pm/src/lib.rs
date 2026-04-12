@@ -259,6 +259,7 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
         let peek_ats = enum_getter_w_arg!(data, peek_at);
         let takes = enum_getter_w_arg!(data, take);
         let find_id_by_names = enum_getter_w_arg!(data, find_id_by_name);
+        let ejects = enum_getter!(data, eject_all);
 
         TokenStream::from(quote! {
             impl crate::item::container::Storage for #name {
@@ -271,6 +272,7 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
                 fn peek_at(&self, value: &str) -> Option<&Item> { match self {#(#peek_ats),*}}
                 fn take(&mut self, value: &str) -> Option<Item> { match self {#(#takes),*}}
                 fn find_id_by_name(&self, value: &str) -> Option<String> { match self {#(#find_id_by_names),*}}
+                fn eject_all(&mut self) -> Option<Vec<Item>> { match self {#(#ejects),*}}
             }
         })
     } else {

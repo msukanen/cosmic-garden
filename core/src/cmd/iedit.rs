@@ -6,9 +6,20 @@ use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuer
 
 pub mod abort;
 pub mod desc;
+pub mod devolve;
 pub mod iex;
 pub mod set;
 pub mod weave;
+
+#[macro_export]
+macro_rules! err_iedit_buffer_inaccessible {
+    ($ctx:ident, $p:ident, $p_id:ident) => {
+        drop($p);
+        log::error!("Builder '{}'.iedit_buffer evaporated mid-edit?!", $p_id);
+        crate::tell_user!($ctx.writer, "Uh-oh, editor buffer evaporated?!\n");
+        return;
+    };
+}
 
 pub struct IeditCommand;
 

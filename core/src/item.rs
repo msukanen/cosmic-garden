@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::{Metamorphize, PrimordialItem}}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::{Metamorphize, PotentialItemType, PrimordialItem}}, string::{Describable, Uuid}, traits::Reflector};
 
 pub mod owner;
 pub mod container;
@@ -60,6 +60,35 @@ pub enum Item {
     Key(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Consumable(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Primordial(PrimordialItem),
+}
+
+impl Item {
+    pub fn set_potential(&mut self, pot: PotentialItemType) -> bool {
+        match self {
+            Self::Primordial(v) => v.set_potential(pot),
+            _ => false
+        }
+    }
+    pub fn potential(&self) -> PotentialItemType {
+        match self {
+            Self::Primordial(v) => v.potential.clone(),
+            Self::Consumable(_) => PotentialItemType::Consumable,
+            Self::Container(_) => PotentialItemType::Container,
+            Self::Key(_) => PotentialItemType::Key,
+            Self::Tool(_) => PotentialItemType::Tool,
+            Self::Weapon(_) => PotentialItemType::Weapon,
+        }
+    }
+    pub fn devolve(&mut self) {
+        match self {
+            Self::Primordial(_) => (),
+            Self::Consumable(_) => *self = PrimordialItem::atomize(self),
+            Self::Container(_) => *self = PrimordialItem::atomize(self),
+            Self::Key(_) => *self = PrimordialItem::atomize(self),
+            Self::Tool(_) => *self = PrimordialItem::atomize(self),
+            Self::Weapon(_) => *self = PrimordialItem::atomize(self),
+        }
+    }
 }
 
 impl Reflector for Item {
@@ -142,6 +171,13 @@ impl Storage for Item {
     fn find_id_by_name(&self, name: &str) -> Option<String> {
         match self {
             Self::Container(c) => c.find_id_by_name(name),
+            _ => None
+        }
+    }
+
+    fn eject_all(&mut self) -> Option<Vec<Item>> {
+        match self {
+            Self::Container(v) => v.eject_all(),
             _ => None
         }
     }

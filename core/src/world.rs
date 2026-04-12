@@ -4,7 +4,7 @@ use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, player::Player, room::Room, string::{Slugger, UNNAMED, prompt::PromptType}, util::direction::Direction};
+use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, item::Item, player::Player, room::Room, string::{Slugger, UNNAMED, prompt::PromptType}, util::direction::Direction};
 
 /// The world!
 #[derive(Debug, Deserialize, Serialize)]
@@ -37,6 +37,9 @@ pub struct World {
     pub root_room_id: String,
     #[serde(skip)]
     pub root_room: Option<Arc<RwLock<Room>>>,
+
+    #[serde(default)]
+    pub lost_and_found: HashMap<String, Item>,
 }
 
 mod room_id_sieve {
@@ -115,7 +118,8 @@ impl World {
                             l2.save().await?;
                         }
                         rooms
-                    }
+                    },
+                    lost_and_found: HashMap::new(),
                 };
                 w.save().await?;
                 Ok(w)
@@ -151,7 +155,6 @@ impl World {
             let w = world.read().await;
             w.rooms.get(target_id).cloned()
         };
-        log::debug!("Acquired room (Option)");
         let Some(room) = room_to_place_in else {
             log::warn!("Cannot place '{p_id}' where they wanted to go; room '{target_id}' does not exist.");
             log::debug!("Translocating '{p_id}' to root.");
@@ -161,6 +164,7 @@ impl World {
             }
             return
         };
+        log::trace!("Acquired room '{}'…", room.read().await.id());
         log::debug!("Bracing for place_direct()…");
         if let Err(e) = Player::place_direct(arc, room.clone()).await {
             log::error!("Facepalming here; {e:?}");
@@ -169,6 +173,7 @@ impl World {
         log::trace!("Done translocating…");
     }
 
+    /// Establish links between [Room(s)][Room].
     pub async fn link_rooms(&mut self) {
         let rooms = self.rooms.clone();
         for room_arc in rooms.values() {

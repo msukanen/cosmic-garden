@@ -274,6 +274,14 @@ impl Storage for ContainerSpec {
             })
             .map(|(id, _)| id.clone())
     }
+
+    fn eject_all(&mut self) -> Option<Vec<Item>> {
+        if self.contents.is_empty() {
+            None
+        } else {
+            Some(self.contents.drain().map(|(_,v)| v).collect::<Vec<_>>())
+        }
+    }
 }
 
 impl StorageMut for ContainerSpec {
