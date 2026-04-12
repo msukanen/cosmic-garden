@@ -70,6 +70,6 @@ mod entity_tests {
             assert_eq!(Ok(true), e.is_unconscious());
         }
         let elapsed = now.elapsed();
-        log::debug!("\nPERF: 1M recal + drain: {elapsed:?}\nPERF: avg per cycle: {:?}", elapsed / LOOPS);
+        log::debug!("\nPERF: {LOOPS} reuuid + drain, 100 ticks each loop: {elapsed:?}\nPERF: avg per cycle: {:?}\nTOT: {} iterations.", elapsed / LOOPS, LOOPS*100);
     }
 }
