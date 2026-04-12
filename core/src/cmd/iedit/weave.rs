@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::IdentityQuery, io::ClientState, io_thread::add_item_to_lnf, item::{container::Storage, primordial::Metamorphize}, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::IdentityQuery, io::ClientState, io_thread::add_item_to_lnf, item::{container::Storage, library::BP_LIBRARY, primordial::Metamorphize}, tell_user, validate_access};
 
 pub struct WeaveCommand;
 
@@ -34,9 +34,15 @@ impl Command for WeaveCommand {
         };
 
         let final_item = item.metamorph();
+
+        let mut persist = ctx.args == "persist";
+        if persist {
+            let mut lib = (*BP_LIBRARY).write().await;
+            persist = lib.shelve(&final_item, true);
+        }
         log::trace!("Builder metamorph: {final_item:?}");
         let Err(storage_error) = plr.write().await.inventory.try_insert(final_item) else {
-            tell_user!(ctx.writer, "You successfully created something — check your inventory…\n");
+            tell_user!(ctx.writer, "You successfully created something — check your inventory…{}\n", if persist {" <c yellow>(Blueprint shelved)</c>."} else {""});
             AbortCommand.exec({ctx.args = "q";ctx}).await;
             return;
         };
@@ -44,13 +50,13 @@ impl Command for WeaveCommand {
         let item = storage_error.extract_item().unwrap();
         // too big for player inv. Room?
         let Err(storage_error) = p_loc.write().await.contents.try_insert(item) else {
-            tell_user!(ctx.writer, "Well, too large for your inventory. So, you set it down on the ground…\n");
+            tell_user!(ctx.writer, "Well, too large for your inventory. So, you set it down on the ground…{}\n", if persist {" <c yellow>(Blueprint shelved)</c>."} else {""});
             AbortCommand.exec({ctx.args = "q";ctx}).await;
             return;
         };
         
         add_item_to_lnf(storage_error.extract_item().unwrap()).await;
-        tell_user!(ctx.writer, "Well… you made something, but have no clue where it went…\n");
+        tell_user!(ctx.writer, "Well… you made something, but have no clue where it went…{}\n", if persist {" But at least the <c yellow>blueprint got shelved</c>."} else {""});
         AbortCommand.exec({ctx.args = "q";ctx}).await;
     }
 }
