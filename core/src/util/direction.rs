@@ -31,7 +31,7 @@ impl Display for Direction {
 impl From<&str> for Direction {
     fn from(value: &str) -> Self {
         let lc = value.to_lowercase();
-        match value.to_lowercase().as_str() {
+        match lc.as_str() {
             "d"|"down" => Self::Down,
             "e"|"east" => Self::East,
             "ne"|"northeast"|"north-east" => Self::NE,
