@@ -5,7 +5,7 @@ use std::{collections::HashMap, fmt::Display};
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, consumable::{ConsumableMatter, NutritionType}, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, consumable::{ConsumableMatter, NutritionType}, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState}, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -62,7 +62,7 @@ impl PotentialItemType {
             Some(c) => Ok(match c {
                 'w' => Self::Weapon,
                 't' => Self::Tool,
-                'k' => Self::Weapon,
+                'k' => Self::Key,
                 'o' => Self::Other_,// TODO might need to disable this later
                 _ => return Err(PotentialItemTypeError::ListAll)
             })
@@ -82,6 +82,8 @@ pub struct PrimordialItem {
     pub uses: Option<usize>,
     pub nutrition: Option<NutritionType>,
     pub affect_ticks: Option<usize>,
+    pub rots_in_ticks: Option<usize>,
+    pub matter_state: Option<MatterState>,
 }
 
 impl PrimordialItem {
@@ -96,6 +98,8 @@ impl PrimordialItem {
             uses: None,
             nutrition: None,
             affect_ticks: None,
+            rots_in_ticks: None,
+            matter_state: None,
         })
     }
 
@@ -120,6 +124,8 @@ impl PrimordialItem {
                     uses: item.uses,
                     nutrition: item.nutrition.clone().into(),
                     affect_ticks: item.affect_ticks.clone(),
+                    rots_in_ticks: item.affect_ticks.clone(),
+                    matter_state: item.matter_state.into(),
             }),
             _ => Item::Primordial(PrimordialItem {
                     id: item.id().to_string(),
@@ -131,6 +137,8 @@ impl PrimordialItem {
                     uses: None,
                     nutrition: None,
                     affect_ticks: None,
+                    rots_in_ticks: None,
+                    matter_state: None,
             })
         }
     }
@@ -181,13 +189,18 @@ impl Metamorphize for PrimordialItem {
                 PotentialItemType::Container => unimplemented!("Already determined by max_space"),
                 PotentialItemType::Consumable => {
                     Item::Consumable(ConsumableMatter {
-                        id: self.id,
+                        id: self.id.clone(),
                         title: self.title,
                         size: self.size,
                         nutrition: self.nutrition.unwrap_or(NutritionType::NotEdible),
                         desc: self.desc,
                         uses: self.uses,
                         affect_ticks: self.affect_ticks,
+                        rots_in_ticks: self.rots_in_ticks,
+                        matter_state: self.matter_state.unwrap_or_else(|| {
+                            log::warn!("Builder: consumable '{}' lacks proper matter_state! Going \"safe\" with 'solid' assumption.", self.id);
+                            MatterState::Solid
+                        }),
                     })
                 }
                 // staying as-is?
@@ -197,5 +210,15 @@ impl Metamorphize for PrimordialItem {
                 PotentialItemType::Tool  => todo!("TODO: more item modes!")
             }
         }
+    }
+}
+
+impl Tickable for PrimordialItem {
+    fn tick(&mut self) -> bool {
+        #[cfg(all(debug_assertions, feature = "stresstest"))]{
+            log::debug!("Primordial '{}' ticked.", self.id);
+            return true;
+        }
+        false
     }
 }
