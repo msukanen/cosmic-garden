@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, io_thread::add_item_to_lnf, item::{Item, container::Storage}, mob::affect::{Affector, stack_affect}, player_or_bust, roomloc_or_bust, string::Uuid, tell_user};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, io_thread::add_item_to_lnf, item::{Item, container::Storage, matter::MatterState}, mob::affect::{Affector, stack_affect}, player_or_bust, roomloc_or_bust, string::Uuid, tell_user};
 
 pub struct EatCommand;
 
@@ -17,10 +17,10 @@ impl Command for EatCommand {
             tell_user!(ctx.writer, "Even turning your pockets inside out, you can't find anything like '{}'…\n", ctx.args);
             return ;
         };
+        let item_name = item.title().to_string();
         let Item::Consumable(ref mut m) = item else {
-            let item_name = item.title().to_string();
             let Err(e) = plr.write().await.receive_item(item) else {
-                tell_user!(ctx.writer, "Ick! You can't possibly even think about eating '{}'!\n", item_name);
+                tell_user!(ctx.writer, "Ick! You can't possibly even think about consuming '{}'!\n", item_name);
                 return;
             };
             let Err(e) = p_loc.write().await.contents.try_insert(e.extract_item().unwrap()) else {
@@ -39,6 +39,16 @@ impl Command for EatCommand {
         }
         
         if let Some(affect) = m.as_affect() {
+            tell_user!(ctx.writer, "You {} the '{}'. {}\n",
+                m.matter_state.delivery_method(),
+                item_name,
+                match m.matter_state {
+                    MatterState::Liquid => "*Glug-glug*",
+                    MatterState::Solid => "Not bad…",
+                    MatterState::Gaseous => "Which makes you hickup.",
+                    MatterState::Plasma => "GAH! Probably <c red>bad idea</c>…"
+                }
+            );
             let mut p = plr.write().await;
             stack_affect(item.id(), &affect, &mut p.affects);
         }
