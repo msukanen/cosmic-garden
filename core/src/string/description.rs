@@ -3,6 +3,9 @@
 pub trait Describable {
     /// Get current description.
     fn desc<'a>(&'a self) -> &'a str;
+}
+
+pub trait DescribableMut {
     /// Set description, if possible.
     /// 
     /// # Args

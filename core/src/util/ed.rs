@@ -206,6 +206,7 @@ fn insert_nth_line(text: &str, line_num: usize, text_to_insert: &str) -> String 
 }
 
 /// Access `$ed` (hedit, redit, etc.) of the given `$ctx`.
+// NOTE: does not work with Enum based stuff, like Iedit.
 #[macro_export]
 macro_rules! access_ed_entry {
     ($plr:ident, $ed:ident) => {

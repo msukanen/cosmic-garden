@@ -1,12 +1,12 @@
 //! Player stuff!
 
-use std::{fmt::Display, sync::{Arc, Weak}};
+use std::{collections::HashMap, fmt::Display, ops::AddAssign, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, io_thread::{SAVE_ASAP, SAVE_ASAP_THRESHOLD}, item::{Item, container::{variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType}, room::Room, string::UNNAMED, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, io_thread::{SAVE_ASAP, SAVE_ASAP_THRESHOLD}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, traits::Tickable, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -69,6 +69,9 @@ pub struct Player {
 
     #[serde(default = "player_inv_default")]
     pub inventory: ContainerVariant,
+
+    #[serde(default)]
+    pub affects: HashMap<String, Affect>,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -135,6 +138,7 @@ impl Player {
         Ok(())
     }
 
+    /// Accumulate action weight.
     pub async fn act(&mut self, player: Arc<RwLock<Player>>, act_wt: ActionWeight) -> usize {
         self.actions_taken += act_wt;
         if self.actions_taken >= SAVE_ASAP_THRESHOLD {
@@ -144,6 +148,21 @@ impl Player {
             }
         }
         self.actions_taken
+    }
+
+    /// Receive an item. If you can't take it, throw it back…
+    pub fn receive_item(&mut self, item: Item) -> Result<(), StorageError> {
+        self.inventory.try_insert(item)
+    }
+
+    /// Apply ± on a stat.
+    pub fn apply_stat_change(&mut self, stat: StatType, drain: StatValue) {
+        match stat {
+            StatType::HP => *(self.hp_mut()) += drain,
+            StatType::MP => *(self.mp_mut()) += drain,
+            StatType::SN => *(self.sn_mut()) += drain,
+            StatType::San => *(self.san_mut()) += drain,
+        }
     }
 }
 
@@ -166,6 +185,7 @@ impl Default for Player {
             iedit_buffer: None,
             activity_type: ActivityType::Other,
             inventory: player_inv_default(),
+            affects: HashMap::new(),
         }
     }
 }
@@ -188,10 +208,30 @@ impl Accessor for Player {
     }
 }
 
-#[cfg(test)]
-mod player_tests {
-    #[test]
-    fn player_inventory() {
+impl Tickable for Player {
+    fn tick(&mut self) -> bool {
+        let hp_t = self.hp_mut().tick();
+        let mp_t = self.mp_mut().tick();
+        let sn_t = self.sn_mut().tick();
+        let san_t = self.san_mut().tick();
+        // now Affects, if any …
+        let mut changes: Vec<_> = Vec::new();
+        self.affects.retain(|_id, affect| {
+            if affect.expired() { return false; }
+            if let Affect::Nutrition { kind, .. } = affect {
+                if let NutritionType::Heal { stat, drain } = kind {
+                    changes.push((*stat, *drain));
+                }
+            }
 
+            affect.tick();
+            !affect.expired()
+        });
+        for (stat, amount) in &changes {
+            self.apply_stat_change(*stat, *amount);
+        }
+        let ch_t = !changes.is_empty();
+
+        hp_t || mp_t || sn_t || san_t || ch_t
     }
 }

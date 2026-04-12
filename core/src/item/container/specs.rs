@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, ItemizedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}}, string::{Describable, UNNAMED, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::Reflector};
 
 pub type StorageSpace = u16;
 
@@ -104,7 +104,9 @@ impl Describable for ContainerSpec {
     fn desc<'a>(&'a self) -> &'a str {
         &self.desc
     }
+}
 
+impl DescribableMut for ContainerSpec {
     fn set_desc(&mut self, text: &str) -> bool {
         if self.desc_can_be_modified {
             self.desc = text.to_string();
@@ -129,9 +131,12 @@ impl From<&ContainerSpec> for ContainerSpec {
 
 impl Reflector for ContainerSpec {
     fn reflect(&self) -> Self {
+        Self::from(self)
+    }
+    fn deep_reflect(&self) -> Self {
         let mut r = Self::from(self);
-        for x in &self.contents {
-            let refl = x.1.reflect();
+        for (_,x) in &self.contents {
+            let refl = x.reflect();
             r.contents.insert(refl.id().into(), refl);
         }
         r
@@ -261,6 +266,14 @@ impl Storage for ContainerSpec {
             }
         }
         None
+    }
+
+    fn take_by_name(&mut self, name: &str) -> Option<Item> {
+        if let Some(id) = self.find_id_by_name(name) {
+            self.contents.remove(&id)
+        } else {
+            None
+        }
     }
 
     fn find_id_by_name(&self, name: &str) -> Option<String> {

@@ -73,17 +73,19 @@ For description, use 'desc' command instead.
 
             "potential"|
             "pot" => {
-                if !matches!(ed, Item::Primordial(_)) {
+                if let Item::Primordial(v) = ed {
+                    let err = PotentialItemType::from(value);
+                    if err.is_err() {
+                        tell_user!(ctx.writer, "That doesn't work, the variants are: {}\n", err.err().unwrap());
+                        return;
+                    };
+                    let pot = err.ok().unwrap();
+                    v.set_potential(pot.clone());
+                    tell_user!(ctx.writer, "Item potential set as '{}'\n", pot);
+                }
+                else {
                     no_can_do!(ctx, "potential");
                 }
-                let err = PotentialItemType::from(value);
-                if err.is_err() {
-                    tell_user!(ctx.writer, "That doesn't work, the variants are: {}\n", err.err().unwrap());
-                    return;
-                };
-                let pot = err.ok().unwrap();
-                ed.set_potential(pot.clone());
-                tell_user!(ctx.writer, "Item potential set as '{}'\n", pot);
             },
 
             _ => tell_user!(ctx.writer, "No such field to alter, and I can't just whip up new fields out of nothing…\n")

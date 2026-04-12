@@ -3,7 +3,7 @@ use std::i32;
 use cosmic_garden_pm::{IdentityMut, Storage};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{Item, Itemized, ItemizedMut, container::{StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}}, string::Describable, traits::Reflector};
+use crate::{item::{Item, Itemized, ItemizedMut, container::{StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}}, string::{Describable, DescribableMut}, traits::Reflector};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum ContainerVariantType {
@@ -57,7 +57,9 @@ impl Describable for ContainerVariant {
             Self::Room(v) => v.desc()
         }
     }
+}
 
+impl DescribableMut for ContainerVariant {
     fn set_desc(&mut self, text: &str) -> bool {
         match self {
             Self::Backpack(v) |
@@ -103,6 +105,16 @@ impl Reflector for ContainerVariant {
             Self::Pouch(p) => Self::Pouch(p.reflect()),
             Self::Room(r) => Self::Room(r.reflect()),
             Self::Chest(c) => Self::Chest(c.reflect()),
+        }
+    }
+
+    fn deep_reflect(&self) -> Self {
+        match self {
+            Self::Backpack(b) => Self::Backpack(b.deep_reflect()),
+            Self::PlayerInventory(p) => Self::PlayerInventory(p.deep_reflect()),
+            Self::Pouch(p) => Self::Pouch(p.deep_reflect()),
+            Self::Room(r) => Self::Room(r.deep_reflect()),
+            Self::Chest(c) => Self::Chest(c.deep_reflect()),
         }
     }
 }

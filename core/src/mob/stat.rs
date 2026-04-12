@@ -34,11 +34,23 @@ impl Display for StatError {
 pub type StatValue = f32;
 
 /// Stat types for [Stat::new].
+#[derive(Debug, Clone, Copy, Deserialize, Serialize, Hash, PartialEq, Eq)]
 pub enum StatType {
     HP,
     MP,
     San,
     SN,
+}
+
+impl Display for StatType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Self::HP => "HP",
+            Self::MP => "MP",
+            Self::SN => "SN",
+            Self::San => "San",
+        })
+    }
 }
 
 /// Stat core.

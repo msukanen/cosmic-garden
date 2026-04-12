@@ -258,6 +258,7 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
         let contains = enum_getter_w_arg!(data, contains);
         let peek_ats = enum_getter_w_arg!(data, peek_at);
         let takes = enum_getter_w_arg!(data, take);
+        let take_bys = enum_getter_w_arg!(data, take_by_name);
         let find_id_by_names = enum_getter_w_arg!(data, find_id_by_name);
         let ejects = enum_getter!(data, eject_all);
 
@@ -271,11 +272,70 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
                 fn contains(&self, value: &str) -> bool { match self {#(#contains),*}}
                 fn peek_at(&self, value: &str) -> Option<&Item> { match self {#(#peek_ats),*}}
                 fn take(&mut self, value: &str) -> Option<Item> { match self {#(#takes),*}}
+                fn take_by_name(&mut self, value: &str) -> Option<Item> { match self {#(#take_bys),*}}
                 fn find_id_by_name(&self, value: &str) -> Option<String> { match self {#(#find_id_by_names),*}}
                 fn eject_all(&mut self) -> Option<Vec<Item>> { match self {#(#ejects),*}}
             }
         })
     } else {
         panic!("No no! Enum only!")
+    }
+}
+
+#[proc_macro_derive(Describable)]
+pub fn describable_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    if let Data::Enum(data) = input.data {
+        let descs = enum_getter!(data, desc);
+        let set_descs = enum_setter_w_result!(data, set_desc);
+        TokenStream::from(quote! {
+            impl crate::string::description::Describable for #name {
+                fn desc<'a>(&'a self) -> &'a str => { match self {#(#descs),*}}
+                fn set_desc(&mut self, value: &str) -> bool { match self {#(#set_descs),*}}
+            }
+        })
+    } else {
+        TokenStream::from(quote! {
+            impl crate::string::description::Describable for #name {
+                fn desc<'a>(&'a self) -> &'a str { &self.desc }
+                fn set_desc(&mut self, value: &str) -> bool {
+                    self.desc = value.to_string();
+                    true
+                }
+            }
+        })
+    }
+}
+
+#[proc_macro_derive(DescribableMut)]
+pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = input.ident;
+
+    if let Data::Enum(data) = input.data {
+        let descs = enum_getter!(data, desc);
+        let set_descs = enum_setter_w_result!(data, set_desc);
+        TokenStream::from(quote! {
+            impl crate::string::description::Describable for #name {
+                fn desc<'a>(&'a self) -> &'a str => { match self {#(#descs),*}}
+            }
+            impl crate::string::description::DescribableMut for #name {
+                fn set_desc(&mut self, value: &str) -> bool { match self {#(#set_descs),*}}
+            }
+        })
+    } else {
+        TokenStream::from(quote! {
+            impl crate::string::description::Describable for #name {
+                fn desc<'a>(&'a self) -> &'a str { &self.desc }
+            }
+            impl crate::string::description::DescribableMut for #name {
+                fn set_desc(&mut self, value: &str) -> bool {
+                    self.desc = value.to_string();
+                    true
+                }
+            }
+        })
     }
 }

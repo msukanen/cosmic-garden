@@ -12,6 +12,7 @@ mod dummy;
 
 mod dig;
 mod drop;
+mod eat;
 mod force;
 mod get;
 mod goto;

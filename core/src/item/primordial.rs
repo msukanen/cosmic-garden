@@ -2,10 +2,10 @@
 
 use std::{collections::HashMap, fmt::Display};
 
-use cosmic_garden_pm::{IdentityMut, ItemizedMut};
+use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage, StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, consumable::{ConsumableMatter, NutritionType}, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}}, string::{Describable, Uuid}, traits::Reflector};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -71,7 +71,7 @@ impl PotentialItemType {
 }
 
 /// Entirely "primordial soup" for creating other items from.
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, DescribableMut)]
 pub struct PrimordialItem {
     pub id: String,
     pub title: String,
@@ -79,6 +79,9 @@ pub struct PrimordialItem {
     pub desc: String,
     pub max_space: StorageSpace,
     pub potential: PotentialItemType,
+    pub uses: Option<usize>,
+    pub nutrition: Option<NutritionType>,
+    pub affect_ticks: Option<usize>,
 }
 
 impl PrimordialItem {
@@ -90,6 +93,9 @@ impl PrimordialItem {
             desc: "Something indescribable…".into(),
             max_space: 0,
             potential: PotentialItemType::default(),
+            uses: None,
+            nutrition: None,
+            affect_ticks: None,
         })
     }
 
@@ -98,37 +104,44 @@ impl PrimordialItem {
         true
     }
 
+    pub fn potential(&self) -> PotentialItemType { self.potential.clone() }
+
+    /// Atomize any item into primal goo...
     pub fn atomize(item: &Item) -> Item {
         match item {
             Item::Primordial(_) => item.clone(),
-            _ => Item::Primordial(
-                PrimordialItem {
+            Item::Consumable(item) => Item::Primordial(PrimordialItem {
                     id: item.id().to_string(),
                     title: item.title().to_string(),
                     size: item.size(),
                     desc: item.desc().to_string(),
-                    max_space: item.max_space(),
+                    max_space: 0,
                     potential: PotentialItemType::Other_,
-                }
-            )
+                    uses: item.uses,
+                    nutrition: item.nutrition.clone().into(),
+                    affect_ticks: item.affect_ticks.clone(),
+            }),
+            _ => Item::Primordial(PrimordialItem {
+                    id: item.id().to_string(),
+                    title: item.title().to_string(),
+                    size: item.size(),
+                    desc: item.desc().to_string(),
+                    max_space: 0,
+                    potential: PotentialItemType::Other_,
+                    uses: None,
+                    nutrition: None,
+                    affect_ticks: None,
+            })
         }
     }
 }
 
 impl Reflector for PrimordialItem {
     fn reflect(&self) -> Self {
-        self.clone()
+        Self { id: self.id.re_uuid(), ..self.clone() }
     }
-}
-
-impl Describable for PrimordialItem {
-    fn desc<'a>(&'a self) -> &'a str {
-        &self.desc
-    }
-
-    fn set_desc(&mut self, text: &str) -> bool {
-        self.desc = text.to_string();
-        true
+    fn deep_reflect(&self) -> Self {
+        self.reflect()
     }
 }
 
@@ -166,12 +179,22 @@ impl Metamorphize for PrimordialItem {
         } else {
             match self.potential {
                 PotentialItemType::Container => unimplemented!("Already determined by max_space"),
+                PotentialItemType::Consumable => {
+                    Item::Consumable(ConsumableMatter {
+                        id: self.id,
+                        title: self.title,
+                        size: self.size,
+                        nutrition: self.nutrition.unwrap_or(NutritionType::NotEdible),
+                        desc: self.desc,
+                        uses: self.uses,
+                        affect_ticks: self.affect_ticks,
+                    })
+                }
                 // staying as-is?
                 PotentialItemType::Other_ => Item::Primordial(self),
                 PotentialItemType::Weapon |
                 PotentialItemType::Key |
-                PotentialItemType::Tool |
-                PotentialItemType::Consumable => todo!("TODO: more item modes!")
+                PotentialItemType::Tool  => todo!("TODO: more item modes!")
             }
         }
     }

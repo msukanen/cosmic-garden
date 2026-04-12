@@ -2,11 +2,11 @@
 
 use std::{collections::HashMap, fmt::Display, fs as sync_fs, sync::{Arc, Weak}};
 
-use cosmic_garden_pm::IdentityMut;
+use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::{Describable, Slugger}, util::direction::Direction, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -23,7 +23,7 @@ impl Display for RoomError {
 
 impl std::error::Error for RoomError {}
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct Room {
     id: String,
     title: String,
@@ -130,17 +130,6 @@ impl Room {
         self.desc = source.desc;
         self.exits = source.exits;
         self.raw_exits = source.raw_exits;
-    }
-}
-
-impl Describable for Room {
-    fn desc<'a>(&'a self) -> &'a str {
-        &self.desc
-    }
-
-    fn set_desc(&mut self, text: &str) -> bool {
-        self.desc = text.to_string();
-        true
     }
 }
 

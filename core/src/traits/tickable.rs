@@ -1,12 +1,12 @@
 //! General purpose [Tickable] trait…
 
-use crate::mob::traits::MobMut;
+use crate::mob::{core::Entity, traits::MobMut};
 
 pub trait Tickable {
     fn tick(&mut self) -> bool;
 }
 
-impl <T: MobMut> Tickable for T {
+impl Tickable for Entity {
     fn tick(&mut self) -> bool {
         let hp = self.hp_mut().tick();
         let mp = self.mp_mut().tick();

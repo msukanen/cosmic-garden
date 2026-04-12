@@ -3,9 +3,10 @@
 use cosmic_garden_pm::{IdentityMut, Itemized};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::{Metamorphize, PotentialItemType, PrimordialItem}}, string::{Describable, Uuid}, traits::Reflector};
+use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::{Metamorphize, PrimordialItem}}, string::{Describable, DescribableMut, Uuid}, traits::Reflector};
 
 pub mod owner;
+pub mod consumable;
 pub mod container;
 pub mod key;
 pub mod primordial;
@@ -40,12 +41,17 @@ impl Reflector for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn reflect(&self) -> Self {
         Self { id: self.id().re_uuid(), title: self.title.clone() }
     }
+    fn deep_reflect(&self) -> Self {
+        self.reflect()
+    }
 }
 impl Describable for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn desc<'a>(&'a self) -> &'a str {
         "nothing to see here"
     }
+}
 
+impl DescribableMut for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn set_desc(&mut self, _: &str) -> bool {
         false
     }
@@ -58,27 +64,11 @@ pub enum Item {
     Weapon(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Tool(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Key(TemporaryStructToAppeaseAnalyzerDuringWIP),
-    Consumable(TemporaryStructToAppeaseAnalyzerDuringWIP),
+    Consumable(ConsumableMatter),
     Primordial(PrimordialItem),
 }
 
 impl Item {
-    pub fn set_potential(&mut self, pot: PotentialItemType) -> bool {
-        match self {
-            Self::Primordial(v) => v.set_potential(pot),
-            _ => false
-        }
-    }
-    pub fn potential(&self) -> PotentialItemType {
-        match self {
-            Self::Primordial(v) => v.potential.clone(),
-            Self::Consumable(_) => PotentialItemType::Consumable,
-            Self::Container(_) => PotentialItemType::Container,
-            Self::Key(_) => PotentialItemType::Key,
-            Self::Tool(_) => PotentialItemType::Tool,
-            Self::Weapon(_) => PotentialItemType::Weapon,
-        }
-    }
     pub fn devolve(&mut self) {
         match self {
             Self::Primordial(_) => (),
@@ -100,6 +90,16 @@ impl Reflector for Item {
             Self::Weapon(w) => Self::Weapon(w.reflect()),
             Self::Primordial(p) => Self::Primordial(p.reflect()),
             Self::Consumable(c) => Self::Consumable(c.reflect()),
+        }
+    }
+    fn deep_reflect(&self) -> Self {
+        match self {
+            Self::Container(c) => Self::Container(c.deep_reflect()),
+            Self::Key(k) => Self::Key(k.deep_reflect()),
+            Self::Tool(t) => Self::Tool(t.deep_reflect()),
+            Self::Weapon(w) => Self::Weapon(w.deep_reflect()),
+            Self::Primordial(p) => Self::Primordial(p.deep_reflect()),
+            Self::Consumable(c) => Self::Consumable(c.deep_reflect()),
         }
     }
 }
@@ -168,6 +168,13 @@ impl Storage for Item {
         }
     }
 
+    fn take_by_name(&mut self, id: &str) -> Option<Item> {
+        match self {
+            Self::Container(c) => c.take_by_name(id),
+            _ => None,
+        }
+    }
+
     fn find_id_by_name(&self, name: &str) -> Option<String> {
         match self {
             Self::Container(c) => c.find_id_by_name(name),
@@ -194,7 +201,9 @@ impl Describable for Item {
             Self::Consumable(v) => v.desc(),
         }
     }
+}
 
+impl DescribableMut for Item {
     fn set_desc(&mut self, text: &str) -> bool {
         match self {
             Self::Container(v) => v.set_desc(text),

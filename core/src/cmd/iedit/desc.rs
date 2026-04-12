@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player_or_bust, show_help, string::Describable, tell_user, util::ed::{EdResult, edit_text}};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player_or_bust, show_help, string::{Describable, DescribableMut}, tell_user, util::ed::{EdResult, edit_text}};
 
 pub struct DescCommand;
 
