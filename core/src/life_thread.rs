@@ -1,6 +1,29 @@
 //! Life-thread keeps the world ticking.
 
+use std::{sync::Arc, time::Duration};
+
+use tokio::{sync::RwLock, time};
+
+use crate::world::World;
+
 /// Life-thread. Lives hang on in balance here!
-pub(super) async fn life_thread() {
-    log::trace!("Firing up.");
+pub(super) async fn life_thread(world: Arc<RwLock<World>>) {
+    let mut tick_interval = time::interval(Duration::from_millis(100));
+    let mut tick = 0;
+    log::info!("Life thread firing up…\n");
+    loop {
+        tokio::select! {
+            _ = tick_interval.tick() => {
+                {
+                    let mut w = world.write().await;
+                    w.tick().await;
+                }
+                tick += 1;
+
+                #[cfg(all(debug_assertions,feature = "stresstest"))]{
+                    log::trace!("tick {tick} done");
+                }
+            }
+        }
+    }
 }
