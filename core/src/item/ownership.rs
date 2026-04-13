@@ -18,7 +18,7 @@ pub trait Owned {
 }
 
 /// [Item][crate::item::Item] ownership mutation.
-pub trait OwnedMut {
+pub trait OwnedMut: Owned {
     /// Change the [Item][crate::item::Item] owner.
     fn change_owner(&mut self, new_id: &str);
     /// Change last user of [Item][crate::item::Item].
