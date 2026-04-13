@@ -13,9 +13,24 @@ pub enum Access {
     }
 }
 
+/// [Player] access rights; coarse.
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum StrictAccess {
+    Admin,
+    Builder,
+    AnyBuilder,
+    Player,
+}
+
 impl Default for Access {
     fn default() -> Self {
         Self::Player { event_host: false, builder: false }
+    }
+}
+
+impl Default for StrictAccess {
+    fn default() -> Self {
+        Self::Player
     }
 }
 

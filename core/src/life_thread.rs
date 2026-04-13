@@ -10,7 +10,7 @@ use crate::world::World;
 pub(super) async fn life_thread(world: Arc<RwLock<World>>) {
     let mut tick_interval = time::interval(Duration::from_millis(100));
     let mut tick = 0;
-    log::info!("Life thread firing up…\n");
+    log::info!("Life thread firing up…");
     loop {
         tokio::select! {
             _ = tick_interval.tick() => {

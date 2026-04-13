@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, io_thread::{SAVE_ASAP, SAVE_ASAP_THRESHOLD}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, traits::Tickable, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, io_thread::{SAVE_ASAP, SAVE_ASAP_THRESHOLD}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -63,6 +63,7 @@ pub struct Player {
     
     #[serde(default)] pub redit_buffer: Option<Room>,
     #[serde(default)] pub iedit_buffer: Option<Item>,
+    #[serde(default)] pub hedit_buffer: Option<HelpPage>,
     
     #[serde(default = "player_default_atype", skip)]
     pub activity_type: ActivityType,
@@ -184,6 +185,7 @@ impl Default for Player {
             config: Config::default(),
             redit_buffer: None,
             iedit_buffer: None,
+            hedit_buffer: None,
             activity_type: ActivityType::Other,
             inventory: player_inv_default(),
             affects: HashMap::new(),

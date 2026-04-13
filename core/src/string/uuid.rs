@@ -15,6 +15,10 @@ pub trait Uuid {
     fn re_uuid(&self) -> String { self.no_uuid().with_uuid() }
 }
 
+pub trait StrUuid {
+    fn show_uuid(&self, yn: bool) -> &str;
+}
+
 /// Append UUID if no such yet.
 fn append_uuid(value: &str) -> String {
     if UUID_RE.is_match(value) {
@@ -33,6 +37,16 @@ pub fn remove_uuid(value: &str) -> String {
             .into();
     }
     value.into()
+}
+
+impl StrUuid for str {
+    fn show_uuid(&self, yn: bool) -> &str {
+        if yn { self } else {
+            if UUID_RE.is_match(self) {
+                &self[..self.len() - 36]
+            } else {self}
+        }
+    }
 }
 
 impl Uuid for &str {

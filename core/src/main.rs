@@ -8,13 +8,14 @@ mod io_thread;      use io_thread::io_thread;
 mod life_thread;    use life_thread::life_thread;
 use tokio::{io::{BufReader, AsyncBufReadExt}, net::TcpListener, sync::{RwLock, broadcast}};
 
-use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, item::library::librarian, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
+use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, library::librarian, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
 
 mod cmd;
 mod edit;
 mod error;
 mod identity;
 mod item;
+mod library;
 mod mob;
 mod password;
 mod player;

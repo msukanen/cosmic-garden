@@ -1,6 +1,6 @@
 //! Editor modes for those who need them.
 
-use crate::{identity::IdentityQuery, player::Player};
+use crate::{identity::IdentityQuery, player::Player, string::StrUuid};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditorMode {
@@ -17,7 +17,11 @@ const fn dirty_flag(state:bool) -> &'static str {
 impl EditorMode {
     pub fn prompt(&self, player: &Player) -> String {
         match self {
-            Self::Help{dirty} => "[HEDIT ()]: ".to_string(),
+            Self::Help{dirty} => format!("<c blue>[<c cyan>HEDIT</c>@<c green> {} ({})</c>]</c>{}: ",
+                if let Some(page) = &player.hedit_buffer { page.id().show_uuid(player.config.show_id) } else {"***"},
+                if let Some(page) = &player.hedit_buffer { page.title() } else {"***"},
+                dirty_flag(*dirty)
+            ),
             Self::Item{dirty} => format!("<c blue>[<c cyan>IEDIT</c>@<c green> {}</c>]</c>{}: ",
                 if let Some(item) = &player.iedit_buffer { item.id() } else {"***"},
                 dirty_flag(*dirty)

@@ -9,7 +9,6 @@ pub mod owner;
 pub mod consumable;
 pub mod container; pub use container::{StorageError, StorageQueryError};
 pub mod key;
-pub mod library;
 pub mod matter;
 pub mod ownership;
 pub mod primordial;

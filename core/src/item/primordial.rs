@@ -70,7 +70,9 @@ impl PotentialItemType {
     }
 }
 
-/// Entirely "primordial soup" for creating other items from.
+/// Entirely "primordial soup" for creating anything and everything.
+/// 
+/// What anything becomes, depends on what the `potential` is set upon 'weave'.
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, DescribableMut, OwnedMut)]
 pub struct PrimordialItem {
     pub id: String,

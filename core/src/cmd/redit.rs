@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, show_help_if_needed, string::Slugger, tell_user, translocate, util::access::Accessor, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, player::ActivityType, show_help_if_needed, string::Slugger, tell_user, translocate, util::access::Accessor, validate_access};
 
 pub mod abort;
 pub mod desc;
@@ -65,8 +65,10 @@ impl Command for ReditCommand {
                 }
             }
         };
+        // we got a [Room], shove it into buffer and start tinkering.
         {
             let mut w = plr.write().await;
+            w.activity_type = ActivityType::Building;
             w.redit_buffer = Some(room);
             ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Room{ dirty: false } }
         }

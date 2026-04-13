@@ -384,14 +384,14 @@ fn generate_describable_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 }
 
 /// Derive [Describable].
-#[proc_macro_derive(Describable)]
+#[proc_macro_derive(Describable, attributes(description))]
 pub fn describable_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(generate_describable_impl(&input))
 }
 
 /// Derive [DescribableMut] (and [Describable]).
-#[proc_macro_derive(DescribableMut)]
+#[proc_macro_derive(DescribableMut, attributes(description))]
 pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
@@ -412,7 +412,7 @@ pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
             quote! {
                 impl crate::string::description::DescribableMut for #name {
                     fn set_desc(&mut self, a: &str) -> bool {
-                        self.desc = a.to_string();
+                        self.#f_desc = a.to_string();
                         true
                     }
                 }

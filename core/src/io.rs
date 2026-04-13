@@ -198,7 +198,8 @@ impl ClientState {
                         World::insert_player(world.clone(), addr, &id, player.clone()).await;
                         return state;
                     } else {
-                        log::error!("UserInfo of user '{}' mismatch - Player file '{}' missing (or broken)!", info.id, p_id);
+                        let err = Player::load(&info.id, &p_id).await;
+                        log::error!("UserInfo of user '{}' mismatch - Player file '{}' missing (or broken)!: {err:?}", info.id, p_id);
                         tell_user!(&mut writer, "A bit of misplacement error here… Do contact admin ASAP!\n");
                         return self;
                     }

@@ -1,16 +1,19 @@
 //! Persistent item blueprint library.
 
-use std::{collections::{HashMap, HashSet}, path::PathBuf, sync::Arc, time::Duration};
+use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{identity::{IdentityMut, IdentityQuery}, io::DATA_PATH, item::Item, string::Uuid};
+use crate::{identity::{IdentityMut, IdentityQuery}, io::DATA_PATH, item::Item, string::Uuid, util::HelpLibrary};
 
 lazy_static! {
     pub(crate) static ref BP_PATH: PathBuf = PathBuf::from(format!("{}/blueprint", *DATA_PATH));
     pub static ref BP_LIBRARY: Arc<RwLock<BlueprintLibrary>> = Arc::new(RwLock::new(BlueprintLibrary::default()));
+
+    pub(crate) static ref HELP_PATH: PathBuf = PathBuf::from(format!("{}/help", *DATA_PATH));
+    pub static ref HELP_LIBRARY: Arc<RwLock<HelpLibrary>> = Arc::new(RwLock::new(HelpLibrary::default()));
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -22,12 +25,12 @@ pub struct BlueprintLibrary {
     items: HashMap<String, Item>,
 }
 
-mod string_vec_to_bool_map {
+pub mod string_vec_to_bool_map {
     use std::collections::HashMap;
 
     use serde::{Deserialize, Deserializer, Serializer, ser::SerializeSeq};
 
-    pub(super) fn serialize<S>(map: &HashMap<String,bool>, s:S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(map: &HashMap<String,bool>, s:S) -> Result<S::Ok, S::Error>
     where S: Serializer
     {
         let mut seq = s.serialize_seq(Some(map.len()))?;
@@ -37,7 +40,7 @@ mod string_vec_to_bool_map {
         seq.end()
     }
 
-    pub(super) fn deserialize<'de, D>(d:D) -> Result<HashMap<String,bool>, D::Error>
+    pub fn deserialize<'de, D>(d:D) -> Result<HashMap<String,bool>, D::Error>
     where D: Deserializer<'de>
     {
         let ids = Vec::<String>::deserialize(d)?;
@@ -172,9 +175,15 @@ pub async fn librarian(world_id: String) {
         log::error!("FAIL: Library in fire!!! {e:?}");
         return ;
     }
+    if let Err(e) = HelpLibrary::load_or_bootstrap(&world_id).await {
+        // Shucks! The documents are in fire!
+        log::error!("Help! The help system is in distress! {e:?}");
+        return ;
+    }
 
     log::info!("Library didn't catch fire, yay.");
-    let mut dusting_shelves_interval = tokio::time::interval(Duration::from_mins(10));
+    let mut dusting_shelves_interval = tokio::time::interval(Duration::from_mins(8));
+    let mut dusting_documents_interval = tokio::time::interval(Duration::from_mins(12));
     
     loop {
         tokio::select! {
@@ -183,6 +192,14 @@ pub async fn librarian(world_id: String) {
                 let mut lib = BP_LIBRARY.write().await;
                 if let Err(e) = lib.save().await {
                     log::error!("\"FFS!\", a snag while saving blueprints: {e:?}");
+                }
+            }
+
+            _ = dusting_documents_interval.tick() => {
+                log::trace!("Librarian rummages through the documents…");
+                let mut lib = HELP_LIBRARY.write().await;
+                if let Err(e) = lib.save().await {
+                    log::error!("\"Seriously!?…\", a snag while saving documents: {e:?}");
                 }
             }
         }
