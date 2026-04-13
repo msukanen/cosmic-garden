@@ -1,6 +1,6 @@
 //! Player stuff!
 
-use std::{collections::HashMap, fmt::Display, ops::AddAssign, sync::{Arc, Weak}};
+use std::{collections::HashMap, fmt::Display, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};

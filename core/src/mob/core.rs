@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::{IdentityMut, IdentityQuery}, mob::*, string::{UNNAMED, Uuid, as_id_with_uuid}};
+use crate::{mob::*, string::{UNNAMED, as_id_with_uuid}};
 
 #[derive(Debug, Deserialize, Serialize, IdentityMut, MobMut)]
 pub struct Entity {
@@ -30,7 +30,9 @@ impl Default for Entity {
 }
 
 impl Entity {
+    #[cfg(test)]
     pub fn re_uuid(&mut self) {
+        use crate::{identity::{IdentityMut, IdentityQuery}, string::uuid::Uuid};
         *self.id_mut() = self.id().re_uuid()
     }
 }

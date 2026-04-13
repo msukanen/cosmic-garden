@@ -4,7 +4,7 @@ use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, item::Item, player::Player, room::Room, string::{Slugger, UNNAMED, prompt::PromptType}, traits::Tickable, util::direction::Direction};
+use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, item::Item, player::Player, room::Room, string::{Slugger, UNNAMED, prompt::PromptType}, util::direction::Direction};
 
 /// The world!
 #[derive(Debug, Deserialize, Serialize)]
@@ -215,15 +215,13 @@ impl World {
 
 #[cfg(test)]
 mod world_tests {
-    use std::{sync::Arc, time::Duration};
-
-    use tokio::{sync::RwLock, time};
-
-    use crate::{Cli, DATA, identity::IdentityMut, io::DATA_PATH, io_thread::{io_thread, PLAYERS_TO_LOGOUT}, player::Player, world::World};
-
     #[cfg(feature = "stresstest")]
     #[tokio::test]
     async fn world_spins_5000_logout() {
+        use std::{sync::Arc, time::Duration};
+        use tokio::{sync::RwLock, time};
+        use crate::{Cli, DATA, identity::IdentityMut, io::DATA_PATH, io_thread::{io_thread, PLAYERS_TO_LOGOUT}, player::Player, world::World};
+
         let _ = env_logger::try_init();
         let _ = DATA.set(std::env::var("COSMIC_GARDEN_DATA").unwrap());
         let args = Cli {

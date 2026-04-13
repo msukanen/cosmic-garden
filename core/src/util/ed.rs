@@ -28,10 +28,6 @@ pub enum EdResult {
 
 impl From<ParseIntError> for EditorError { fn from(value: ParseIntError) -> Self { Self::ParseIntError(value)}}
 
-pub trait Editor {
-    fn set_description(&mut self, desc: &str);
-}
-
 /// A versatile text editing function.
 /// 
 /// Modus operandi is determined by the first character in `args`.
