@@ -55,7 +55,7 @@ fn slugify(input: &str) -> String {
 /// 
 /// # Args
 /// - `input` to be sanitized.
-fn as_id(input: &str) -> Result<String, IdError> {
+pub fn as_id(input: &str) -> Result<String, IdError> {
     let mut out = String::new();
     let mut last_was_junk = false;
     let mut has_alnum = false;

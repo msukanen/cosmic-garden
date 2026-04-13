@@ -24,7 +24,7 @@ fn append_uuid(value: &str) -> String {
 }
 
 /// Remove UUID if present.
-fn remove_uuid(value: &str) -> String {
+pub fn remove_uuid(value: &str) -> String {
     if let Some(caps) = UUID_RE.captures(value) {
         let uuid_str = caps.name("uuid").unwrap().as_str();
         return value
