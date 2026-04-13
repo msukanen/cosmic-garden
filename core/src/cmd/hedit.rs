@@ -6,6 +6,7 @@ use crate::{cmd::{Command, CommandCtx, help::HelpCommand}, library::HELP_LIBRARY
 
 pub mod abort;
 pub mod desc;
+pub mod weave;
 
 pub struct HeditCommand;
 

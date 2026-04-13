@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{identity::{IdentityMut, IdentityQuery}, io::DATA_PATH, item::Item, string::Uuid, util::HelpLibrary};
+use crate::{identity::{IdentityMut, IdentityQuery}, io::{DATA_PATH, WORLD_ID}, item::Item, string::Uuid, util::HelpLibrary};
 
 lazy_static! {
     pub(crate) static ref BP_PATH: PathBuf = PathBuf::from(format!("{}/blueprint", *DATA_PATH));
@@ -100,7 +100,8 @@ impl From<std::io::Error> for BlueprintError { fn from(value: std::io::Error) ->
 impl From<serde_json::Error> for BlueprintError { fn from(value: serde_json::Error) -> Self { Self::Json(value)}}
 
 impl BlueprintLibrary {
-    pub async fn load_or_bootstrap(world_id: &str) -> Result<(), BlueprintError> {
+    pub async fn load_or_bootstrap() -> Result<(), BlueprintError> {
+        let world_id = WORLD_ID.as_str();
         fs::create_dir_all(&format!("{}/{}", BP_PATH.display(), world_id)).await?;
         
         let Ok(mf) = fs::read_to_string(&format!("{}/{}.library", BP_PATH.display(), world_id)).await else {
@@ -140,7 +141,7 @@ impl BlueprintLibrary {
     pub async fn save(&mut self) -> Result<(), BlueprintError> {
         let world_dir = BP_PATH.join(&self.world_id);
         let contents = serde_json::to_string_pretty(&self)?;
-        fs::write(&format!("{}/{}.library", BP_PATH.display(), self.world_id), contents).await?;
+        fs::write(&format!("{}/{}.library", BP_PATH.display(), WORLD_ID.as_str()), contents).await?;
         
         for (id, dirty) in self.id_stem.iter_mut() {
             if !*dirty { continue; }
@@ -169,13 +170,15 @@ impl BlueprintLibrary {
 }
 
 /// Librarian wake up.
-pub async fn librarian(world_id: String) {
-    if let Err(e) = BlueprintLibrary::load_or_bootstrap(&world_id).await {
+pub async fn librarian() {
+    log::info!("Library establishing… blueprints @ '{}/{}'", BP_PATH.display(), *WORLD_ID);
+    if let Err(e) = BlueprintLibrary::load_or_bootstrap().await {
         // Halt the printing press!!!
         log::error!("FAIL: Library in fire!!! {e:?}");
         return ;
     }
-    if let Err(e) = HelpLibrary::load_or_bootstrap(&world_id).await {
+    log::info!("Library establishing… helpful documents @ '{}/{}'", HELP_PATH.display(), *WORLD_ID);
+    if let Err(e) = HelpLibrary::load_or_bootstrap().await {
         // Shucks! The documents are in fire!
         log::error!("Help! The help system is in distress! {e:?}");
         return ;
@@ -183,7 +186,7 @@ pub async fn librarian(world_id: String) {
 
     log::info!("Library didn't catch fire, yay.");
     let mut dusting_shelves_interval = tokio::time::interval(Duration::from_mins(8));
-    let mut dusting_documents_interval = tokio::time::interval(Duration::from_mins(12));
+    let mut dusting_documents_interval = tokio::time::interval(Duration::from_mins(4));
     
     loop {
         tokio::select! {

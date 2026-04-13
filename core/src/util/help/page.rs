@@ -5,7 +5,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{identity::{IdError, IdentityQuery}, library::{HELP_LIBRARY, HELP_PATH, string_vec_to_bool_map}, string::{Slugger, UNNAMED, Uuid}, util::access::{Access, StrictAccess}};
+use crate::{identity::{IdError, IdentityQuery}, io::WORLD_ID, io_thread::SAVE_HELP_ASAP, library::{HELP_LIBRARY, HELP_PATH, string_vec_to_bool_map}, string::{Slugger, UNNAMED, Uuid}, util::access::{Access, StrictAccess}};
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct HelpPage {
@@ -60,6 +60,24 @@ impl HelpPage {
             obfuscation: None
         })
     }
+
+    /// Save me!
+    pub async fn save(&self) -> Result<(), HelpSystemError> {
+        let nouuid = self.id().no_uuid();
+        let path = format!("{}/{}/{nouuid}.help", HELP_PATH.display(), WORLD_ID.as_str());
+        match toml::to_string_pretty(self) {
+            Ok(contents) => {
+                if let Err(e) = fs::write(path, contents).await {
+                    log::error!("FAILURE: could not write '{nouuid}' onto disk: {e}");
+                    return Err(e.into());
+                } else {
+                    log::trace!("Filed document: '{nouuid}'");
+                }
+            }
+            Err(e) => log::error!("FAIL: TOMLing of '{nouuid}' failed: {e}")
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -103,7 +121,8 @@ impl From<toml::ser::Error> for HelpSystemError { fn from(value: toml::ser::Erro
 impl From<IdError> for HelpSystemError { fn from(value: IdError) -> Self { Self::IdError(value) }}
 
 impl HelpLibrary {
-    pub async fn load_or_bootstrap(world_id: &str) -> Result<(), HelpSystemError> {
+    pub async fn load_or_bootstrap() -> Result<(), HelpSystemError> {
+        let world_id = WORLD_ID.as_str();
         fs::create_dir_all(&format!("{}/{}", HELP_PATH.display(), world_id)).await?;
         let Ok(mf) = fs::read_to_string(&format!("{}/{}.library", HELP_PATH.display(), world_id)).await else {
             log::warn!("No papers, no ID? Ah well — preparing anyway…");
@@ -158,9 +177,8 @@ impl HelpLibrary {
     }
 
     pub async fn save(&mut self) -> Result<(), HelpSystemError> {
-        let world_dir = HELP_PATH.join(&self.world_id);
         let contents = serde_json::to_string_pretty(&self)?;
-        fs::write(&format!("{}/{}.library", HELP_PATH.display(), self.world_id), contents).await?;
+        fs::write(&format!("{}/{}.library", HELP_PATH.display(), WORLD_ID.as_str()), contents).await?;
         
         for (id, dirty) in self.id_stem.iter_mut() {
             if !*dirty { continue; }
@@ -169,19 +187,7 @@ impl HelpLibrary {
                 log::error!("Could not find '{id}' in 'items'!");
                 continue;
             };
-
-            match toml::to_string_pretty(item) {
-                Ok(contents) => {
-                    let path = world_dir.join(format!("{id}.help"));
-                    if let Err(e) = fs::write(path, contents).await {
-                        log::error!("FAILURE: could not write '{id}' onto disk: {e}");
-                    } else {
-                        *dirty = false;
-                        log::trace!("Filed document: '{id}'");
-                    }
-                }
-                Err(e) => log::error!("FAIL: TOMLing of '{id}' failed: {e}")
-            }
+            let _ = item.save().await;
         }
 
         Ok(())
@@ -209,6 +215,9 @@ impl HelpLibrary {
     /// # Return
     /// `true` if shelved for real.
     pub fn shelve(&mut self, entry: &HelpPage) -> bool {
+        // TODO content checking?
+        self.id_stem.insert(entry.id().no_uuid(), true);
+        self.items.insert(entry.id().no_uuid(), entry.clone());
         true
     }
 }

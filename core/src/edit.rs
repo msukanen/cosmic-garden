@@ -23,7 +23,7 @@ impl EditorMode {
                 dirty_flag(*dirty)
             ),
             Self::Item{dirty} => format!("<c blue>[<c cyan>IEDIT</c>@<c green> {}</c>]</c>{}: ",
-                if let Some(item) = &player.iedit_buffer { item.id() } else {"***"},
+                if let Some(item) = &player.iedit_buffer { item.id().show_uuid(player.config.show_id) } else {"***"},
                 dirty_flag(*dirty)
             ),
             Self::Room{dirty} => format!("<c blue>[<c cyan>REDIT</c>@<c green> {} ({})</c>]</c>{}: ",

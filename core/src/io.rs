@@ -28,8 +28,25 @@ impl Deref for ImmutablePath {
     }
 }
 
+pub(crate) struct WorldPath; impl WorldPath {
+    pub fn set(path: impl Into<String>) {
+        let path: String = path.into();
+        WORLD.set(path.clone()).expect(&format!("Cannot set WORLD to '{path}'!"));
+    }
+}
+impl Deref for WorldPath {
+    type Target = String;
+    fn deref(&self) -> &Self::Target {
+        WORLD.get().unwrap_or_else(|| {
+            panic!("WORLD.get() fail! Dev, go find out why not…");
+        })
+    }
+}
+
 pub(super) static DATA: OnceCell<String> = OnceCell::new();
 pub(crate) static DATA_PATH: ImmutablePath = ImmutablePath;
+pub(super) static WORLD: OnceCell<String> = OnceCell::new();
+pub(crate) static WORLD_ID: WorldPath = WorldPath;
 lazy_static! {
     pub(crate) static ref SAVE_PATH: PathBuf = PathBuf::from(format!("{}/save", *DATA_PATH));
 }

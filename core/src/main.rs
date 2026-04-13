@@ -5,8 +5,9 @@ use clap::Parser;
 
 mod io;             use io::*;
 mod io_thread;      use io_thread::io_thread;
-mod life_thread;    use life_thread::life_thread;
-use tokio::{io::{BufReader, AsyncBufReadExt}, net::TcpListener, sync::{RwLock, broadcast}};
+mod life_thread;
+use life_thread::life_thread;
+use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpListener, sync::{RwLock, broadcast}};
 
 use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, library::librarian, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
 
@@ -52,6 +53,7 @@ async fn main() {
     let _ = env_logger::try_init();
     let args = Cli::parse();
     let _ = DATA.set(args.data_path.clone());
+    let _ = WORLD.set(args.world.clone());
 
     if (*CMD_ALIASES).is_empty() {
         log::info!("No command aliases defined yet.");
@@ -71,7 +73,7 @@ async fn main() {
 
     tokio::spawn(io_thread(world.clone(), args.clone()));
     tokio::spawn(life_thread(world.clone()));
-    tokio::spawn(librarian(args.world.clone()));
+    tokio::spawn(librarian());
 
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);

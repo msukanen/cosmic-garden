@@ -5,13 +5,14 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::RwLock, time};
 
-use crate::{Cli, DATA_PATH, identity::IdentityQuery, item::Item, player::Player, room::Room, world::World};
+use crate::{Cli, DATA_PATH, identity::IdentityQuery, item::Item, player::Player, room::Room, util::HelpPage, world::World};
 
 lazy_static! {
     pub static ref PLAYERS_TO_LOGOUT: Arc<RwLock<Vec<Arc<RwLock<Player>>>>> = Arc::new(RwLock::new(Vec::new()));
     pub static ref WORLD_NEEDS_SAVING: Arc<RwLock<bool>> = Arc::new(RwLock::new(false));
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
     pub static ref SAVE_ASAP: Arc<RwLock<Vec<Arc<RwLock<Player>>>>> = Arc::new(RwLock::new(Vec::new()));
+    pub static ref SAVE_HELP_ASAP: Arc<RwLock<Vec<Arc<RwLock<HelpPage>>>>> = Arc::new(RwLock::new(Vec::new()));
     pub static ref LOST_AND_FOUND: Arc<RwLock<Vec<Item>>> = Arc::new(RwLock::new(Vec::new()));
 }
 pub const SAVE_ASAP_THRESHOLD: usize = 100;
@@ -25,27 +26,25 @@ pub(super) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
     let mut world_save_interval = time::interval(Duration::from_secs(30));
     let mut room_save_interval = time::interval(Duration::from_secs(30));
     let mut save_asap_interval = time::interval(Duration::from_secs(2));
+    let mut save_help_asap_interval = time::interval(Duration::from_secs(45));
     let mut lost_and_found_interval = time::interval(Duration::from_mins(2));
 
     loop {
         tokio::select! {
             // Logout handling.
             _ = logout_purge_interval.tick() => logout_purge().await,
-
             // Auto-saving the meningfully active Players.
             _ = autosave_queue_interval.tick() => autosave_queue(world.clone()).await,
-
             // Save players that need saving *now*.
             _ = save_asap_interval.tick() => save_asap().await,
-
             // Save the world, especially the whales!
             _ = world_save_interval.tick() => save_the_whales(world.clone()).await,
-
             // Save the modified [Room]s.
             _ = room_save_interval.tick() => room_save().await,
-
             // Handle lost and found items…
             _ = lost_and_found_interval.tick() => lost_and_found(world.clone()).await,
+            // Save help entries that need saving Soon™
+            _ = save_help_asap_interval.tick() => save_asap().await,
         }
     }
 }
@@ -195,4 +194,32 @@ async fn lost_and_found(world: Arc<RwLock<World>>) {
         }
     }
     save_the_whales(world.clone()).await;
+}
+
+/// ASAP save of a [HelpPage].
+async fn save_help_asap() {
+    let h_to_save = {
+        let mut qlock = (*SAVE_HELP_ASAP).write().await;
+        qlock.drain(..).collect::<Vec<_>>()
+    };
+    if h_to_save.is_empty() { return; }
+    
+    log::info!("Saving {} help document{}…", h_to_save.len(), if h_to_save.len() == 1 {""} else {"s"});
+    let mut fails = vec![];
+    for p in h_to_save {
+        let p_id = {
+            let p = p.read().await;
+            p.id().to_string()
+        };
+
+        if let Err(e) = p.write().await.save().await {
+            log::error!("Failed to save help document '{p_id}': {e:?}");
+            fails.push(p.clone());
+            continue;
+        }
+    }
+    if !fails.is_empty() {
+        (*SAVE_HELP_ASAP).write().await.extend(fails);
+    }
+    log::info!("Document filing cycle complete.");
 }
