@@ -10,7 +10,7 @@ pub const MAX_ID_LEN: usize = 255;
 
 lazy_static! {
     /// Immutable [IdError::ReservedName] sources.
-    static ref HARDCODED_RESERVED: HashSet<&'static str> = {
+    pub static ref HARDCODED_RESERVED: HashSet<&'static str> = {
         let mut s = HashSet::new();
         // some OS-related things...
         for name in &[
@@ -30,7 +30,7 @@ lazy_static! {
         s
     };
 
-    static ref CONFIG_RESERVED: Arc<RwLock<HashSet<String>>> = {
+    pub static ref CONFIG_RESERVED: Arc<RwLock<HashSet<String>>> = {
         let mut s = HashSet::new();
         if let Ok(buf) = fs::read_to_string(format!("{}/reserved.names", *DATA_PATH)) {
             let words = buf.split(';').map(|w| w.trim()).collect::<Vec<&str>>();
@@ -87,22 +87,13 @@ pub trait IdentityMut {
     /// 
     /// # Args
     /// - `value` to use as ID.
-    fn set_id(&mut self, value: &str) -> Result<(), IdError> {
-        let pre_checked_id = value.as_id()?;
-        if HARDCODED_RESERVED.contains(pre_checked_id.no_uuid().as_str()) {
-            return Err(IdError::ReservedName(value.no_uuid()));
-        }
-        *self.id_mut() = pre_checked_id;
-        Ok(())
-    }
+    fn set_id(&mut self, value: &str) -> Result<(), IdError>;
 
     /// Get ref to raw title/name.
     fn title_mut<'a>(&'a mut self) -> &'a mut String;
     /// Safely set title to `value`.
     // Convenience method really as titles in general are freeform, and thus lack validation.
-    fn set_title(&mut self, value: &str) {
-        *self.title_mut() = value.into()
-    }
+    fn set_title(&mut self, value: &str);
 }
 
 #[cfg(test)]
