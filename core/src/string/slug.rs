@@ -10,24 +10,29 @@ pub trait Slugger {
     fn slugify(&self) -> String;
     /// Get representation as file/hash ready `id`, if possible…
     fn as_id(&self) -> Result<String, IdError>;
+    /// Check if string is valid as ID without actually creating an ID out of it.
+    fn is_id(&self) -> Result<(), IdError>;
     /// Reduce repetitive non-alphanum to singular entries.
     fn reduce_noise(&self) -> Result<String, IdError>;
 }
 
 impl Slugger for String {
     #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
+    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
     #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
     #[inline] fn slugify(&self) -> String { slugify(self) }
 }
 
 impl Slugger for &String {
     #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
+    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
     #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
     #[inline] fn slugify(&self) -> String { slugify(self) }
 }
 
 impl Slugger for &str {
     #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
+    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
     #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
     #[inline] fn slugify(&self) -> String { slugify(self) }
 }
@@ -82,6 +87,37 @@ fn as_id(input: &str) -> Result<String, IdError> {
     }
 
     Ok(out)
+}
+
+/// Check if string is valid as ID without actually creating an ID out of it.
+pub fn is_id(input: &str) -> Result<(), IdError> {
+    let mut out = 0;
+    let mut last_was_junk = false;
+    let mut has_alnum = false;
+
+    for ch in input.trim().to_lowercase().nfd() {
+        if ch.is_ascii_alphanumeric() {
+            out += 1;
+            last_was_junk = false;
+            has_alnum = true;
+            continue;
+        }
+
+        if !last_was_junk && out != 0 {
+            out += 1;
+            last_was_junk = true;
+        }
+    }
+
+    if !has_alnum || out == 0 {
+        return Err(IdError::EmptyOrGarbage);
+    }
+
+    if out > MAX_ID_LEN {
+        return Err(IdError::TooLong);
+    }
+
+    Ok(())
 }
 
 /// Reduce repetitive non-alphanum to singular entries.

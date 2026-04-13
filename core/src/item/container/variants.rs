@@ -1,6 +1,6 @@
 use std::i32;
 
-use cosmic_garden_pm::{IdentityMut, Storage};
+use cosmic_garden_pm::{IdentityMut, Storage, OwnedMut};
 use serde::{Deserialize, Serialize};
 
 use crate::{item::{Item, Itemized, ItemizedMut, container::{StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}}, string::{Describable, DescribableMut}, traits::{Reflector, Tickable}};
@@ -38,7 +38,7 @@ impl From<&ContainerVariant> for ContainerVariantType {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Storage)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Storage, OwnedMut)]
 pub enum ContainerVariant {
     Pouch(ContainerSpec),
     Backpack(ContainerSpec),

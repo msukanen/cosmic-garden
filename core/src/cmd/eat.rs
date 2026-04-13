@@ -23,11 +23,11 @@ impl Command for EatCommand {
                 tell_user!(ctx.writer, "Ick! You can't possibly even think about consuming '{}'!\n", item_name);
                 return;
             };
-            let Err(e) = p_loc.write().await.contents.try_insert(e.extract_item().unwrap()) else {
+            let Err(e) = p_loc.write().await.contents.try_insert(e.into()) else {
                 tell_user!(ctx.writer, "Whoops, greasy fingers, you dropped '{}'…!\n", item_name);
                 return ;
             };
-            add_item_to_lnf(e.extract_item().unwrap()).await;
+            add_item_to_lnf(e).await;
             tell_user!(ctx.writer, "Sheesh, the nerve! Something or someone stole your '{}'?!\n", item_name);
             return;
         };
@@ -60,11 +60,11 @@ impl Command for EatCommand {
         }
         
         let Err(e) = plr.write().await.receive_item(item) else { return; };
-        let Err(e) = p_loc.write().await.contents.try_insert(e.extract_item().unwrap()) else {
+        let Err(e) = p_loc.write().await.contents.try_insert(e.into()) else {
             tell_user!(ctx.writer, "Woops, … and you dropped it. Bah, double bah!\n");
             return;
         };
-        add_item_to_lnf(e.extract_item().unwrap()).await;
+        add_item_to_lnf(e).await;
         tell_user!(ctx.writer, "*mutter* where'd it go?\n");
     }
 }

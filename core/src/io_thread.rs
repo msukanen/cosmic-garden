@@ -173,12 +173,15 @@ async fn room_save() {
 }
 
 /// Add an [Item] into Lost'n'Found queue.
-pub async fn add_item_to_lnf(item: Item) {
+pub async fn add_item_to_lnf<T>(item: T)
+where T: Into<Item> + IdentityQuery
+{
     let mut lock = (*LOST_AND_FOUND).write().await;
     log::warn!("Item '{}' added into L'n'F queue", item.id());
-    lock.push(item);
+    lock.push(item.into());
 }
 
+/// Lost and found. Persist it all, someone might need it later…
 async fn lost_and_found(world: Arc<RwLock<World>>) {
     let items_to_save = {
         let mut lock = (*LOST_AND_FOUND).write().await;

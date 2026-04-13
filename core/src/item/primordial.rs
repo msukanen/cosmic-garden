@@ -2,10 +2,10 @@
 
 use std::{collections::HashMap, fmt::Display};
 
-use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut};
+use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, consumable::{ConsumableMatter, NutritionType}, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState}, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, consumable::{ConsumableMatter, NutritionType}, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::{ItemSource, Owned, Owner}}, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -71,10 +71,11 @@ impl PotentialItemType {
 }
 
 /// Entirely "primordial soup" for creating other items from.
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, DescribableMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, DescribableMut, OwnedMut)]
 pub struct PrimordialItem {
     pub id: String,
     pub title: String,
+    pub owner: Owner,
     pub size: StorageSpace,
     pub desc: String,
     pub max_space: StorageSpace,
@@ -100,6 +101,7 @@ impl PrimordialItem {
             affect_ticks: None,
             rots_in_ticks: None,
             matter_state: None,
+            owner: Owner::no_one(),
         })
     }
 
@@ -126,20 +128,9 @@ impl PrimordialItem {
                     affect_ticks: item.affect_ticks.clone(),
                     rots_in_ticks: item.affect_ticks.clone(),
                     matter_state: item.matter_state.into(),
+                    owner: item.owner.clone(),
             }),
-            _ => Item::Primordial(PrimordialItem {
-                    id: item.id().to_string(),
-                    title: item.title().to_string(),
-                    size: item.size(),
-                    desc: item.desc().to_string(),
-                    max_space: 0,
-                    potential: PotentialItemType::Other_,
-                    uses: None,
-                    nutrition: None,
-                    affect_ticks: None,
-                    rots_in_ticks: None,
-                    matter_state: None,
-            })
+            _ => todo!("More atoms!")
         }
     }
 }
@@ -177,7 +168,8 @@ impl Metamorphize for PrimordialItem {
                 max_space: self.max_space,
                 size: self.size,
                 desc: self.desc,
-                desc_can_be_modified: true
+                desc_can_be_modified: true,
+                owner: self.owner.clone(),
             };
             Item::Container(match vessel_model {
                 MaxSpaceSpec::Backpack => ContainerVariant::Backpack(spec),
@@ -201,6 +193,7 @@ impl Metamorphize for PrimordialItem {
                             log::warn!("Builder: consumable '{}' lacks proper matter_state! Going \"safe\" with 'solid' assumption.", self.id);
                             MatterState::Solid
                         }),
+                        owner: self.owner.clone(),
                     })
                 }
                 // staying as-is?

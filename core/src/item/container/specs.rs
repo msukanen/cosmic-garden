@@ -2,11 +2,11 @@
 
 use std::{cmp::Ordering, collections::HashMap};
 
-use cosmic_garden_pm::{IdentityMut, ItemizedMut};
+use cosmic_garden_pm::{IdentityMut, ItemizedMut, OwnedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::{Reflector, Tickable}};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, StorageQueryError, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::{Reflector, Tickable}};
 
 pub type StorageSpace = u16;
 
@@ -45,6 +45,7 @@ lazy_static! {
         size: 2,
         desc: "a backpack".into(),
         desc_can_be_modified: true,
+        owner: Owner::no_one(),
     };
 
     pub(super) static ref DEFAULT_POUCH_SPEC: ContainerSpec = ContainerSpec {
@@ -55,6 +56,7 @@ lazy_static! {
         size: 1,
         desc: "a pouch".into(),
         desc_can_be_modified: true,
+        owner: Owner::no_one(),
     };
 
     pub(super) static ref DEFAULT_PLR_INV_SPEC: ContainerSpec = ContainerSpec {
@@ -65,6 +67,7 @@ lazy_static! {
         size: 0,
         desc: "player-inventory".into(),
         desc_can_be_modified: false,
+        owner: Owner::no_one(),
     };
 
     pub(super) static ref DEFAULT_ROOM_SPACE_SPEC: ContainerSpec = ContainerSpec {
@@ -75,6 +78,7 @@ lazy_static! {
         size: 0,
         desc: "room-space".into(),
         desc_can_be_modified: false,
+        owner: Owner::no_one(),
     };
 
     pub(super) static ref DEFAULT_CHEST_SPEC: ContainerSpec = ContainerSpec {
@@ -85,14 +89,16 @@ lazy_static! {
         size: StorageSpace::from(MaxSpaceSpec::Chest),
         desc: "a chest".into(),
         desc_can_be_modified: true,
+        owner: Owner::no_one(),
     };
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, OwnedMut)]
 pub struct ContainerSpec {
     pub id: String,
     #[identity(title)]
     pub name: String,
+    pub owner: Owner,
     pub contents: HashMap<String, Item>,
     pub max_space: StorageSpace,
     pub size: StorageSpace,
@@ -125,6 +131,7 @@ impl From<&ContainerSpec> for ContainerSpec {
             size: value.size,
             desc: value.desc.clone(),
             desc_can_be_modified: value.desc_can_be_modified,
+            owner: value.owner.clone(),
         }
     }
 }
@@ -208,28 +215,28 @@ impl Storage for ContainerSpec {
         self.max_space - self.contents_size()
     }
 
-    fn can_hold(&self, item: &Item) -> Result<bool, StorageError> {
+    fn can_hold(&self, item: &Item) -> Result<(), StorageQueryError>
+    {
         if self < item {
-            return Err(StorageError::InvalidHierarchyQ);
+            return Err(StorageQueryError::InvalidHierarchy);
         }
         let ok = item.required_space() as usize
             + self.contents_size() as usize
             <= self.max_space as usize;
         if ok {
-            Ok(true)
+            Ok(())
         } else {
-            Err(StorageError::NoSpaceQ)
+            Err(StorageQueryError::NoSpace)
         }
     }
 
-    fn try_insert(&mut self, item: Item) -> Result<(), StorageError> {
+    fn try_insert(&mut self, item: Item) -> Result<(), StorageError>
+    {
         if let Err(e) = self.can_hold(&item) {
-            // map q-variants into matter-holders
             return Err(match e {
-                StorageError::NoSpaceQ => StorageError::NoSpace(item),
-                StorageError::InvalidHierarchyQ => StorageError::InvalidHierarchy(item),
-                StorageError::NotContainerQ => StorageError::NotContainer(item),
-                _ => e
+                StorageQueryError::NoSpace => StorageError::NoSpace(item),
+                StorageQueryError::InvalidHierarchy => StorageError::InvalidHierarchy(item),
+                StorageQueryError::NotContainer => StorageError::NotContainer(item),
             });
         }
         self.contents.insert(item.id().into(), item);

@@ -1,16 +1,17 @@
 //! Items dwell here…
 
-use cosmic_garden_pm::{IdentityMut, Itemized};
+use cosmic_garden_pm::{IdentityMut, Itemized, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageError, StorageMut, specs::StorageSpace, variants::ContainerVariant}, primordial::{Metamorphize, PrimordialItem}}, string::{Describable, DescribableMut, Uuid}, traits::{Reflector, Tickable}};
+use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageMut, specs::StorageSpace, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}}, string::{Describable, DescribableMut, Uuid}, traits::{Reflector, Tickable}};
 
 pub mod owner;
 pub mod consumable;
-pub mod container;
+pub mod container; pub use container::{StorageError, StorageQueryError};
 pub mod key;
 pub mod library;
 pub mod matter;
+pub mod ownership;
 pub mod primordial;
 pub mod tool;
 pub mod weapon;
@@ -23,10 +24,11 @@ pub trait ItemizedMut {
     fn set_size(&mut self, sz: StorageSpace) -> bool;
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, OwnedMut)]
 pub struct TemporaryStructToAppeaseAnalyzerDuringWIP {
     pub(crate) id:String,
-    pub(crate) title:String
+    pub(crate) title:String,
+    pub(crate) owner:Owner,
 }
 
 impl Itemized for TemporaryStructToAppeaseAnalyzerDuringWIP {
@@ -41,7 +43,7 @@ impl ItemizedMut for TemporaryStructToAppeaseAnalyzerDuringWIP {
 }
 impl Reflector for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn reflect(&self) -> Self {
-        Self { id: self.id().re_uuid(), title: self.title.clone() }
+        Self { id: self.id().re_uuid(), title: self.title.clone(), owner:Owner::blueprint() }
     }
     fn deep_reflect(&self) -> Self {
         self.reflect()
@@ -59,7 +61,7 @@ impl DescribableMut for TemporaryStructToAppeaseAnalyzerDuringWIP {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, OwnedMut)]
 /// Root [Item] types.
 pub enum Item {
     Container(ContainerVariant),
@@ -107,17 +109,17 @@ impl Reflector for Item {
 }
 
 impl Storage for Item {
-    fn can_hold(&self, item: &Item) -> Result<bool, StorageError> {
+    fn can_hold(&self, item: &Item) -> Result<(), StorageQueryError> {
         match self {
             Self::Container(c) => {
                 if let Item::Container(other) = item {
                     if c.rank() < other.rank() {
-                        return Err(StorageError::InvalidHierarchyQ);
+                        return Err(StorageQueryError::InvalidHierarchy);
                     }
                 }
                 c.can_hold(item)
             }
-            _ => Ok(false)
+            _ => Err(StorageQueryError::NotContainer)
         }
     }
 
@@ -292,6 +294,7 @@ mod item_tests {
         let key = Item::Key(TemporaryStructToAppeaseAnalyzerDuringWIP {
             id: "iron-key-01".to_string(),
             title: "Heavy Iron Key".to_string(),
+            owner: Owner::no_one(),
         });
 
         // 3. THE HIERARCHY LAW: Try to put the Player inv in the Backpack (Should fail)

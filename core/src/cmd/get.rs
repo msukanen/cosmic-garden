@@ -27,23 +27,16 @@ impl Command for GetCommand {
             return;
         };
         let item_name = item.title().to_string();
-        let Err(storage_error) = plr.write().await.inventory.try_insert(item) else {
+        let Err(item_err) = plr.write().await.inventory.try_insert(item) else {
             tell_user!(ctx.writer, "You nab '{}'!\n", item_name);
             return;
         };
         // bugger, no space in inventory, lets put it back...
-        let Some(item) = storage_error.extract_item() else {
-            // StorageError-error.
-            log::error!("How can matter evaporate. Dig the logs!");
-            tell_user!(ctx.writer, "There's something seriously wrong in timespace continuum…\n");
-            return;
-        };
-        let Err(storage_error) = p_loc.write().await.contents.try_insert(item) else {
+        let Err(item_err) = p_loc.write().await.contents.try_insert(item_err.into()) else {
             tell_user!(ctx.writer, "Way too big or heavy. You set it back before you break your back.\n");
             return;
         };
-
-        add_item_to_lnf(storage_error.extract_item().unwrap()).await;
+        add_item_to_lnf(item_err).await;
         tell_user!(ctx.writer, "… the world is being weird …\n");
     }
 }

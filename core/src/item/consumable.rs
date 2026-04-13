@@ -1,10 +1,10 @@
 //! Consumable matter. Usually food, but not always.
 use std::fmt::Display;
 
-use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut};
+use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{container::specs::StorageSpace, matter::MatterState}, mob::{StatType, StatValue, affect::{Affect, Affector}}, string::Uuid, traits::{Reflector, Tickable}};
+use crate::{item::{container::specs::StorageSpace, matter::MatterState, ownership::Owner}, mob::{StatType, StatValue, affect::{Affect, Affector}}, string::Uuid, traits::{Reflector, Tickable}};
 
 /// Various nutrition types (plus not edible).
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -25,10 +25,11 @@ impl Display for NutritionType {
 }
 
 /// Consumable matter. Be it edible stuff or from McDonalds…
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, DescribableMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, DescribableMut, OwnedMut)]
 pub struct ConsumableMatter {
     pub id: String,
     pub title: String,
+    pub owner: Owner,
     pub size: StorageSpace,
     pub nutrition: NutritionType,
     pub desc: String,

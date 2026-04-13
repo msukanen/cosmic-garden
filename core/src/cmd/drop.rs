@@ -32,17 +32,10 @@ impl Command for DropCommand {
         let item_name = item.title().to_string();
         if let Err(storage_error) = r.contents.try_insert(item) {
             drop(r);
-            let item = storage_error.extract_item();
-            if item.is_none() {
-                log::error!("Item evaporated?! '{thing_id}' {item_name}");
-                tell_user!(ctx.writer, "Seems the item fell through the cracks in timespace…\n");
-                return;
-            }
-            let item = item.unwrap();
             let mut p = plr.write().await;
             // if the try_insert fails - something's really wrong...
-            if let Err(e) = p.inventory.try_insert(item) {
-                add_item_to_lnf(e.extract_item().unwrap()).await;
+            if let Err(e) = p.inventory.try_insert(storage_error.into()) {
+                add_item_to_lnf(e).await;
                 tell_user!(ctx.writer, "You dropped it, and it instantly vanished? Huh?!\n");
             } else {
                 tell_user!(ctx.writer, "The room is too cluttered! You can't find a place for {}.\n", item_name);
