@@ -1,10 +1,24 @@
 //! Identity related proc-macro(s)…
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Attribute, Data, DataStruct, DeriveInput, Fields, FieldsNamed, parse_macro_input};
+use syn::{Attribute, Data, DeriveInput, parse_macro_input};
 
-fn is_identity_attr(attr: &Attribute, goal: &str) -> bool {
-    if attr.path().is_ident("identity") {
+// enum MemberAccess {
+//     Direct,
+//     Delegate(proc_macro2::Ident),
+// }
+
+// fn detect_member_access(data: &Data, target_field: &str) -> MemberAccess {
+//     if let Data::Struct(s) = data {
+//         if s.fields.iter().any(|f| f.ident.as_ref().map_or(false, |i| i == target_field)) {
+//             return MemberAccess::Delegate(format_ident!("{}", target_field));
+//         }
+//     }
+//     MemberAccess::Direct
+// }
+
+fn is_tagged_attr(attr: &Attribute, what: &str, goal: &str) -> bool {
+    if attr.path().is_ident(what) {
         let mut found = false;
         let _ = attr.parse_nested_meta(|meta| {
             if meta.path.is_ident(goal) {
@@ -18,50 +32,23 @@ fn is_identity_attr(attr: &Attribute, goal: &str) -> bool {
     false
 }
 
-macro_rules! get_identity_ident {
-    ($fields:ident, $name:literal) => {
-        $fields.iter().find(|f| {
-            f.attrs.iter().any(|attr| is_identity_attr(attr, $name)) ||
+macro_rules! get_tagged_ident {
+    ($data:ident, $tag:literal, $name:literal) => {
+        $data.fields.iter().find(|f| {
+            f.attrs.iter().any(|attr| is_tagged_attr(attr, $tag, $name)) ||
             f.ident.as_ref().map_or(false, |i| i == $name)
-        }).expect(&format!("No '{}' field or #[identity({})] found!", $name, $name))
+        })  .map(|f| f.ident.as_ref().unwrap())
+            .expect(&format!("Field '{}' not found in #name", $name))
     };
 }
 
-macro_rules! get_identity_fields {
-    ($input:ident) => {
-        if let Data::Struct(DataStruct {
-            fields: Fields::Named(FieldsNamed { named, .. }), ..
-        }) = $input.data {
-            named
-        } else {
-            panic!("IdentityQuery only works on structs with named fields!")
-        }
+macro_rules! req_field {
+    ($data:ident, $field:literal) => {
+        $data.fields.iter().find(|f| {
+            f.ident.as_ref().map_or(false, |i| i == $field)
+        })  .map(|f| f.ident.as_ref().unwrap())
+            .expect(&format!("No '{}' field found in #name", $field))
     };
-}
-
-/// Derive read-only [IdentityQuery].
-/// 
-/// # Required Fields
-/// * `id`: String
-/// * `title`: String
-/// 
-/// # Notes
-/// * `#[identity(id)]` can be used to tag any field as "id".
-/// * `#[identity(title)]` can be used to tag any field as "title".
-#[proc_macro_derive(IdentityQuery, attributes(identity))]
-pub fn identity_query_derive(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
-    let fields = get_identity_fields!(input);
-    let id_ident = &(get_identity_ident!(fields, "id").ident);
-    let title_ident = &(get_identity_ident!(fields, "title").ident);
-
-    TokenStream::from(quote! {
-        impl crate::identity::IdentityQuery for #name {
-            fn id(&self) -> &str { &self.#id_ident }
-            fn title(&self) -> &str { &self.#title_ident }
-        }
-    })
 }
 
 macro_rules! enum_getter {
@@ -100,151 +87,233 @@ macro_rules! enum_setter_3 {
     };
 }
 
-/// Derive mutable [IdentityMut] and read-only [IdentityQuery] both at once.
+/// Generate read-only [IdentityQuery] variant's internals to be reused by [IdentityMut] deriver.
+fn generate_identity_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    match &input.data {
+        Data::Enum(data) => {
+            let ids = enum_getter!(data, id);
+            let titles = enum_getter!(data, title);
+            
+            quote! {
+                impl crate::identity::IdentityQuery for #name {
+                    fn id<'a>(&'a self) -> &'a str { match self {#(#ids),*} }
+                    fn title<'a>(&'a self) -> &'a str { match self {#(#titles),*} }
+                }
+            }
+        },
+    
+        Data::Struct(data) => {
+            let f_id = req_field!(data, "id");
+            let f_title = get_tagged_ident!(data, "identity", "title");
+            
+            quote! {
+                impl crate::identity::IdentityQuery for #name {
+                    fn id<'a>(&'a self) -> &'a str { &self.#f_id }
+                    fn title<'a>(&'a self) -> &'a str { &self.#f_title }
+                }
+            }
+        },
+    
+        _ => unreachable!("Only for Enum/Struct!")
+    }
+}
+
+/// Derive read-only [IdentityQuery].
+/// 
+/// # Required Fields
+/// * `id`: String
+/// * `title`: String
+/// 
+/// # Notes
+/// * `#[identity(id)]` can be used to tag any field as "id".
+/// * `#[identity(title)]` can be used to tag any field as "title".
+#[proc_macro_derive(IdentityQuery, attributes(identity))]
+pub fn identity_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    TokenStream::from(generate_identity_impl(&input))
+}
+
+/// Derive mutable [IdentityMut] (and read-only [IdentityQuery]).
+/// 
+/// # Required Fields
+/// * `id`: String
+/// * `title`: String
+/// 
+/// # Notes
+/// * `#[identity(id)]` can be used to tag any field as "id".
+/// * `#[identity(title)]` can be used to tag any field as "title".
 #[proc_macro_derive(IdentityMut, attributes(identity))]
 pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
 
-    if let Data::Enum(data) = input.data {
-        let id_muts = enum_getter!(data, id_mut);
-        let set_ids = enum_setter!(data, set_id);
-        let title_muts = enum_getter!(data, title_mut);
-        let set_titles = enum_setter!(data, set_title);
-        
-        let ids = enum_getter!(data, id);
-        let titles = enum_getter!(data, title);
-
-        TokenStream::from(quote! {
-            impl crate::identity::IdentityMut for #name {
-                fn id_mut<'a>(&'a mut self) -> &'a mut String { match self {#(#id_muts),*} }
-                fn set_id(&mut self, a: &str) -> Result<(), crate::identity::IdError> { match self {#(#set_ids),*} }
-                fn title_mut<'a>(&'a mut self) -> &'a mut String { match self {#(#title_muts),*} }
-                fn set_title(&mut self, a: &str) { match self {#(#set_titles),*} }
+    let base_impl = generate_identity_impl(&input);
+    let mut_impl =
+    match &input.data {
+        Data::Enum(data) => {
+            let id_mut = enum_getter!(data, id_mut);
+            let set_id = enum_setter!(data, set_id);
+            let title_mut = enum_getter!(data, title_mut);
+            let set_title = enum_setter!(data, set_title);
+            quote! {
+                impl crate::identity::IdentityMut for #name {
+                    fn id_mut<'a>(&'a mut self) -> &'a mut String { match self {#(#id_mut),*} }
+                    fn set_id(&mut self, a: &str) -> Result<(), crate::identity::IdError> { match self {#(#set_id),*} }
+                    fn title_mut<'a>(&'a mut self) -> &'a mut String { match self {#(#title_mut),*} }
+                    fn set_title(&mut self, a: &str) { match self {#(#set_title),*} }
+                }
             }
-
-            impl crate::identity::IdentityQuery for #name {
-                fn id<'a>(&'a self) -> &'a str { match self {#(#ids),*} }
-                fn title<'a>(&'a self) -> &'a str { match self {#(#titles),*} }
+        }
+        Data::Struct(data) => {
+            let f_id = req_field!(data, "id");
+            let title = get_tagged_ident!(data, "identity", "title");
+            quote! {
+                impl crate::identity::IdentityMut for #name {
+                    fn id_mut<'a>(&'a mut self) -> &'a mut String { &mut self.#f_id }
+                    fn set_id(&mut self, a: &str) -> Result<(), crate::identity::IdError> {
+                        let pre_checked_id = crate::string::slug::as_id(a)?;
+                        let no_uuid = crate::string::uuid::remove_uuid(&pre_checked_id);
+                        if crate::identity::HARDCODED_RESERVED.contains(no_uuid.as_str()) {
+                            return Err(crate::identity::IdError::ReservedName(no_uuid));
+                        }
+                        *self.id_mut() = pre_checked_id;
+                        Ok(())
+                    }
+                    fn title_mut<'a>(&'a mut self) -> &'a mut String { &mut self.#title }
+                    fn set_title(&mut self, a: &str) { *self.title_mut() = a.into() }
+                }
             }
-        })
-    } else {
-        let fields = get_identity_fields!(input);
-        let id_ident = &(get_identity_ident!(fields, "id").ident);
-        let title_ident = &(get_identity_ident!(fields, "title").ident);
+        }
+        _=> unreachable!("only enum/struct!")
+    };
 
-        TokenStream::from(quote! {
-            impl crate::identity::IdentityQuery for #name {
-                fn id(&self) -> &str { &self.#id_ident }
-                fn title(&self) -> &str { &self.#title_ident }
-            }
+    TokenStream::from(quote! {
+        #base_impl
+        #mut_impl
+    })
+}
 
-            impl crate::identity::IdentityMut for #name {
-                fn id_mut(&mut self) -> &mut String { &mut self.#id_ident }
-                fn title_mut(&mut self) -> &mut String { &mut self.#title_ident }
-            }
-        })
+/// Derive read-only [Mob] token stream.
+fn generate_mob_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+
+    let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
+
+    let hp_field = req_field!(data, "hp");
+    let mp_field = req_field!(data, "mp");
+    let sn_field = req_field!(data, "sn");
+    let san_field = req_field!(data, "san");
+    quote! {
+        impl crate::mob::traits::Mob for #name {
+            fn hp(&self) -> &crate::mob::stat::Stat { &self.#hp_field }
+            fn mp(&self) -> &crate::mob::stat::Stat { &self.#mp_field }
+            fn sn(&self) -> &crate::mob::stat::Stat { &self.#sn_field }
+            fn san(&self) -> &crate::mob::stat::Stat { &self.#san_field }
+        }
     }
 }
 
 /// Derive read-only [Mob].
-#[proc_macro_derive(Mob, attributes(identity))]
+#[proc_macro_derive(Mob)]
 pub fn mob_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
-    let fields = get_identity_fields!(input);
-    let hp_field = &(get_identity_ident!(fields, "hp").ident);
-    let mp_field = &(get_identity_ident!(fields, "mp").ident);
-    let sn_field = &(get_identity_ident!(fields, "sn").ident);
-    let san_field = &(get_identity_ident!(fields, "san").ident);
-
-    TokenStream::from(quote! {
-        impl crate::mob::traits::Mob for #name {
-            fn hp(&self) -> &Stat { &self.#hp_field }
-            fn mp(&self) -> &Stat { &self.#mp_field }
-            fn sn(&self) -> &Stat { &self.#sn_field }
-            fn san(&self) -> &Stat { &self.#san_field }
-        }
-    })
+    TokenStream::from(generate_mob_impl(&input))
 }
 
 /// Derive read-only [Mob] and mutable [MobMut] both at once.
-#[proc_macro_derive(MobMut, attributes(identity))]
+#[proc_macro_derive(MobMut)]
 pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
-    let fields = get_identity_fields!(input);
-    let hp_field = &(get_identity_ident!(fields, "hp").ident);
-    let mp_field = &(get_identity_ident!(fields, "mp").ident);
-    let sn_field = &(get_identity_ident!(fields, "sn").ident);
-    let san_field = &(get_identity_ident!(fields, "san").ident);
+    let name = &input.ident;
 
-    TokenStream::from(quote! {
-        impl crate::mob::traits::Mob for #name {
-            fn hp(&self) -> &Stat { &self.#hp_field }
-            fn mp(&self) -> &Stat { &self.#mp_field }
-            fn sn(&self) -> &Stat { &self.#sn_field }
-            fn san(&self) -> &Stat { &self.#san_field }
-        }
-
+    let base_impl = generate_mob_impl(&input);
+    let Data::Struct(data) = input.data else { panic!("Struct only!") };
+    let hp_field = req_field!(data, "hp");
+    let mp_field = req_field!(data, "mp");
+    let sn_field = req_field!(data, "sn");
+    let san_field = req_field!(data, "san");
+    let mut_impl = quote! {
         impl crate::mob::traits::MobMut for #name {
-            fn hp_mut(&mut self) -> &mut Stat { &mut self.#hp_field }
-            fn mp_mut(&mut self) -> &mut Stat { &mut self.#mp_field }
-            fn sn_mut(&mut self) -> &mut Stat { &mut self.#sn_field }
-            fn san_mut(&mut self) -> &mut Stat { &mut self.#san_field }
+            fn hp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#hp_field }
+            fn mp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#mp_field }
+            fn sn_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#sn_field }
+            fn san_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#san_field }
         }
+    };
+    TokenStream::from(quote! {
+        #base_impl
+        #mut_impl
     })
 }
 
-/// Query [Itemized] derive.
-#[proc_macro_derive(Itemized)]
-pub fn itemized_derive(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
-    if let Data::Enum(data) = input.data {
-        let sizes = enum_getter!(data, size);
+/// Generate r/o [Itemized]'s token stream.
+fn generate_itemized_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    match &input.data {
+        Data::Enum(data) => {
+            let sizes = enum_getter!(data, size);
+            quote! {
+                impl crate::item::Itemized for #name {
+                    fn size(&self) -> crate::item::StorageSpace { match self {#(#sizes),*}}
+                }
+            }
+        }
 
-        TokenStream::from(quote! {
-            impl crate::item::Itemized for #name {
-                fn size(&self) -> crate::item::StorageSpace { match self {#(#sizes),*}}
+        Data::Struct(data) => {
+            let size = get_tagged_ident!(data, "measurement", "size");
+            quote! {
+                impl crate::item::Itemized for #name {
+                    fn size(&self) -> crate::item::StorageSpace { self.#size }
+                }
             }
-        })
-    } else {
-        TokenStream::from(quote! {
-            impl crate::item::Itemized for #name {
-                fn size(&self) -> crate::item::StorageSpace { self.size }
-            }
-        })
+        }
+
+        _ => unreachable!("Go away…")
     }
 }
 
+/// Query [Itemized] derive.
+#[proc_macro_derive(Itemized, attributes(measurement))]
+pub fn itemized_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    TokenStream::from(generate_itemized_impl(&input))
+}
+
 /// Mutating [ItemizedMut] and [Itemized] in one.
-#[proc_macro_derive(ItemizedMut)]
+#[proc_macro_derive(ItemizedMut, attributes(measurement))]
 pub fn itemized_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
-    if let Data::Enum(data) = input.data {
-        let sizes = enum_getter!(data, size);
-        let set_sizes = enum_setter!(data, set_size);
+    let name = &input.ident;
+    let base_impl = generate_itemized_impl(&input);
+    let mut_impl = match &input.data
+    {
+        Data::Enum(data) => {
+            let set_sizes = enum_setter!(data, set_size);
 
-        TokenStream::from(quote! {
-            impl crate::item::Itemized for #name {
-                fn size(&self) -> crate::item::StorageSpace { match self {#(#sizes),*}}
+            quote! {
+                impl crate::item::ItemizedMut for #name {
+                    fn set_size(&mut self, a: crate::item::StorageSpace) -> bool { match self {#(#set_sizes),*}}
+                }
             }
-            impl crate::item::ItemizedMut for #name {
-                fn set_size(&mut self, a: crate::item::StorageSpace) -> bool { match self {#(#set_sizes),*}}
+        }
+        
+        Data::Struct(data) => {
+            let size = get_tagged_ident!(data, "measurement", "size");
+            quote! {
+                impl crate::item::ItemizedMut for #name {
+                    fn set_size(&mut self, a: crate::item::StorageSpace) -> bool { self.#size = a; true }
+                }
             }
-        })
-    } else {
-        TokenStream::from(quote! {
-            impl crate::item::Itemized for #name {
-                fn size(&self) -> crate::item::StorageSpace { self.size }
-            }
-            impl crate::item::ItemizedMut for #name {
-                fn set_size(&mut self, a: crate::item::StorageSpace) -> bool { self.size = a; true }
-            }
-        })
-    }
+        }
+
+        _ => unreachable!("Go away…")
+    };
+
+    TokenStream::from(quote! {
+        #base_impl
+        #mut_impl
+    })
 }
 
 /// [Storage] related derive.
@@ -288,140 +357,166 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
     }
 }
 
+/// Generate [Describable] impl.
+fn generate_describable_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    match &input.data {
+        Data::Enum(data) => {
+            let descs = enum_getter!(data, desc);
+            quote! {
+                impl crate::string::description::Describable for #name {
+                    fn desc<'a>(&'a self) -> &'a str { match self {#(#descs),*}}
+                }
+            }
+        }
+
+        Data::Struct(data) => {
+            let f_desc = get_tagged_ident!(data, "description", "desc");
+            quote! {
+                impl crate::string::description::Describable for #name {
+                    fn desc<'a>(&'a self) -> &'a str { &self.#f_desc }
+                }
+            }
+        }
+
+        _ => unreachable!("Go away…")
+    }
+}
+
 /// Derive [Describable].
 #[proc_macro_derive(Describable)]
 pub fn describable_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
-
-    if let Data::Enum(data) = input.data {
-        let descs = enum_getter!(data, desc);
-        let set_descs = enum_setter!(data, set_desc);
-        TokenStream::from(quote! {
-            impl crate::string::description::Describable for #name {
-                fn desc<'a>(&'a self) -> &'a str => { match self {#(#descs),*}}
-                fn set_desc(&mut self, a: &str) -> bool { match self {#(#set_descs),*}}
-            }
-        })
-    } else {
-        TokenStream::from(quote! {
-            impl crate::string::description::Describable for #name {
-                fn desc<'a>(&'a self) -> &'a str { &self.desc }
-                fn set_desc(&mut self, a: &str) -> bool {
-                    self.desc = a.to_string();
-                    true
-                }
-            }
-        })
-    }
+    TokenStream::from(generate_describable_impl(&input))
 }
 
 /// Derive [DescribableMut] (and [Describable]).
 #[proc_macro_derive(DescribableMut)]
 pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
-
-    if let Data::Enum(data) = input.data {
-        let descs = enum_getter!(data, desc);
-        let set_descs = enum_setter!(data, set_desc);
-        TokenStream::from(quote! {
-            impl crate::string::description::Describable for #name {
-                fn desc<'a>(&'a self) -> &'a str => { match self {#(#descs),*}}
-            }
-            impl crate::string::description::DescribableMut for #name {
-                fn set_desc(&mut self, a: &str) -> bool { match self {#(#set_descs),*}}
-            }
-        })
-    } else {
-        TokenStream::from(quote! {
-            impl crate::string::description::Describable for #name {
-                fn desc<'a>(&'a self) -> &'a str { &self.desc }
-            }
-            impl crate::string::description::DescribableMut for #name {
-                fn set_desc(&mut self, a: &str) -> bool {
-                    self.desc = a.to_string();
-                    true
+    let name = &input.ident;
+    let base_impl = generate_describable_impl(&input);
+    let mut_impl = match &input.data
+    {
+        Data::Enum(data) => {
+            let set_descs = enum_setter!(data, set_desc);
+            quote! {
+                impl crate::string::description::DescribableMut for #name {
+                    fn set_desc(&mut self, a: &str) -> bool { match self {#(#set_descs),*}}
                 }
             }
-        })
+        }
+
+        Data::Struct(data) => {
+            let f_desc = get_tagged_ident!(data, "description", "desc");
+            quote! {
+                impl crate::string::description::DescribableMut for #name {
+                    fn set_desc(&mut self, a: &str) -> bool {
+                        self.desc = a.to_string();
+                        true
+                    }
+                }
+            }
+        }
+
+        _ => unreachable!("Go away…")
+    };
+
+    TokenStream::from(quote! {
+        #base_impl
+        #mut_impl
+    })
+}
+
+/// Generate read-only [Owned] variant's internals to be reused by [OwnedMut] deriver.
+fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+
+    match &input.data {
+        Data::Enum(data) => {
+            let owner_ids = enum_getter!(data, owner);
+            let last_user_ids = enum_getter!(data, last_user);
+            let sources = enum_getter!(data, source);
+            
+            quote! {
+                impl crate::item::ownership::Owned for #name {
+                    fn owner(&self) -> Option<String> { match self {#(#owner_ids),*}}
+                    fn last_user(&self) -> Option<String> { match self {#(#last_user_ids),*}}
+                    fn source(&self) -> crate::item::ownership::ItemSource { match self {#(#sources),*}}
+                }
+            }
+        },
+    
+        Data::Struct(data) => {
+            let has_owner_field = data.fields.iter().any(|f| {
+                f.ident.as_ref().map(|i| i == "owner").unwrap_or(false)
+            });
+
+            let (o_body, l_body, s_body) = if has_owner_field {
+            (
+                quote! { self.owner.owner() },
+                quote! { self.owner.last_user() },
+                quote! { self.owner.source() },
+            )
+            } else {
+            (
+                quote! { self.owner_id.clone() },
+                quote! { self.last_user_id.clone() },
+                quote! { self.source.clone() },
+            )
+            };
+
+            quote! {
+                impl crate::item::ownership::Owned for #name {
+                    fn owner(&self) -> Option<String> { #o_body }
+                    fn last_user(&self) -> Option<String> { #l_body }
+                    fn source(&self) -> crate::item::ownership::ItemSource { #s_body }
+                }
+            }
+        },
+    
+        _ => panic!("Only for Enum/Struct!")
     }
 }
 
 /// Derive [Owned].
-// #[proc_macro_derive(Owned)]
-// pub fn owned_derive(input: TokenStream) -> TokenStream {
-//     let input = parse_macro_input!(input as DeriveInput);
-//     let name = input.ident;
-
-//     if let Data::Enum(data) = input.data {
-//         let owner_ids = enum_getter!(data, owner_id);
-//         let last_user_ids = enum_getter!(data, last_user_id);
-//         let sources = enum_getter!(data, source);
-        
-//         TokenStream::from(quote! {
-//             impl crate::item::ownership::Owned for #name {
-//                 fn owner_id(&self) -> Option<String> => { match self {#(#owner_ids),*}}
-//                 fn last_user_id(&self) -> Option<String> => { match self {#(#last_user_ids),*}}
-//                 fn source(&self) -> crate::item::ownership::ItemSource => { match self {#(#sources),*}}
-//             }
-//         })
-//     } else {
-//         TokenStream::from(quote! {
-//             impl crate::item::ownership::Owned for #name {
-//                 fn owner_id(&self) -> Option<String> { &self.owner_id }
-//                 fn last_user_id(&self) -> Option<String> { &self.last_user_id }
-//                 fn source(&self) -> crate::item::ownership::ItemSource { self.source.clone() }
-//             }
-//         })
-//     }
-// }
+#[proc_macro_derive(Owned)]
+pub fn owned_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    TokenStream::from(generate_owned_impl(&input))
+}
 
 /// Derive [OwnedMut] and [Owned].
 #[proc_macro_derive(OwnedMut)]
 pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
+    let name = &input.ident;
 
-    if let Data::Enum(data) = input.data {
-        let owner_ids = enum_getter!(data, owner);
-        let last_user_ids = enum_getter!(data, last_user);
-        let sources = enum_getter!(data, source);
-        let set_owner_ids = enum_setter!(data, change_owner);
-        let set_last_user_ids = enum_setter!(data, set_last_user);
-        let set_sources = enum_setter_3!(data, set_source);
+    let base_impl = generate_owned_impl(&input);
+    let mut_impl = match &input.data {
+        Data::Enum(data) => {
+            let set_owner_ids = enum_setter!(data, change_owner);
+            let set_last_user_ids = enum_setter!(data, set_last_user);
+            let set_sources = enum_setter_3!(data, set_source);
+            quote! {
+                impl crate::item::ownership::OwnedMut for #name {
+                    fn change_owner(&mut self, a: &str) { match self {#(#set_owner_ids),*}}
+                    fn set_last_user(&mut self, a: &str) -> Result<(), crate::identity::IdError> { match self {#(#set_last_user_ids),*}}
+                    fn set_source(&mut self, a: &str, b: &str, c: crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { match self {#(#set_sources),*}}
+                }
+            }
+        }
         
-        TokenStream::from(quote! {
-            impl crate::item::ownership::Owned for #name {
-                fn owner(&self) -> Option<String> { match self {#(#owner_ids),*}}
-                fn last_user(&self) -> Option<String> { match self {#(#last_user_ids),*}}
-                fn source(&self) -> crate::item::ownership::ItemSource { match self {#(#sources),*}}
-            }
-            impl crate::item::ownership::OwnedMut for #name {
-                fn change_owner(&mut self, a: &str) { match self {#(#set_owner_ids),*}}
-                fn set_last_user(&mut self, a: &str) -> Result<(), crate::identity::IdError> { match self {#(#set_last_user_ids),*}}
-                fn set_source(&mut self, a: &str, b: &str, c: crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { match self {#(#set_sources),*}}
-            }
-        })
-    } else if let Data::Struct(ref data) = input.data {
-        let has_owner_field = data.fields.iter().any(|f| {
-            f.ident.as_ref().map(|i| i == "owner").unwrap_or(false)
-        });
+        Data::Struct(data) => {
+            let has_owner_field = data.fields.iter().any(|f| {
+                f.ident.as_ref().map(|i| i == "owner").unwrap_or(false)
+            });
 
-        let (owner_id_body, last_user_body, source_body, change_owner_body, set_last_user_body, set_source_body) = if has_owner_field {
-            (
-                quote! { self.owner.owner() },
-                quote! { self.owner.last_user() },
-                quote! { self.owner.source() },
+            let (o_body, l_body, s_body) = if has_owner_field {(
                 quote! { self.owner.change_owner(a) },
                 quote! { self.owner.set_last_user(a) },
                 quote! { self.owner.set_source(a,b,c) },
-            )
-        } else {
-            (
-                quote! { self.owner_id.clone() },
-                quote! { self.last_user_id.clone() },
-                quote! { self.source.clone() },
+            )} else {(
                 quote! {// change_owner
                     if let Some(ref mut prev_owner) = self.owner_id {
                         log::trace!("Changing ownership from '{}' to '{}'", prev_owner, a);
@@ -438,27 +533,26 @@ pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
                 quote! {// set_source
                     if let crate::item::ownership::ItemSource::Blueprint = c {
                         log::warn!("Hol'up! Rejecting demotion of '{}' to blueprint by '{}'.", a, b);
-                        return Err(ItemSourceError::Rejected);
+                        return Err(crate::item::ownership::ItemSourceError::Rejected);
                     }
                     self.source = c;
                     Ok(())
                 }
-            )
-
-        };
-
-        TokenStream::from(quote! {
-            impl crate::item::ownership::Owned for #name {
-                fn owner(&self) -> Option<String> { #owner_id_body }
-                fn last_user(&self) -> Option<String> { #last_user_body }
-                fn source(&self) -> crate::item::ownership::ItemSource { #source_body }
+            )};
+            quote! {
+                impl crate::item::ownership::OwnedMut for #name {
+                    fn change_owner(&mut self, a: &str) { #o_body }
+                    fn set_last_user(&mut self, a: &str) -> Result<(), crate::identity::IdError> { #l_body }
+                    fn set_source(&mut self, a: &str, b: &str, c: crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { #s_body }
+                }
             }
+        }
 
-            impl crate::item::ownership::OwnedMut for #name {
-                fn change_owner(&mut self, a: &str) { #change_owner_body }
-                fn set_last_user(&mut self, a: &str) -> Result<(), crate::identity::IdError> { #set_last_user_body }
-                fn set_source(&mut self, a: &str, b: &str, c: crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { #set_source_body }
-            }
-        })
-    } else { panic!("Only for Enum/Struct!") }
+        _ => unimplemented!("Only for Enum/Struct!")
+    };
+
+    TokenStream::from(quote! {
+        #base_impl
+        #mut_impl
+    })
 }
