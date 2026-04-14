@@ -89,11 +89,12 @@ pub struct PrimordialItem {
     pub matter_state: Option<MatterState>,
 }
 
-impl PrimordialItem {
-    pub fn new(id: &str) -> Item {
-        Item::Primordial(Self {
-            id: id.re_uuid(),
+impl Default for PrimordialItem {
+    fn default() -> Self {
+        Self {
+            id: "Primordial".with_uuid(),
             title: "Primordial Soup".into(),
+            owner: Owner::no_one(),
             size: 0,
             desc: "Something indescribable…".into(),
             max_space: 0,
@@ -102,11 +103,19 @@ impl PrimordialItem {
             nutrition: None,
             affect_ticks: None,
             rots_in_ticks: None,
-            matter_state: None,
-            owner: Owner::no_one(),
-        })
+            matter_state: None
+        }
+    }
+}
+
+impl PrimordialItem {
+    pub fn new(id: &str) -> Item {
+        Item::Primordial(
+            Self { id: id.re_uuid(), ..Self::default() }
+        )
     }
 
+    /// Set item potential.
     pub fn set_potential(&mut self, pot: PotentialItemType) -> bool {
         self.potential = pot;
         true

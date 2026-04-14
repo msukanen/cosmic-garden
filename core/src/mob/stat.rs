@@ -42,6 +42,12 @@ pub enum StatType {
     SN,
 }
 
+impl StatType {
+    pub const fn display_list() -> &'static str {
+        "HP, MP, SN, SAN"
+    }
+}
+
 impl Display for StatType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", match self {
@@ -75,6 +81,8 @@ impl Stat {
             StatType::SN => Self::SN { curr: 100.0, max: 100.0, drain: 0.0 },
         }
     }
+
+    pub const fn display_list() -> &'static str { StatType::display_list() }
 }
 
 impl AddAssign<StatValue> for Stat {
@@ -390,5 +398,26 @@ mod stat_tests {
         // see that we can't reduce them into negative singularity…
         hp -= 100; // curr -100
         assert_eq!(SMR_THRESHOLD, hp.current());
+    }
+
+    /// Enforce that StatType enum count and its display_list() are kept in strict sync.
+    #[test]
+    fn stat_display_list_is_in_sync() {
+        assert_eq!("HP, MP, SN, SAN", StatType::display_list(), "Update StatType::display_list()! Out of sync.");
+        trait StatKill {
+            fn check_it(&self) -> bool;
+        }
+        impl StatKill for StatType {
+            fn check_it(&self) -> bool {
+                match self {
+                Self::HP |
+                Self::MP |
+                Self::SN |
+                Self::San => true,
+                }
+            }
+        }
+        let x = StatType::HP;
+        assert!(true == x.check_it());
     }
 }

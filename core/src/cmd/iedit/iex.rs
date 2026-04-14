@@ -2,9 +2,11 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::{Item, Itemized, container::{Storage, specs::StorageSpace}}, string::Describable, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::{Item, Itemized, container::{Storage, specs::StorageSpace}, ownership::Owned}, string::Describable, tell_user, tell_userln, validate_access};
 
 pub struct IexCommand;
+
+static IEX_UNSET: &'static str = "<c gray><unset></c>";
 
 #[async_trait]
 impl Command for IexCommand {
@@ -21,26 +23,34 @@ impl Command for IexCommand {
             return ;
         };
 
-        tell_user!(ctx.writer, "<c cyan>--- Item Examination Gantry ---</c>\n");
-        tell_user!(ctx.writer, "{:>10}: <c white>{}</c>\n", "ID", item.id());
-        tell_user!(ctx.writer, "{:>10}: <c white>{}</c>\n", "Title", item.title());
-        tell_user!(ctx.writer, "{:>10}: <c green>{:?}</c>\n", "Type", item); // Show the enum guts (Primordial, etc.)
+        tell_userln!(ctx.writer, "<c cyan>--- Item Examination Gantry ---</c>");
+        // .id
+        tell_userln!(ctx.writer, "{:>10}: <c white>{}</c>", "ID", item.id());
+        // .title
+        tell_userln!(ctx.writer, "{:>10}: <c white>{}</c>", "Title", item.title());
+        // {:?}
+        tell_userln!(ctx.writer, "{:>10}: <c green>{:?}</c>", "Type", item); // Show the enum guts (Primordial, etc.)
+
+        // .potential
         if let Item::Primordial(v) = item {
-        tell_user!(ctx.writer, "{:>10}: <c green>{}</c>\n", "Potential", v.potential());
+        tell_userln!(ctx.writer, "{:>10}: <c green>{}</c>", "Potential", v.potential());
         }
-            
+
+        // .owner
+        tell_userln!(ctx.writer, "{:>10}: <c white>{:?}</c>", "Owner", item.owner());
+        
         // Access the storage interface if applicable
-        tell_user!(ctx.writer, "{:>10}: <c yellow>{}</c>\n", "Size", item.size());
+        tell_userln!(ctx.writer, "{:>10}: <c yellow>{}</c>", "Size", item.size());
         let cap: Option<StorageSpace> = match item {
             Item::Container(c) => Some(c.max_space()),
             Item::Primordial(p) => Some(p.max_space),
             _ => None
         };
         if let Some(cap) = cap {
-        tell_user!(ctx.writer, "{:>10}: <c yellow>{}</c>\n", "Max space", cap);
+        tell_userln!(ctx.writer, "{:>10}: <c yellow>{}</c>", "Max space", cap);
         }
 
-        // Nutrition spex
+        // .nutrition
         let nutri = match item {
             Item::Consumable(v) => Some(
                 (   v.nutrition.clone().into(),
@@ -55,8 +65,8 @@ impl Command for IexCommand {
             _ => None
         };
         match nutri {
-            None => (),
-            Some((a,b,c)) => tell_user!(ctx.writer,
+            None => tell_userln!(ctx.writer, "{:>10}: {}", "Nutrition", IEX_UNSET),
+            Some((a,b,c)) => tell_userln!(ctx.writer,
                 "{:>10}: (type: {}, uses: {}, ticks: {})", "Nutrition",
                     match a {
                         None => "<n/a>".into(),
@@ -66,6 +76,18 @@ impl Command for IexCommand {
                     match c {None => "∞".into(), Some(v) => v.to_string()},
             ),
         }
+        
+        // .matter_state
+        let matter_state = match item {
+            Item::Consumable(v) => v.matter_state.into(),
+            Item::Primordial(v) => v.matter_state.clone(),
+            _ => None
+        };
+        match matter_state {
+            None => tell_userln!(ctx.writer, "{:>10}: {}", "Mat.State", IEX_UNSET),
+            Some(a) => tell_userln!(ctx.writer, "{:>10}: <c white>{}</c>", "Mat.State", a),
+        }
+        
         // 
         // Description    
         tell_user!(ctx.writer, "<c gray>Description:</c>\n{}\n", item.desc());

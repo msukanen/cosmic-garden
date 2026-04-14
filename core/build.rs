@@ -47,18 +47,18 @@ fn generate_cmd_table(file: &mut BufWriter<File>, path_str: &str, table_name: &s
     }
     if commands.is_empty() { return Ok(()); }
 
-    let mut reg_file_name = Path::new(&*OUT_DIR)
+    let reg_file_name = Path::new(&*OUT_DIR)
         .join(format!("{table_lc_stripped}registry.rs"));
     let mut reg_file = BufWriter::new(File::create(reg_file_name).unwrap());
-    writeln!(file, "static {}: once_cell::sync::Lazy<std::collections::HashMap<String, Box<dyn crate::cmd::Command>>> = once_cell::sync::Lazy::new(|| {{", table_name)?;
+    writeln!(file, "static {table_name}: once_cell::sync::Lazy<std::collections::HashMap<String, Box<dyn crate::cmd::Command>>> = once_cell::sync::Lazy::new(|| {{")?;
     writeln!(file, "    let mut m: std::collections::HashMap<String, Box<dyn crate::cmd::Command>> = std::collections::HashMap::new();")?;
 
     for (cmd, cmd_path) in &commands {
         // e.g., for "say.rs", creates `SayCommand`
         let struct_name = cmd.to_upper_camel_case();
-        let module_name = if cmd == "return" {"r#return"} else {cmd};
+        let module_name = escape_hatch(cmd);
         let full_module_path = if at_cmd_root {
-            module_name.into()
+            module_name.clone()
         } else {
             format!("{}::{module_name}", Path::new(path_str).file_name().unwrap().to_str().unwrap())
         };
@@ -74,4 +74,25 @@ fn generate_cmd_table(file: &mut BufWriter<File>, path_str: &str, table_name: &s
     writeln!(file, "m\n}});")?;
 
     Ok(())
+}
+
+fn escape_hatch(villain: &str) -> String {
+    match villain {
+        // --- strict keywords ---
+        "as"       | "break"    | "const"    | "continue" | "crate"    | 
+        "else"     | "enum"     | "extern"   | "false"    | "fn"       | 
+        "for"      | "if"       | "impl"     | "in"       | "let"      | 
+        "loop"     | "match"    | "mod"      | "move"     | "mut"      | 
+        "pub"      | "ref"      | "return"   | "self"     | "static"   | 
+        "struct"   | "super"    | "trait"    | "true"     | "type"     | 
+        "unsafe"   | "use"      | "where"    | "while"    | "async"    | 
+        "await"    | "dyn"      | "abstract" | "become"   | "box"      | 
+        // --- reserved / future Keywords ---
+        "do"       | "final"    | "macro"    | "override" | "priv"     | 
+        "typeof"   | "unsized"  | "virtual"  | "yield"    | "try"      |
+        // --- type level & maybe ---
+        "Self"
+        => format!("r#{}", villain),
+        _ => villain.into(),
+    }
 }

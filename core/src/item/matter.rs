@@ -1,5 +1,7 @@
 //! Matter basics…
 
+use std::fmt::Display;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
@@ -18,5 +20,16 @@ impl MatterState {
             Self::Plasma => "absorb",
             Self::Gaseous => "inhale",
         }
+    }
+}
+
+impl Display for MatterState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Self::Gaseous => "gaseous",
+            Self::Liquid => "liquid",
+            Self::Plasma => "plasma",
+            Self::Solid => "solid",
+        })
     }
 }

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::IdentityQuery, item::{Item, container::Storage}, roomloc_or_bust, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::IdentityQuery, item::{Item, container::Storage}, roomloc_or_bust, tell_user, thread::janitor::add_item_to_lnf, validate_access};
 
 pub struct DevolveCommand;
 
@@ -29,16 +29,28 @@ impl Command for DevolveCommand {
         let ed_name = ed.title().to_string();
         if let Item::Container(v) = ed {
             if let Some(items) = v.eject_all() {
-                // deadlock prevention
-                drop(p);
+                drop(p);// deadlock prevention
+
                 tell_user!(ctx.writer, "Suddenly '{}' spills the beans all over the place!\n", ed_name);
                 let mut r = p_loc.write().await;
+                let mut count_lost: usize = 0;
                 for item in items {
                     // we try trust the poor Room to hold on to all of this junk...
                     if let Err(e) = r.contents.try_insert(item) {
-                        // TODO toss into lost-and-found
-                        log::warn!("Item {e:?} in lost-and-found!");
+                        count_lost += 1;
+                        add_item_to_lnf(e.extract_item()).await;
                     }
+                }
+                if count_lost > 0 {
+                    tell_user!(ctx.writer, "Well bugger, you saw {} item{} to just evaporate?!\n",
+                        match count_lost {
+                            1 => "an",
+                            2 => "two",
+                            3..=5 => "a handful",
+                            6..=10 => "many",
+                            _ => "lots of"
+                        }, if count_lost==1{""} else {"s"}
+                    );
                 }
             }
         }

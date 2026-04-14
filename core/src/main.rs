@@ -3,7 +3,8 @@ use std::sync::Arc;
 
 use clap::Parser;
 
-mod io;             use io::*;
+mod io;             use convert_case::{Case, Casing};
+use io::*;
 use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpListener, sync::{RwLock, broadcast}};
 
 use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, string::{prompt::PromptType, sanitize::Sanitizer}, thread::janitor::PLAYERS_TO_LOGOUT, world::World};
@@ -77,7 +78,7 @@ async fn main() {
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);
     let listener = TcpListener::bind(&listen_on).await.unwrap();
-    log::info!("Server listening on {}", listen_on);
+    log::info!("{} v{} listening on {}", args.world.to_case(Case::Title), env!("CARGO_PKG_VERSION"), listen_on);
 
     // A broadcast channel is used to send messages to all connected clients.
     // Here, we're just broadcasting chat messages.

@@ -49,7 +49,7 @@ pub(crate) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
             // Handle lost and found items…
             _ = lost_and_found_interval.tick() => lost_and_found(world.clone()).await,
             // Save help entries that need saving Soon™
-            _ = save_help_asap_interval.tick() => save_asap().await,
+            _ = save_help_asap_interval.tick() => save_help_asap().await,
         }
     }
 }

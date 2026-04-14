@@ -14,6 +14,7 @@ include!(concat!(env!("OUT_DIR"), "/registry.rs"));
 // Get the commands hashmap.
 include!(concat!(env!("OUT_DIR"), "/commands.rs"));
 
+/// Command "context" to be handed across all the unified [Command] things.
 pub struct CommandCtx<'a> {
     pub pre_pad_n: bool,
     pub state: ClientState,
