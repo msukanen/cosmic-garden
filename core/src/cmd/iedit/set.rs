@@ -136,21 +136,23 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                     // set nut heal <stat-type> <value>
                     // set nut heal <value-as-drain>  ;; to assign drain without bothering to re-type type
                     {
-                        let (stat, value) = value.split_once(' ').unwrap_or((value, ""));
+                        let (r#type, value) = value.split_once(' ').unwrap_or((value, ""));
                         // if a float, value is 'drain'; + heals, - damages
-                        if let Ok(v) = stat.parse::<f32>() {
+                        if let Ok(v) = r#type.parse::<f32>() {
                             *drain = v.clamp(-100.0, 100.0);// TODO drain - RECHECK min/max [14.04.2026]
                             tell_user!(ctx.writer, "Item 'drain' value set at: {}\n", *drain);
                             return ;
                         }
 
-                        let stat = match stat.to_lowercase().as_str() {
+                        let stat_type = match r#type.to_lowercase().as_str() {
                             "hp" => StatType::HP,
                             "mp" => StatType::MP,
                             "sn" => StatType::SN,
                             "san" => StatType::San,
                             _ => {tell_user!(ctx.writer, "Has to be one of the existing stat types: {}", StatType::display_list());return;}
                         };
+                        // set nut heal stat <drain>
+                        *stat = stat_type;
 
                         if let Ok(v) = value.parse::<f32>() {
                             *drain = v.clamp(-100.0, 100.0);// TODO drain - RECHECK min/max [14.04.2026]
@@ -158,7 +160,7 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                             return ;
                         }
 
-                        // not a stat, not direct drain value...
+                        // but - not a stat, not direct drain value...?
                         tell_user!(ctx.writer, "Usage: set nut heal <stat> <value>\n       set nut heal <drain>\n");
                         return ;
                     },
@@ -218,7 +220,27 @@ mod cmd_iedit_set_tests {
         let (world, plr) = get_operational_mock_world().await;
         plr.write().await.access = Access::Builder;
         
-        log::debug!("Debugging the Kobolds away!");
+        log::debug!("Debugging the Kobolds away!");// <-- for posterity
+        ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);
+        ctx!(IexCommand, "", mock_sock, tx, world, plr);
+        ctx!(SetCommand, "pot cons", mock_sock, tx, world, plr);
+        ctx!(SetCommand, "nut inedible", mock_sock, tx, world, plr);
+        ctx!(SetCommand, "nut heal hp 10.0", mock_sock, tx, world, plr);
+        ctx!(DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, world, plr);
+        ctx!(DescCommand, "+3 ...", mock_sock, tx, world, plr);
+        ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, world, plr);
+        ctx!(IexCommand, "", mock_sock, tx, world, plr);
+        ctx!(DescCommand, "", mock_sock, tx, world, plr);
+    }
+
+    #[tokio::test]
+    async fn iedit_crank_something_on_primordial() {
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut mock_sock = std::io::Cursor::new(&mut buffer);
+        let (tx, _) = tokio::sync::broadcast::channel::<crate::Broadcast>(16);
+        let (world, plr) = get_operational_mock_world().await;
+        plr.write().await.access = Access::Builder;
+        
         ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);
         ctx!(IexCommand, "", mock_sock, tx, world, plr);
         ctx!(SetCommand, "pot cons", mock_sock, tx, world, plr);

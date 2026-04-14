@@ -31,6 +31,12 @@ macro_rules! err_iedit_buffer_inaccessible {
 
 #[cfg(test)]
 #[macro_export]
+    /// CommandCtx utilizing macro.
+    /// 
+    /// Requires /src/test/world_test_harness.inc contents in the test fn.
+    /// 
+    /// # Examples
+    /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);`
     macro_rules! ctx {
         ($cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $world:ident, $plr:ident) => {
             {
