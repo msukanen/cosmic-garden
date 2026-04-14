@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, io_thread::WORLD_NEEDS_SAVING, player_or_bust, room::Room, string::Slugger, tell_user, tell_user_unk, translocate, util::{access::Accessor, direction::Direction}};
+use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, thread::io::FLAG_WORLD_TO_SAVE, player_or_bust, room::Room, string::Slugger, tell_user, tell_user_unk, translocate, util::{access::Accessor, direction::Direction}};
 
 pub struct DigCommand;
 
@@ -65,7 +65,7 @@ impl Command for DigCommand {
             // persist both rooms
             let _ = origin_arc.read().await.save().await;
             let _ = target_arc.read().await.save().await;
-            *((*WORLD_NEEDS_SAVING).write().await) = true;
+            *((*FLAG_WORLD_TO_SAVE).write().await) = true;
             tell_user!(ctx.writer, "Diggy diggy to {} - success!\n", dir);
             translocate!(plr, origin_arc, target_arc);
             ReditCommand.exec({ctx.args = "this";ctx}).await;

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, io_thread::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, thread::io::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user};
 
 pub struct GetCommand;
 

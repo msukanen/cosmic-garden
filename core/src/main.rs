@@ -4,24 +4,21 @@ use std::sync::Arc;
 use clap::Parser;
 
 mod io;             use io::*;
-mod io_thread;      use io_thread::io_thread;
-mod life_thread;
-use life_thread::life_thread;
 use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpListener, sync::{RwLock, broadcast}};
 
-use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, io_thread::PLAYERS_TO_LOGOUT, library::librarian, string::{prompt::PromptType, sanitize::Sanitizer}, world::World};
+use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, string::{prompt::PromptType, sanitize::Sanitizer}, thread::janitor::PLAYERS_TO_LOGOUT, world::World};
 
 mod cmd;
 mod edit;
 mod error;
 mod identity;
 mod item;
-mod library;
 mod mob;
 mod password;
 mod player;
 mod room;
 mod string;
+mod thread;
 mod traits;
 mod user;
 mod util;
@@ -71,9 +68,9 @@ async fn main() {
     world.link_rooms().await;
     let world = Arc::new(RwLock::new(world));
 
-    tokio::spawn(io_thread(world.clone(), args.clone()));
-    tokio::spawn(life_thread(world.clone()));
-    tokio::spawn(librarian());
+    tokio::spawn(thread::io::io_thread(world.clone(), args.clone()));
+    tokio::spawn(thread::game::life_thread(world.clone()));
+    tokio::spawn(thread::lib::librarian());
 
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);

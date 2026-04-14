@@ -5,7 +5,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{identity::{IdError, IdentityQuery}, io::WORLD_ID, io_thread::SAVE_HELP_ASAP, library::{HELP_LIBRARY, HELP_PATH, string_vec_to_bool_map}, string::{Slugger, UNNAMED, Uuid}, util::access::{Access, StrictAccess}};
+use crate::{identity::{IdError, IdentityQuery}, io::WORLD_ID, string::{Slugger, UNNAMED, Uuid}, thread::librarian::{HELP_LIBRARY, HELP_PATH, string_vec_to_bool_map}, util::access::{Access, StrictAccess}};
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct HelpPage {

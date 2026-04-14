@@ -9,7 +9,7 @@ use crate::{Cli, DATA_PATH, identity::IdentityQuery, item::Item, player::Player,
 
 lazy_static! {
     pub static ref PLAYERS_TO_LOGOUT: Arc<RwLock<Vec<Arc<RwLock<Player>>>>> = Arc::new(RwLock::new(Vec::new()));
-    pub static ref WORLD_NEEDS_SAVING: Arc<RwLock<bool>> = Arc::new(RwLock::new(false));
+    pub static ref FLAG_WORLD_TO_SAVE: Arc<RwLock<bool>> = Arc::new(RwLock::new(false));
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
     pub static ref SAVE_ASAP: Arc<RwLock<Vec<Arc<RwLock<Player>>>>> = Arc::new(RwLock::new(Vec::new()));
     pub static ref SAVE_HELP_ASAP: Arc<RwLock<Vec<Arc<RwLock<HelpPage>>>>> = Arc::new(RwLock::new(Vec::new()));
@@ -18,7 +18,12 @@ lazy_static! {
 pub const SAVE_ASAP_THRESHOLD: usize = 100;
 
 /// Disk I/O thread thing.
-pub(super) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
+/// 
+/// `io_thread` handles all sorts of "janitorial" tasks from
+/// autosaves and logouts to keeping the live world and disk
+/// in (relative) sync.
+/// 
+pub(crate) async fn io_thread(world: Arc<RwLock<World>>, args: Cli) {
     log::trace!("Firing up; DATA_PATH = '{}'", *DATA_PATH);
 
     let mut autosave_queue_interval = time::interval(Duration::from_secs(args.autosave_queue_interval.unwrap_or(300)));
@@ -137,7 +142,7 @@ async fn save_asap() {
 /// World save cycle.
 async fn save_the_whales(world: Arc<RwLock<World>>) {
     let ws_req = {
-        let mut w = (*WORLD_NEEDS_SAVING).write().await;
+        let mut w = (*FLAG_WORLD_TO_SAVE).write().await;
         let val = *w;
         *w = false;
         val
@@ -146,7 +151,7 @@ async fn save_the_whales(world: Arc<RwLock<World>>) {
 
     if let Err(e) = world.read().await.save().await {
         log::error!("World save failed?! {e:?}");
-        *((*WORLD_NEEDS_SAVING).write().await) = true;
+        *((*FLAG_WORLD_TO_SAVE).write().await) = true;
     } else {
         log::info!("World save cycle complete.");
     }

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, cmd_alias::AbortCommand}, library::HELP_LIBRARY, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx, cmd_alias::AbortCommand}, thread::lib::HELP_LIBRARY, tell_user, validate_access};
 
 pub struct WeaveCommand;
 

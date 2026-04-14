@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, io_thread::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, tell_user, util::activity::ActionWeight};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, thread::io::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, tell_user, util::activity::ActionWeight};
 
 pub struct DropCommand;
 

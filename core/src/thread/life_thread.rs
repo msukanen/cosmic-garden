@@ -7,7 +7,11 @@ use tokio::{sync::RwLock, time};
 use crate::world::World;
 
 /// Life-thread. Lives hang on in balance here!
-pub(super) async fn life_thread(world: Arc<RwLock<World>>) {
+/// 
+/// Life-thread is the game's "pulse" that ticks the clocks of everything.
+//TODO (It'll do) much more than that Soon™.
+/// 
+pub(crate) async fn life_thread(world: Arc<RwLock<World>>) {
     let mut tick_interval = time::interval(Duration::from_millis(100));
     let mut tick = 0;
     log::info!("Life thread firing up…");

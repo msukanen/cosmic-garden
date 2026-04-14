@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, library::HELP_LIBRARY, player_or_bust, string::Describable, tell_user, util::{HelpPage, access::Accessor}};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player_or_bust, string::Describable, tell_user, thread::librarian::HELP_LIBRARY, util::{HelpPage, access::Accessor}};
 
 pub struct HelpCommand;
 
