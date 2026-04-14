@@ -5,9 +5,9 @@ use clap::Parser;
 
 mod io;             use convert_case::{Case, Casing};
 use io::*;
-use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpListener, sync::{RwLock, broadcast}};
+use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpListener, sync::{RwLock, broadcast, mpsc}};
 
-use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, string::{prompt::PromptType, sanitize::Sanitizer}, thread::janitor::PLAYERS_TO_LOGOUT, world::World};
+use crate::{cmd::{CommandCtx, cmd_alias::CMD_ALIASES}, identity::IdentityQuery, string::{prompt::PromptType, sanitize::Sanitizer}, thread::{SystemSignal, janitor::PLAYERS_TO_LOGOUT, signal::SignalChannels}, world::World};
 
 mod cmd;
 mod edit;
@@ -70,10 +70,19 @@ async fn main() {
     // connect some dots…
     world.link_rooms().await;
     let world = Arc::new(RwLock::new(world));
+    let (janitor_tx, mut io_rx) = mpsc::channel::<SystemSignal>(32);
+    let (librarian_tx, mut lib_rx) = mpsc::channel::<SystemSignal>(8);
+    let (game_tx, mut game_rx) = mpsc::channel::<SystemSignal>(64);
 
-    tokio::spawn(thread::io::io_thread(world.clone(), args.clone()));
-    tokio::spawn(thread::game::life_thread(world.clone()));
-    tokio::spawn(thread::lib::librarian());
+    let private_channels = SignalChannels {
+        janitor_tx: janitor_tx,
+        librarian_tx: librarian_tx,
+        game_tx: game_tx,
+    };
+
+    tokio::spawn(thread::io::io_thread((private_channels.clone(), io_rx), world.clone(), args.clone()));
+    tokio::spawn(thread::game::life_thread((private_channels.clone(), game_rx), world.clone()));
+    tokio::spawn(thread::lib::librarian((private_channels.clone(), lib_rx)));
 
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);
@@ -91,6 +100,7 @@ async fn main() {
 
         // Sender broadcast clone…
         let tx = tx.clone();
+        let system_ch = private_channels.clone();
         // World Arc…
         let world = world.clone();
         // Get a receiver for this client to listen for messages from others…
@@ -165,7 +175,7 @@ async fn main() {
                             break; // not in game, cut the line, wipe the floors and take a break.
                         }
 
-                        state = state.handle(&mut writer, world.clone(), &addr, &tx, &line.trim().sanitize()).await;
+                        state = state.handle(&mut writer, world.clone(), &addr, &tx, &system_ch, &line.trim().sanitize()).await;
                     },
 
                     // --- Second Branch: Receive broadcast messages from other clients/system itself…
@@ -250,6 +260,7 @@ async fn main() {
                                         pre_pad_n: true,
                                         state: state.clone(),
                                         world: world.clone(),
+                                        system: &system_ch,
                                         tx: &tx,
                                         args: &command,
                                         writer: &mut writer,

@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
 
-use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::Error, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, user::UserInfo, world::World};
+use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::Error, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::signal::SignalChannels, user::UserInfo, world::World};
 
 pub mod broadcast; pub use broadcast::*;
 
@@ -90,7 +90,7 @@ impl ClientState {
     }
 
     /// Big state handler…
-    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, tx: &tokio::sync::broadcast::Sender<Broadcast>, input: &str) -> Self {
+    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, tx: &tokio::sync::broadcast::Sender<Broadcast>, system_ch: &SignalChannels, input: &str) -> Self {
         match self {
             Self::EnteringLogin => {
                 let state = match input.as_id() {
@@ -284,6 +284,7 @@ impl ClientState {
                     pre_pad_n: false,
                     state: self.clone(),
                     world: world.clone(),
+                    system: &system_ch,
                     tx: &tx,
                     writer: &mut writer,
                     args: input,

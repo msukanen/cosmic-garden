@@ -40,10 +40,12 @@ macro_rules! err_iedit_buffer_inaccessible {
     macro_rules! ctx {
         ($cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $world:ident, $plr:ident) => {
             {
+            let ch = crate::thread::signal::SignalChannels::default();
             let mut ctx = CommandCtx {
                 writer: &mut $mock_sock,
                 args: $args,
                 pre_pad_n: false,
+                system: &ch,
                 state: ClientState::Playing { player: $plr.clone() },
                 world: $world.clone(),
                 tx: &$tx

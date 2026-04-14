@@ -4,9 +4,9 @@ use std::{collections::HashMap, path::PathBuf, sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
-use tokio::{fs, sync::RwLock};
+use tokio::{fs, sync::{RwLock, mpsc}};
 
-use crate::{identity::{IdentityMut, IdentityQuery}, io::{DATA_PATH, WORLD_ID}, item::Item, string::Uuid, util::HelpLibrary};
+use crate::{identity::{IdentityMut, IdentityQuery}, io::{DATA_PATH, WORLD_ID}, item::Item, string::Uuid, thread::{SystemSignal, signal::SignalChannels}, util::HelpLibrary};
 
 lazy_static! {
     pub(crate) static ref BP_PATH: PathBuf = PathBuf::from(format!("{}/blueprint", *DATA_PATH));
@@ -100,10 +100,12 @@ impl From<std::io::Error> for BlueprintError { fn from(value: std::io::Error) ->
 impl From<serde_json::Error> for BlueprintError { fn from(value: serde_json::Error) -> Self { Self::Json(value)}}
 
 impl BlueprintLibrary {
+    /// Load or bootstrap the blueprint library.
     pub async fn load_or_bootstrap() -> Result<(), BlueprintError> {
         let world_id = WORLD_ID.as_str();
         fs::create_dir_all(&format!("{}/{}", BP_PATH.display(), world_id)).await?;
         
+        // Library present? If no, make one.
         let Ok(mf) = fs::read_to_string(&format!("{}/{}.library", BP_PATH.display(), world_id)).await else {
             log::warn!("No library established yet. Setting defaults…");
             let mut lock = (*BP_LIBRARY).write().await;
@@ -114,6 +116,8 @@ impl BlueprintLibrary {
             log::info!("Library in place, just no blueprints yet.");
             return Ok(());
         };
+
+        // Load the library.
         let mut lib: BlueprintLibrary = serde_json::from_str(&mf)?;
         lib.world_id = world_id.into();
         for id in lib.id_stem.keys() {
@@ -138,6 +142,7 @@ impl BlueprintLibrary {
         Ok(())
     }
 
+    /// Save the blueprint library and all the dirty marked entries.
     pub async fn save(&mut self) -> Result<(), BlueprintError> {
         let world_dir = BP_PATH.join(&self.world_id);
         let contents = serde_json::to_string_pretty(&self)?;
@@ -169,8 +174,12 @@ impl BlueprintLibrary {
     }
 }
 
+/// 
 /// Librarian wake up.
-pub async fn librarian() {
+/// 
+/// This thread keeps the world's documents nice and tidy.
+/// 
+pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>)) {
     log::info!("Library establishing… blueprints @ '{}/{}'", BP_PATH.display(), *WORLD_ID);
     if let Err(e) = BlueprintLibrary::load_or_bootstrap().await {
         // Halt the printing press!!!
@@ -185,8 +194,8 @@ pub async fn librarian() {
     }
 
     log::info!("Library didn't catch fire, yay.");
-    let mut dusting_shelves_interval = tokio::time::interval(Duration::from_mins(8));
-    let mut dusting_documents_interval = tokio::time::interval(Duration::from_mins(4));
+    let mut dusting_shelves_interval = tokio::time::interval(Duration::from_mins(10));
+    let mut dusting_documents_interval = tokio::time::interval(Duration::from_mins(10));
     
     loop {
         tokio::select! {
@@ -205,6 +214,16 @@ pub async fn librarian() {
                     log::error!("\"Seriously!?…\", a snag while saving documents: {e:?}");
                 }
             }
+
+            Some(sig) = incoming.recv() => match sig {
+                SystemSignal::NewLibraryEntry => reorganize_library(&outgoing.janitor_tx).await,
+                _ => ()
+            }
         }
     }
+}
+
+/// Reorganize the library, reindex, etc.
+async fn reorganize_library(janitor_tx: &mpsc::Sender<SystemSignal>) {
+
 }

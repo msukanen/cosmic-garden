@@ -5,7 +5,14 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{identity::{IdError, IdentityQuery}, io::WORLD_ID, string::{Slugger, UNNAMED, Uuid}, thread::librarian::{HELP_LIBRARY, HELP_PATH, string_vec_to_bool_map}, util::access::{Access, StrictAccess}};
+use crate::{identity::{IdError, IdentityQuery}, io::WORLD_ID, string::{Slugger, UNNAMED, Uuid}, thread::{SystemSignal, librarian::{HELP_LIBRARY, HELP_PATH, string_vec_to_bool_map}, signal::SignalChannels}, util::access::{Access, StrictAccess}};
+
+#[derive(Debug, Clone)]
+pub enum HelpLibraryState {
+    Pending,
+    Stable,
+    Reindex,
+}
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct HelpPage {
@@ -124,8 +131,11 @@ impl HelpLibrary {
     pub async fn load_or_bootstrap() -> Result<(), HelpSystemError> {
         let world_id = WORLD_ID.as_str();
         fs::create_dir_all(&format!("{}/{}", HELP_PATH.display(), world_id)).await?;
+
+        // Bootstrap a brand new library if none exists yet.
         let Ok(mf) = fs::read_to_string(&format!("{}/{}.library", HELP_PATH.display(), world_id)).await else {
             log::warn!("No papers, no ID? Ah well — preparing anyway…");
+
             let mut lock = (*HELP_LIBRARY).write().await;
             *lock = HelpLibrary::default();
             lock.world_id = world_id.into();
@@ -133,7 +143,7 @@ impl HelpLibrary {
             let mut xfiles = HelpPage::new(world_id)?;
             xfiles.alias.insert("world".into());
             xfiles.alias.insert("cosmic-garden".into());
-            xfiles.contents = format!("This entry was written by Cosmic Garden v{} bootstrap.", env!("CARGO_PKG_VERSION"));
+            xfiles.contents = format!("This entry was written by Cosmic Garden v{} bootstrap.\n", env!("CARGO_PKG_VERSION"));
             let nouuid = xfiles.id().no_uuid();
             lock.id_stem.insert(nouuid.clone(), true);
             lock.items.insert(nouuid, xfiles);
@@ -176,6 +186,7 @@ impl HelpLibrary {
         Ok(())
     }
 
+    /// Save the library and all the dirty entries.
     pub async fn save(&mut self) -> Result<(), HelpSystemError> {
         let contents = serde_json::to_string_pretty(&self)?;
         fs::write(&format!("{}/{}.library", HELP_PATH.display(), WORLD_ID.as_str()), contents).await?;
@@ -214,10 +225,11 @@ impl HelpLibrary {
     /// 
     /// # Return
     /// `true` if shelved for real.
-    pub fn shelve(&mut self, entry: &HelpPage) -> bool {
+    pub fn shelve(&mut self, entry: &HelpPage, system_ch: &SignalChannels) -> bool {
         // TODO content checking?
         self.id_stem.insert(entry.id().no_uuid(), true);
         self.items.insert(entry.id().no_uuid(), entry.clone());
+        system_ch.librarian_tx.try_send(SystemSignal::NewLibraryEntry);
         true
     }
 }
