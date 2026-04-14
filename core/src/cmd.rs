@@ -8,25 +8,11 @@ use tokio::{net::tcp::OwnedWriteHalf, sync::{RwLock, broadcast}};
 use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::{Broadcast, ClientState}, player::Player, tell_user, tell_user_unk, util::direction::Directional, world::World};
 
 pub mod cmd_alias;
-mod dummy;
 
-mod dig;
-mod drop;
-mod eat;
-mod force;
-mod get;
-mod goto;
-pub mod help;
-mod iedit;
-mod inventory;
-mod invis;
-mod look;
-mod hedit;
-mod quit;
-mod redit;
-mod say;
-mod teleport;
-mod who;
+// Get modules.
+include!(concat!(env!("OUT_DIR"), "/commands_registry.rs"));
+// Get the commands hashmap.
+include!(concat!(env!("OUT_DIR"), "/commands.rs"));
 
 pub struct CommandCtx<'a> {
     pub pre_pad_n: bool,
@@ -56,9 +42,6 @@ pub trait Command: Send + Sync {
     /// - `ctx`— CommandCtx
     async fn exec(&self, ctx: &mut CommandCtx<'_>);
 }
-
-// Get the commands hashmap.
-include!(concat!(env!("OUT_DIR"), "/commands.rs"));
 
 /// Parse part of player input and exec the corresponding command.
 /// 

@@ -13,6 +13,8 @@ mod edit;
 mod error;
 mod identity;
 mod item;
+#[macro_use]
+mod macros;
 mod mob;
 mod password;
 mod player;

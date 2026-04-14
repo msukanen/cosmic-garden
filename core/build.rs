@@ -49,9 +49,9 @@ fn generate_cmd_table(file: &mut BufWriter<File>, path_str: &str, table_name: &s
         let struct_name = cmd.to_upper_camel_case();
         let module_name = if cmd == "return" {"r#return"} else {cmd};
         let full_module_path = if path_str == "src/cmd" {
-            format!("{}", module_name)
+            module_name.into()
         } else {
-            format!("{}::{}", Path::new(path_str).file_name().unwrap().to_str().unwrap(), module_name)
+            format!("{}::{module_name}", Path::new(path_str).file_name().unwrap().to_str().unwrap())
         };
         writeln!(file,
             "    m.insert(\"{}\".to_string(), Box::new({}::{}Command));",
