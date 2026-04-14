@@ -45,6 +45,6 @@ impl Command for DropCommand {
 
         tell_user!(ctx.writer, "You drop '{}' on the ground.\n", item_name);
 
-        plr.write().await.act(plr.clone(), ActionWeight::ItemTransfer { count: 1 }).await;
+        plr.write().await.act(plr.clone(),  &ctx.system, ActionWeight::ItemTransfer { count: 1 }).await;
     }
 }

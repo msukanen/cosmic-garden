@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::janitor::{SAVE_ASAP, SAVE_ASAP_THRESHOLD}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -141,13 +141,10 @@ impl Player {
     }
 
     /// Accumulate action weight.
-    pub async fn act(&mut self, player: Arc<RwLock<Player>>, act_wt: ActionWeight) -> usize {
+    pub async fn act(&mut self, player: Arc<RwLock<Player>>, system_ch: &SignalChannels, act_wt: ActionWeight) -> usize {
         self.actions_taken += act_wt;
         if self.actions_taken >= SAVE_ASAP_THRESHOLD {
-            let mut asap = (*SAVE_ASAP).write().await;
-            if !asap.iter().any(|existing| Arc::ptr_eq(existing, &player)) {
-                asap.push(player.clone());
-            }
+            system_ch.janitor_tx.send(SystemSignal::PlayerNeedsSaving(player.clone(), player.read().await.id().to_string())).await;
         }
         self.actions_taken
     }

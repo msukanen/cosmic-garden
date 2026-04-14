@@ -21,7 +21,7 @@ impl Command for WeaveCommand {
         drop(p);
 
         if let Some(page) = page {
-            if !(*HELP_LIBRARY).write().await.shelve(&page) {
+            if !(*HELP_LIBRARY).write().await.shelve(&page, &ctx.system) {
                 tell_user!(ctx.writer, "Something's off… Probably need to check your work closer.\nEither the librarian is busy or there's something else wrong…\n");
                 let mut p = plr.write().await;
                 p.hedit_buffer = Some(page);

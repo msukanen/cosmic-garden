@@ -1,6 +1,10 @@
 //! System signals.
 
-use tokio::sync::mpsc;
+use std::sync::Arc;
+
+use tokio::sync::{RwLock, mpsc};
+
+use crate::player::Player;
 
 /// Various system signals between threads.
 #[derive(Debug, Clone)]
@@ -8,7 +12,7 @@ pub enum SystemSignal {
     /// Generic "we're shutting down, brace for impact".
     Shutdown,
     /// Player in logout queue.
-    PlayerInLogout,
+    PlayerNeedsSaving (Arc<RwLock<Player>>, String),
     /// Save the whales, now!
     SaveWorld,
     ///

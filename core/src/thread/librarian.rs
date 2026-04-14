@@ -225,5 +225,9 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver
 
 /// Reorganize the library, reindex, etc.
 async fn reorganize_library(janitor_tx: &mpsc::Sender<SystemSignal>) {
-
+    //
+    // Reorganize, and...
+    //
+    // ...inform.
+    janitor_tx.send(SystemSignal::ReindexLibrary).await;
 }
