@@ -28,3 +28,22 @@ macro_rules! err_iedit_buffer_inaccessible {
         return;
     };
 }
+
+#[cfg(test)]
+#[macro_export]
+    macro_rules! ctx {
+        ($cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $world:ident, $plr:ident) => {
+            {
+            let mut ctx = CommandCtx {
+                writer: &mut $mock_sock,
+                args: $args,
+                pre_pad_n: false,
+                state: ClientState::Playing { player: $plr.clone() },
+                world: $world.clone(),
+                tx: &$tx
+            };
+            $cmd.exec(&mut ctx).await;
+            }
+            log::debug!("{}", String::from_utf8_lossy($mock_sock.get_ref()));
+        };
+    }

@@ -35,7 +35,7 @@ impl From<ParseIntError> for EditorError { fn from(value: ParseIntError) -> Self
 /// - `+` — insert line.
 /// - `-` — remove line.
 /// - `=` — ignore `source`, use `args` as full replacement.
-pub async fn edit_text(writer: &mut OwnedWriteHalf, args: &str, source: &str) -> Result<EdResult, EditorError> {
+pub async fn edit_text(writer: &mut (dyn tokio::io::AsyncWrite + Unpin + Send), args: &str, source: &str) -> Result<EdResult, EditorError> {
     if args.is_empty() {
         return {
             let mut display = String::new();

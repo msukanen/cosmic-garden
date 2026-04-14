@@ -42,6 +42,24 @@ pub struct World {
     pub lost_and_found: HashMap<String, Item>,
 }
 
+#[cfg(test)]
+impl World {
+    pub async fn dummy() -> Self {Self {
+        name: "Test World".into(),
+        path: PathBuf::new(),
+        port: 8080,
+        greeting: "Greetings, Crash Test Dummy!".to_string().into(),
+        fixed_prompts: HashMap::new(),
+        players_by_sockaddr: HashMap::new(),
+        players_by_id: HashMap::new(),
+        rooms: HashMap::new(),
+        root_room_id: "room-1".into(),
+        root_room: Some(Room::new("room-1", "Incineration Chamber").await.unwrap()),
+        lost_and_found: HashMap::new()
+    }
+    }
+}
+
 mod room_id_sieve {
     use super::*;
     use serde::{Serializer, Deserializer, Deserialize, ser::SerializeSeq};
@@ -214,7 +232,26 @@ impl World {
 }
 
 #[cfg(test)]
-mod world_tests {
+pub(crate) mod world_tests {
+    pub(crate) async fn get_operational_mock_world() -> 
+        (
+            std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
+            std::sync::Arc<tokio::sync::RwLock<crate::player::Player>>
+        )
+    {
+        let _ = env_logger::try_init();
+        let _ = crate::DATA.set("data".into());
+        let _ = crate::WORLD.set("crash-test-dummy".to_string());
+        use crate::identity::IdentityQuery;
+        let plr = crate::player::Player::default();
+        let mut world = crate::world::World::dummy().await;
+        let plr_id = plr.id().to_string();
+        let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
+        world.players_by_id.insert(plr_id, plr.clone());
+        let plr = world.players_by_id.get("xxx").unwrap().clone();
+        (std::sync::Arc::new(tokio::sync::RwLock::new(world)), plr)
+    }
+
     #[cfg(feature = "stresstest")]
     #[tokio::test]
     async fn world_spins_5000_logout() {

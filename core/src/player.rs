@@ -172,7 +172,7 @@ impl Default for Player {
     fn default() -> Self {
         Self {
             owner_id: UNNAMED.into(),
-            id: "".into(),
+            id: "xxx".into(),
             name: "".into(),
             actions_taken: 0,
             location_id: player_location_void(),

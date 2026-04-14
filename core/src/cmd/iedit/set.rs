@@ -127,7 +127,9 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
 
     // Actually set some `value` after exact `what` has been determined.
     async fn go_really_nuts(ctx: &mut CommandCtx<'_>, nuts: &mut NutritionType, what: &str, value: &str) {
+            log::warn!("<what> now: {what}");
         loop {
+            log::warn!("<what> now: {what}");
         match what {
             "heal" => match nuts {
                 NutritionType::Heal { stat, drain } => 
@@ -176,31 +178,56 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
     let (sub, value) = value.split_once(' ').unwrap_or((value, ""));
     if match sub {
         // set nut inedible
-        "indedible"|"na"|"no"|"eww"|"nope"|"awful" => true,_=> false
+        "inedible"|"na"|"no"|"eww"|"nope"|"awful" => true,_=> false
     } {
         match ed {
             Item::Consumable(v) => v.nutrition = NutritionType::NotEdible,
             Item::Primordial(v) => v.nutrition = None,
             _ => { tell_user!(ctx.writer, "It wasn't very nutritional anyway…\n"); return ; }
         }
-        tell_user!(ctx.writer, "Item set as 'inedbile'.\n");
+        tell_user!(ctx.writer, "Item set as 'inedible'.\n");
         return;
     }
 
     // set nut <what> <value>
-    let (what, value) = value.split_once(' ').unwrap_or((value, ""));
     if value.is_empty() {
         tell_user!(ctx.writer, "Some sort of a value is needed.\n");
         return;
     }
 
     match ed {
-        Item::Consumable(v) => go_really_nuts(ctx, &mut v.nutrition, what, value).await,
+        Item::Consumable(v) => go_really_nuts(ctx, &mut v.nutrition, sub, value).await,
         Item::Primordial(v) => {
             let mut n = v.nutrition.clone().unwrap_or_default();
-            go_really_nuts(ctx, &mut n, what, value).await;
+            go_really_nuts(ctx, &mut n, sub, value).await;
             v.nutrition = if matches!(n, NutritionType::NotEdible) { None } else { Some(n) }
         },
         _ => unreachable!("This should not happen…")
+    }
+}
+
+#[cfg(test)]
+mod cmd_iedit_set_tests {
+    use crate::{cmd::{Command, CommandCtx, iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand}}, ctx, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
+    
+    #[tokio::test]
+    async fn iedit_set_something_on_primordial() {
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut mock_sock = std::io::Cursor::new(&mut buffer);
+        let (tx, _) = tokio::sync::broadcast::channel::<crate::Broadcast>(16);
+        let (world, plr) = get_operational_mock_world().await;
+        plr.write().await.access = Access::Builder;
+        
+        log::debug!("Debugging the Kobolds away!");
+        ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);
+        ctx!(IexCommand, "", mock_sock, tx, world, plr);
+        ctx!(SetCommand, "pot cons", mock_sock, tx, world, plr);
+        ctx!(SetCommand, "nut inedible", mock_sock, tx, world, plr);
+        ctx!(SetCommand, "nut heal hp 10.0", mock_sock, tx, world, plr);
+        ctx!(DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, world, plr);
+        ctx!(DescCommand, "+3 ...", mock_sock, tx, world, plr);
+        ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, world, plr);
+        ctx!(IexCommand, "", mock_sock, tx, world, plr);
+        ctx!(DescCommand, "", mock_sock, tx, world, plr);
     }
 }

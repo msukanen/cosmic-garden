@@ -15,13 +15,14 @@ include!(concat!(env!("OUT_DIR"), "/registry.rs"));
 include!(concat!(env!("OUT_DIR"), "/commands.rs"));
 
 /// Command "context" to be handed across all the unified [Command] things.
-pub struct CommandCtx<'a> {
+pub struct CommandCtx<'a>
+{
     pub pre_pad_n: bool,
     pub state: ClientState,
     pub world: Arc<RwLock<World>>,
     pub tx: &'a broadcast::Sender<Broadcast>,
     pub args: &'a str,
-    pub writer: &'a mut OwnedWriteHalf,
+    pub writer: &'a mut (dyn tokio::io::AsyncWrite + Unpin + Send),
 }
 
 impl CommandCtx<'_> {
@@ -104,4 +105,27 @@ pub async fn parse_and_exec<'a>(mut ctx: CommandCtx<'_>) -> ClientState {
     }
 
     ctx.state.clone()
+}
+
+#[cfg(test)]
+mod cmd_tests {
+    use crate::{cmd::{Command, CommandCtx, look::LookCommand}, io::ClientState, world::world_tests::get_operational_mock_world};
+
+    #[tokio::test]
+    async fn synthetic_commandctx() {
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut mock_sock = std::io::Cursor::new(&mut buffer);
+        let (tx, _) = tokio::sync::broadcast::channel::<crate::Broadcast>(16);
+        let (world, plr) = get_operational_mock_world().await;
+        let mut ctx = CommandCtx {
+            writer: &mut mock_sock,
+            args: "",
+            pre_pad_n: false,
+            state: ClientState::Playing { player: plr.clone() },
+            world: world.clone(),
+            tx: &tx
+        };
+        LookCommand.exec(&mut ctx).await;
+        log::debug!("{buffer:?}");
+    }
 }
