@@ -10,7 +10,7 @@ use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, 
 pub mod cmd_alias;
 
 // Get modules.
-include!(concat!(env!("OUT_DIR"), "/commands_registry.rs"));
+include!(concat!(env!("OUT_DIR"), "/registry.rs"));
 // Get the commands hashmap.
 include!(concat!(env!("OUT_DIR"), "/commands.rs"));
 

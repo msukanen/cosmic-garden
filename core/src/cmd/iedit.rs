@@ -4,7 +4,7 @@ use async_trait::async_trait;
 
 use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{container::Storage, primordial::PrimordialItem}, show_help_if_needed, tell_user, validate_access};
 
-include!(concat!(env!("OUT_DIR"), "/iedit_commands_registry.rs"));
+include!(concat!(env!("OUT_DIR"), "/iedit_registry.rs"));
 
 pub struct IeditCommand;
 
