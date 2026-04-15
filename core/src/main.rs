@@ -21,6 +21,7 @@ mod mob;
 mod password;
 mod player;
 mod room;
+mod serial;
 mod string;
 mod thread;
 mod traits;

@@ -12,7 +12,7 @@ use crate::{thread::{SystemSignal, signal::SignalChannels}, world::World};
 //TODO (It'll do) much more than that Soon™.
 /// 
 pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>), world: Arc<RwLock<World>>) {
-    let mut tick_interval = time::interval(Duration::from_millis(100));
+    let mut tick_interval = time::interval(Duration::from_millis(10));// 100Hz
     let mut tick = 0;
     log::info!("Life thread firing up…");
     loop {
@@ -28,6 +28,13 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                     log::trace!("tick {tick} done");
                 }
             }
+
+            Some(sig) = incoming.recv() => match sig {
+                SystemSignal::Shutdown => break,
+                _ => {}
+            }
         }
     }
+
+    log::info!("Bye now!");
 }

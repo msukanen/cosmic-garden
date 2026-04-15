@@ -5,7 +5,7 @@ use std::{collections::HashMap, fmt::Display};
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, consumable::{ConsumableMatter, NutritionType}, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::{ItemSource, Owned, Owner}}, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, consumable::{ConsumableMatter, NutritionType}, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::Owner}, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
