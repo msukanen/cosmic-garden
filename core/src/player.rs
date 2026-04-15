@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::Error, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -88,6 +88,14 @@ fn player_inv_default() -> ContainerVariant {
 impl Player {
     pub fn owner_id<'a>(&'a self) -> &'a str { &self.owner_id }
 
+    /// Attempt to load a [Player].
+    /// 
+    /// # Args
+    /// - `owner_id` of the [user][crate::user::UserInfo].
+    /// - `id` of the [Player].
+    /// 
+    /// # Returns
+    /// `Arc<RwLock<Player>>` if successful.
     pub async fn load(owner_id: &str, id: &str) -> Result<Arc<RwLock<Self>>, Error> {
         let mut player: Self = serde_json::from_str(
             &fs::read_to_string(player_save_fp(owner_id, id)).await?
@@ -96,13 +104,14 @@ impl Player {
         Ok(Arc::new(RwLock::new(player)))
     }
 
+    /// Attempt to save self…
     pub async fn save(&self) -> Result<(), Error> {
-        #[cfg(feature = "stresstest")]
-        log::debug!("Storing {path}");
-        fs::write(player_save_fp(self.owner_id(), self.id()), serde_json::to_string_pretty(self)?).await?;
+        fs::write(player_save_fp(self.owner_id(), self.id()),
+        serde_json::to_string_pretty(self)?).await?;
         Ok(())
     }
 
+    /// Show current playing state's prompt, if possible.
     pub fn prompt(&self, state: &ClientState) -> Option<String> {
         match state {
             ClientState::Playing { .. } => format!("[{} {} {}]#> ", self.hp, self.mp, self.sn).into(),
@@ -111,13 +120,9 @@ impl Player {
         }
     }
 
-    pub async fn place(player: Arc<RwLock<Player>>, world: Arc<RwLock<World>>, target_id: &str) -> Result<(), Error> {
-        if let Some(target_arc) = world.read().await.rooms.get(target_id) {
-            Player::place_direct(player.clone(), target_arc.clone()).await?
-        }
-        Ok(())
-    }
-
+    /// Place [Player] directly in `target_arc` [Room].
+    /// 
+    //NOTE: potential deadlock if not careful.
     pub async fn place_direct(player: Arc<RwLock<Player>>, target_arc: Arc<RwLock<Room>>) -> Result<(), Error> {
         let tgt_id = {
             let mut tgt_lock = target_arc.write().await;
@@ -129,7 +134,7 @@ impl Player {
             let mut origin_lock = origin.write().await;
             origin_lock.who.remove(player.read().await.id());
         }
-        // some arcrobatics was needed around places to make this part not to deadlock...
+        // some arcrobatics was needed around places to make this part to not deadlock…
         {
             let mut p_lock = player.write().await;
             p_lock.location_id = tgt_id.clone();
@@ -173,11 +178,12 @@ impl Player {
 }
 
 impl Default for Player {
+    /// Construt a default [Player] instance.
     fn default() -> Self {
         Self {
             owner_id: UNNAMED.into(),
-            id: "xxx".into(),
-            name: "".into(),
+            id: "***".into(),
+            name: "***".into(),
             actions_taken: 0,
             location_id: player_location_void(),
             location: Weak::new(),

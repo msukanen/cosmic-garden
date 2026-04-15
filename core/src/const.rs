@@ -6,39 +6,54 @@ use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use tokio::sync::RwLock;
 
+use crate::io::reserved_names_fp;
+
 // some const to deal with [World]-specific choices that aren't present for a reason or other…
 pub const GREETING: &'static str = "Welcome to Cosmic Garden!";
 pub const PROMPT_LOGIN: &'static str = "Login: ";
+
+// Data/World paths … upon which everything else hinges.
 pub(super) static DATA: OnceCell<String> = OnceCell::new();
 static DATA_PATH: ImmutablePath = ImmutablePath;
 pub(super) static WORLD: OnceCell<String> = OnceCell::new();
 pub static WORLD_ID: WorldId = WorldId;
 
+macro_rules! maybe_fs_issue {
+    ($what:ident, $fn:expr) => {
+        if let Err(e) = $fn {
+            if e.kind() != std::io::ErrorKind::AlreadyExists {
+                log::error!("FATAL! {e:?} with {}", $what.display());
+                panic!("FATAL! {e:?} with {}", $what.display());
+            }
+        }
+    };
+}
+
 lazy_static! {
     pub(crate) static ref WORLD_PATH: PathBuf = {
-        let w_path = PathBuf::from(format!("{}/{}", *DATA_PATH, *WORLD_ID));
-        fs::create_dir_all(&w_path);
-        w_path
+        let path = std::path::Path::new(DATA_PATH.as_str()).join(WORLD_ID.as_str());
+        maybe_fs_issue!(path, fs::create_dir_all(&path));
+        path
     };
     pub(crate) static ref SAVE_PATH: PathBuf = {
-        let s_path = WORLD_PATH.join("save");
-        fs::create_dir(&s_path);
-        s_path
+        let path = WORLD_PATH.join("save");
+        maybe_fs_issue!(path, fs::create_dir(&path));
+        path
     };
     pub(crate) static ref BP_PATH: PathBuf = {
-        let bp_path = WORLD_PATH.join("blueprint");
-        fs::create_dir(&bp_path);
-        bp_path
+        let path = WORLD_PATH.join("blueprint");
+        maybe_fs_issue!(path, fs::create_dir(&path));
+        path
     };
     pub(crate) static ref HELP_PATH: PathBuf = {
-        let help_path = WORLD_PATH.join("help");
-        fs::create_dir(&help_path);
-        help_path
+        let path = WORLD_PATH.join("help");
+        maybe_fs_issue!(path, fs::create_dir(&path));
+        path
     };
     pub(crate) static ref ROOM_PATH: PathBuf = {
-        let r_path = WORLD_PATH.join("room");
-        fs::create_dir(&r_path);
-        r_path
+        let path = WORLD_PATH.join("room");
+        maybe_fs_issue!(path, fs::create_dir(&path));
+        path
     };
 
     /// Immutable [IdError::ReservedName] sources.
@@ -64,13 +79,13 @@ lazy_static! {
 
     pub static ref CONFIG_RESERVED: Arc<RwLock<HashSet<String>>> = {
         let mut s = HashSet::new();
-        if let Ok(buf) = fs::read_to_string(format!("{}/reserved.names", *DATA_PATH)) {
+        if let Ok(buf) = fs::read_to_string(reserved_names_fp()) {
             let words = buf.split(';').map(|w| w.trim()).collect::<Vec<&str>>();
             for w in words {
                 s.insert(w.into());
             }
         } else {
-            log::trace!("No {}/reserved.names to process.", *DATA_PATH);
+            log::trace!("No 'reserved.names' to process.");
         }
         Arc::new(RwLock::new(s))
     };

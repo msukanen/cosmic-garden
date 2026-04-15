@@ -35,7 +35,7 @@ pub(crate) async fn io_thread((outgoing, mut incoming): (SignalChannels, mpsc::R
             _ = world_save_interval.tick() => {
                 if save_the_whales(world.clone(), false).await {
                     // save actually happened, for a reason or other.
-                    log::info!("World save cycle complete.")
+                    log::trace!("World save cycle complete.")
                 }
             },
             // Save the modified [Room]s.
@@ -103,10 +103,11 @@ async fn save_the_whales(world: Arc<RwLock<World>>, force_save: bool) -> bool {
     if let Err(e) = world.read().await.save(force_save).await {
         log::error!("World save failed?! {e:?}");
         return false;
-    } else {
-        log::info!("World save cycle complete.");
-        return true;
     }
+    if force_save {
+        log::info!("Forced world save cycle complete.");
+    }
+    return true;
 }
 
 /// [Room(s)][Room] save cycle.

@@ -65,8 +65,9 @@ impl Command for DigCommand {
             // persist both rooms
             let _ = origin_arc.read().await.save().await;
             let _ = target_arc.read().await.save().await;
-            ctx.system.janitor_tx.send(SystemSignal::SaveWorld);
-            tell_user!(ctx.writer, "Diggy diggy to {} - success!\n", dir);
+            // ping the janitor. Even if they don't respond right now, they'll save the world soon enough anyway.
+            ctx.system.janitor_tx.try_send(SystemSignal::SaveWorld).ok();
+            tell_user!(ctx.writer, "Diggy diggy to {} — success!\n", dir);
             translocate!(plr, origin_arc, target_arc);
             ReditCommand.exec({ctx.args = "this";ctx}).await;
         }

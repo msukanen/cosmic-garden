@@ -7,16 +7,15 @@ lazy_static! {
     pub(crate) static ref UUID_RE: Regex = Regex::new(
         r"(?P<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
     ).unwrap();
+    pub(crate) static ref UUID_RE_DELIM: Regex = Regex::new(
+        r"[-][0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
+    ).unwrap();
 }
 
 pub trait Uuid {
     fn with_uuid(&self) -> String;
     fn no_uuid(&self) -> String;
     fn re_uuid(&self) -> String { self.no_uuid().with_uuid() }
-}
-
-pub trait StrUuid {
-    fn show_uuid(&self, yn: bool) -> &str;
 }
 
 /// Append UUID if no such yet.
@@ -29,21 +28,18 @@ fn append_uuid(value: &str) -> String {
 
 /// Remove UUID if present.
 pub fn remove_uuid(value: &str) -> String {
-    if let Some(caps) = UUID_RE.captures(value) {
-        let uuid_str = caps.name("uuid").unwrap().as_str();
-        return value
-            .replace(uuid_str, "")
-            .trim_end_matches('-')
-            .into();
-    }
-    value.into()
+    value.show_uuid(false).into()
 }
 
+pub trait StrUuid {
+    fn show_uuid(&self, yn: bool) -> &str;
+}
 impl StrUuid for str {
-    fn show_uuid(&self, yn: bool) -> &str {
-        if yn { self } else {
-            if UUID_RE.is_match(self) {
-                &self[..self.len() - 36]
+    /// "Hide" UUID part if present when `show` is `false`.
+    fn show_uuid(&self, show: bool) -> &str {
+        if show { self } else {
+            if UUID_RE_DELIM.is_match(self) {
+                &self[..self.len() - 37]// chop '-' delimiter and the UUID which follows
             } else {self}
         }
     }

@@ -46,3 +46,7 @@ const EXT_ROOM:  &'static str = ".room";
 #[inline ] pub fn room_fp(id: &str) -> PathBuf {
     ROOM_PATH.join(format!("{}{EXT_ROOM}", id.show_uuid(false)))
 }
+
+#[inline] pub fn reserved_names_fp() -> PathBuf {
+    WORLD_PATH.join("reserved.names")
+}

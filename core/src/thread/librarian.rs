@@ -1,6 +1,6 @@
 //! Persistent item blueprint library.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, fmt::Display, sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
@@ -66,7 +66,7 @@ impl BlueprintLibrary {
     /// # Return
     /// `true` if shelved for real.
     pub fn shelve(&mut self, item: &Item, replace: bool) -> bool {
-        let id = item.id().no_uuid();
+        let id = item.id().no_uuid().to_string();
 
         if self.id_stem.contains_key(&id) && !replace {
             return false;
@@ -88,6 +88,14 @@ pub enum BlueprintError {
     Json(serde_json::Error),
 }
 
+impl Display for BlueprintError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Io(e) => write!(f, "BP I/O {e:?}"),
+            Self::Json(e) => write!(f, "BP JSON {e:?}"),
+        }
+    }
+}
 impl Default for BlueprintLibrary {
     fn default() -> Self {
         Self { world_id: "foobar".into(), id_stem: HashMap::new(), items: HashMap::new() }

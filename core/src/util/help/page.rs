@@ -137,7 +137,7 @@ impl HelpLibrary {
             xfiles.alias.insert("world".into());
             xfiles.alias.insert("cosmic-garden".into());
             xfiles.contents = format!("This entry was written by Cosmic Garden v{} bootstrap.\n", env!("CARGO_PKG_VERSION"));
-            let nouuid = xfiles.id().no_uuid();
+            let nouuid = xfiles.id().no_uuid().to_string();
             lock.id_stem.insert(nouuid.clone(), true);
             lock.items.insert(nouuid, xfiles);
 
@@ -146,6 +146,7 @@ impl HelpLibrary {
             return Ok(());
         };
 
+        // We got either a bootstrapped or a loaded source in `mf`.
         let mut lib: HelpLibrary = serde_json::from_str(&mf)?;
         lib.world_id = WORLD_ID.as_str().into();
         for id in lib.id_stem.keys() {
@@ -180,6 +181,7 @@ impl HelpLibrary {
     }
 
     /// Save the library and all the dirty entries.
+    // (…especially the 'dirty' entries…)
     pub async fn save(&mut self) -> Result<(), HelpSystemError> {
         let contents = serde_json::to_string_pretty(&self)?;
 
