@@ -1,55 +1,13 @@
 //! I/O related stuff lives here…
 
-use std::{net::SocketAddr, ops::Deref, path::PathBuf, sync::Arc};
+use std::{net::SocketAddr, sync::Arc};
 
-use lazy_static::lazy_static;
-use once_cell::sync::OnceCell;
 use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
 
 use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::Error, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::signal::SignalChannels, user::UserInfo, world::World};
 
 pub mod broadcast; pub use broadcast::*;
-
-/// ImmutablePath to appease lazy-init file system access…
-pub(crate) struct ImmutablePath; impl ImmutablePath {
-    pub fn set(path: impl Into<String>) {
-        let path: String = path.into();
-        DATA.set(path.clone()).expect(&format!("Cannot set DATA to '{path}'!"));
-    }
-}
-
-/// Deref to appease lazy-init file system access…
-impl Deref for ImmutablePath {
-    type Target = String;
-    fn deref(&self) -> &Self::Target {
-        DATA.get().unwrap_or_else(|| {
-            panic!("DATA.get() fail. DATA_PATH var not set yet? Dev, go find out why not…");
-        })
-    }
-}
-
-pub(crate) struct WorldPath; impl WorldPath {
-    pub fn set(path: impl Into<String>) {
-        let path: String = path.into();
-        WORLD.set(path.clone()).expect(&format!("Cannot set WORLD to '{path}'!"));
-    }
-}
-impl Deref for WorldPath {
-    type Target = String;
-    fn deref(&self) -> &Self::Target {
-        WORLD.get().unwrap_or_else(|| {
-            panic!("WORLD.get() fail! Dev, go find out why not…");
-        })
-    }
-}
-
-pub(super) static DATA: OnceCell<String> = OnceCell::new();
-pub(crate) static DATA_PATH: ImmutablePath = ImmutablePath;
-pub(super) static WORLD: OnceCell<String> = OnceCell::new();
-pub(crate) static WORLD_ID: WorldPath = WorldPath;
-lazy_static! {
-    pub(crate) static ref SAVE_PATH: PathBuf = PathBuf::from(format!("{}/save", *DATA_PATH));
-}
+pub mod file; pub use file::*;
 
 /// Various states of client existence…
 #[derive(Debug, Clone)]

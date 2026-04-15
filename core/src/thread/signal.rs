@@ -15,7 +15,7 @@ pub enum SystemSignal {
     PlayerNeedsSaving (Arc<RwLock<Player>>, String),
     /// Save the whales, now!
     SaveWorld,
-    ///
+    /// Item tucked into L'n'F.
     LostAndFound,
     /// sent by Librarian -> IO, save the library
     /// sent by IO -> Librarian, reindex your aliases

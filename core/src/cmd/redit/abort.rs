@@ -1,6 +1,6 @@
 //! Room editor - abort!
 use async_trait::async_trait;
-use crate::{cmd::{Command, CommandCtx, cmd_alias::AbortCommand as Bail}};
+use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke as Bail}};
 pub struct AbortCommand;
 
 /// Route abort via [Bail][crate::cmd::cmd_alias::AbortCommand].

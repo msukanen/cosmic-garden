@@ -4,45 +4,7 @@ use std::{collections::HashSet, fmt::Display, fs, sync::Arc};
 use lazy_static::lazy_static;
 use tokio::sync::RwLock;
 
-use crate::{io::DATA_PATH, string::Uuid};
-
 pub const MAX_ID_LEN: usize = 255;
-
-lazy_static! {
-    /// Immutable [IdError::ReservedName] sources.
-    pub static ref HARDCODED_RESERVED: HashSet<&'static str> = {
-        let mut s = HashSet::new();
-        // some OS-related things...
-        for name in &[
-            "con", "prn", "aux", "nul",
-            "null", "dev", "root", "home",
-            "usr", "etc", "var", "tmp",
-        ] { s.insert(*name);}
-        for i in 1..=9 {
-            s.insert(Box::leak(format!("com{i}").into_boxed_str()));
-            s.insert(Box::leak(format!("lpt{i}").into_boxed_str()));
-        }
-        // names, etc.
-        for name in &[
-            "admin", "sys", "system", "root",
-            "world", "self", "me", "omfg",
-        ] { s.insert(*name);}
-        s
-    };
-
-    pub static ref CONFIG_RESERVED: Arc<RwLock<HashSet<String>>> = {
-        let mut s = HashSet::new();
-        if let Ok(buf) = fs::read_to_string(format!("{}/reserved.names", *DATA_PATH)) {
-            let words = buf.split(';').map(|w| w.trim()).collect::<Vec<&str>>();
-            for w in words {
-                s.insert(w.into());
-            }
-        } else {
-            log::trace!("No {}/reserved.names to process.", *DATA_PATH);
-        }
-        Arc::new(RwLock::new(s))
-    };
-}
 
 /// Various ID related errors…
 #[derive(Debug, PartialEq, Clone)]

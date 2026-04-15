@@ -4,7 +4,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpStream, sync::{RwLock, broadcast}};
 
-use crate::{GREETING, PROMPT_LOGIN, cmd::{self, CommandCtx}, identity::IdentityQuery, io::{Broadcast, ClientState, ForceTarget}, reprompt_playing_user, string::{prompt::PromptType, sanitize::Sanitizer}, tell_user, thread::{SystemSignal, signal::SignalChannels}, world::World};
+use crate::{cmd::{self, CommandCtx}, r#const::{GREETING, PROMPT_LOGIN}, identity::IdentityQuery, io::{Broadcast, ClientState, ForceTarget}, reprompt_playing_user, string::{prompt::PromptType, sanitize::Sanitizer}, tell_user, thread::{SystemSignal, signal::SignalChannels}, world::World};
 pub(crate) struct PerClientData {
     pub socket: TcpStream,
     pub addr: SocketAddr,

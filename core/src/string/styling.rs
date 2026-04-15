@@ -137,6 +137,9 @@ pub fn format_color<S: Display>(input: S) -> String {
 
     output
 }
+
+pub const fn maybe_plural(num: i32) -> &'static str { if num == 1 {""} else {"s"}}
+
 #[cfg(test)]
 mod ansi_tests {
     #[test]

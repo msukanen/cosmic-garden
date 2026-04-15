@@ -174,7 +174,7 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
                     fn set_id(&mut self, a: &str) -> Result<(), crate::identity::IdError> {
                         let pre_checked_id = crate::string::slug::as_id(a)?;
                         let no_uuid = crate::string::uuid::remove_uuid(&pre_checked_id);
-                        if crate::identity::HARDCODED_RESERVED.contains(no_uuid.as_str()) {
+                        if crate::r#const::HARDCODED_RESERVED.contains(no_uuid.as_str()) {
                             return Err(crate::identity::IdError::ReservedName(no_uuid));
                         }
                         *self.id_mut() = pre_checked_id;

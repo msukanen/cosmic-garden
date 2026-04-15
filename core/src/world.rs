@@ -1,19 +1,16 @@
 //! When worlds collide…
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::Error, identity::IdentityQuery, io::DATA_PATH, item::Item, player::Player, room::Room, string::{Slugger, UNNAMED, prompt::PromptType}, util::direction::Direction};
+use crate::{Cli, error::Error, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, util::direction::Direction};
 
 /// The world!
 #[derive(Debug, Deserialize, Serialize)]
 pub struct World {
     /// World's printable name.
     pub name: String,
-    /// Location of the .world file itself.
-    #[serde(skip)]
-    path: PathBuf,
     /// Port# the world listens on.
     pub port: u16,
 
@@ -46,7 +43,6 @@ pub struct World {
 impl World {
     pub async fn dummy() -> Self {Self {
         name: "Test World".into(),
-        path: PathBuf::new(),
         port: 8080,
         greeting: "Greetings, Crash Test Dummy!".to_string().into(),
         fixed_prompts: HashMap::new(),
@@ -96,17 +92,14 @@ fn default_root_room_id() -> String {
 impl World {
     /// Load or bootstrap the world.
     pub async fn load_or_bootstrap(args: &Cli) -> Result<Self, Error> {
-        let path = PathBuf::from(format!("{}/{}.world", *DATA_PATH, args.world.as_id()?));
-        match fs::read_to_string(&path).await {
+        match fs::read_to_string(world_fp()).await {
             Ok(content) => {
-                let mut world: World = serde_json::from_str( &content )?;
-                world.path = path;
+                let world: World = serde_json::from_str( &content )?;
                 Ok(world)
             },
             Err(_) => {
                 // bootstrapping required. No world found.
                 let w = Self {
-                    path: path,
                     port: args.host_listen_port,
                     greeting: format!("Welcome to {}!", args.world).into(),
                     name: args.world.clone(),
@@ -139,17 +132,20 @@ impl World {
                     },
                     lost_and_found: HashMap::new(),
                 };
-                w.save().await?;
+                w.save(true).await?;
+                log::info!("World '{}' bootstrapped successfully.", w.name);
                 Ok(w)
             }
         }
     }
 
     /// Save the world! Yeah.
-    pub async fn save(&self) -> Result<(), Error> {
-        let contents = serde_json::to_string_pretty(self)?;
-        fs::write(&self.path, contents).await?;
-        log::info!("World '{}' bootstrapped onto disk.", self.name);
+    pub async fn save(&self, force_save: bool) -> Result<(), Error> {
+        if !self.lost_and_found.is_empty() || force_save {
+            let contents = serde_json::to_string_pretty(self)?;
+            fs::write(world_fp(), contents).await?;
+            log::info!("World '{}' saved.", self.name);
+        }
         Ok(())
     }
 

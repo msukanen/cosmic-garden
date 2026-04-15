@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{Cli, DATA_PATH, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::BP_LIBRARY, signal::SignalChannels}, util::{HelpLibraryState, HelpPage}, world::World};
+use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::BP_LIBRARY, signal::SignalChannels}, world::World};
 
 lazy_static! {
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
@@ -20,19 +20,24 @@ pub const SAVE_ASAP_THRESHOLD: usize = 100;
 /// in (relative) sync.
 /// 
 pub(crate) async fn io_thread((outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>), world: Arc<RwLock<World>>, args: Cli) {
-    log::trace!("Firing up; DATA_PATH = '{}'", *DATA_PATH);
-
     let mut autosave_queue_interval = time::interval(Duration::from_secs(args.autosave_queue_interval.unwrap_or(300)));
     let mut world_save_interval = time::interval(Duration::from_mins(2));
     let mut room_save_interval = time::interval(Duration::from_secs(30));
     let mut lost_and_found_interval = time::interval(Duration::from_mins(2));
+
+    log::trace!("Janitor in the house! \"Time to keep this place tidy…\"");
 
     loop {
         tokio::select! {
             // Auto-saving the meningfully active Players.
             _ = autosave_queue_interval.tick() => autosave_queue(world.clone()).await,
             // Save the world, especially the whales!
-            _ = world_save_interval.tick() => save_the_whales(world.clone()).await,
+            _ = world_save_interval.tick() => {
+                if save_the_whales(world.clone(), false).await {
+                    // save actually happened, for a reason or other.
+                    log::info!("World save cycle complete.")
+                }
+            },
             // Save the modified [Room]s.
             _ = room_save_interval.tick() => room_save().await,
             // Handle lost and found items…
@@ -40,9 +45,9 @@ pub(crate) async fn io_thread((outgoing, mut incoming): (SignalChannels, mpsc::R
             // Anything in mailbox?
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::Shutdown => break,
-                SystemSignal::SaveWorld => save_the_whales(world.clone()).await,
+                SystemSignal::SaveWorld => {save_the_whales(world.clone(), true).await;},
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
-                SystemSignal::ReindexLibrary => save_help_asap().await,
+                SystemSignal::ReindexLibrary => save_help_asap(&outgoing.librarian_tx).await,
                 SystemSignal::PlayerNeedsSaving(lock, p_id) => { let p_id = p_id; save_player_now(lock, &p_id).await; }
                 _ => ()
             }
@@ -57,6 +62,7 @@ async fn save_player_now(plr: Arc<RwLock<Player>>, p_id: &str) {
     if let Err(e) = plr.write().await.save().await {
         log::error!("Failed to save player '{p_id}': {e:?}")
     }
+    log::trace!("Saved '{p_id}'…");
 }
 
 /// Auto-save cycle.
@@ -72,7 +78,7 @@ async fn autosave_queue(world: Arc<RwLock<World>>) {
         p_arcs
     };
     let any_saved = if !players_to_save.is_empty() {
-        log::info!("Autosave cycle initiated.");
+        log::info!("Player autosave cycle initiated.");
         true
     } else {false};
     for p in players_to_save.iter_mut() {
@@ -84,16 +90,22 @@ async fn autosave_queue(world: Arc<RwLock<World>>) {
         }
     }
     if any_saved {
-        log::info!("Autosave cycle complete.");
+        log::info!("Player autosave cycle complete.");
     }
 }
 
 /// World save cycle.
-async fn save_the_whales(world: Arc<RwLock<World>>) {
-    if let Err(e) = world.read().await.save().await {
+/// 
+/// # Args
+/// - `force_save` if true, the world state is stored regardless of "necessity".
+///                Generally used when a [Room] is added/removed.
+async fn save_the_whales(world: Arc<RwLock<World>>, force_save: bool) -> bool {
+    if let Err(e) = world.read().await.save(force_save).await {
         log::error!("World save failed?! {e:?}");
+        return false;
     } else {
         log::info!("World save cycle complete.");
+        return true;
     }
 }
 
@@ -138,12 +150,17 @@ async fn lost_and_found(world: Arc<RwLock<World>>) {
             w.lost_and_found.insert(i.id().to_string(), i);
         }
     }
-    save_the_whales(world.clone()).await;
+
+    // Force world save so that current L'n'F is stored along the world file.
+    save_the_whales(world.clone(), true).await;
 }
 
-/// ASAP save of a [HelpPage].
-async fn save_help_asap() {
+/// ASAP save of [HelpPage]s.
+async fn save_help_asap(librarian_tx: &mpsc::Sender<SystemSignal>) {
     if let Err(e) = (*BP_LIBRARY).write().await.save().await {
         log::error!("Blueprint anomaly! {e:?}");
+        return ;
     }
+    // Nudge the librarian, but don't wait if he's asleep…
+    librarian_tx.try_send(SystemSignal::ReindexLibrary).ok();
 }

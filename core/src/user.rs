@@ -6,7 +6,7 @@ use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_ha
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{error::Error, identity::IdError, io::SAVE_PATH, password::{PasswordError, validate_passwd}, string::Slugger};
+use crate::{error::Error, identity::IdError, io::user_save_fp, password::{PasswordError, validate_passwd}, string::Slugger};
 
 /// Generic user info.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -23,7 +23,7 @@ impl UserInfo {
     /// Load user info chunk.
     pub async fn load(id: &str, pwd: &str) -> Result<UserInfo, Error> {
         let info: UserInfo = serde_json::from_str(
-            &fs::read_to_string(&format!("{}/{}", SAVE_PATH.display(), id.as_id()?)).await?
+            &fs::read_to_string(user_save_fp(&id.as_id()?)).await?
         )?;
         if info.verify_passwd(pwd) {
             return Ok(info);
@@ -33,7 +33,7 @@ impl UserInfo {
 
     /// Save the user info chunk.
     pub async fn save(&self) -> Result<(), Error> {
-        fs::write(format!("{}/{}", SAVE_PATH.display(), self.id), serde_json::to_string_pretty(self)?).await?;
+        fs::write(user_save_fp(&self.id), serde_json::to_string_pretty(self)?).await?;
         Ok(())
     }
 

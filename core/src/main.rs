@@ -7,8 +7,9 @@ mod io;             use convert_case::{Case, Casing};
 use io::*;
 use tokio::{net::TcpListener, sync::{RwLock, broadcast, mpsc}};
 
-use crate::{cmd::cmd_alias::CMD_ALIASES, thread::{SystemSignal, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
+use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{DATA, WORLD}, thread::{SystemSignal, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
 
+mod r#const;
 mod cmd;
 mod edit;
 mod error;
@@ -43,14 +44,9 @@ pub(crate) struct Cli {
     #[arg(long)] autosave_queue_interval: Option<u64>,
 }
 
-// some const to deal with [World]-specific choices that aren't present for a reason or other…
-pub const GREETING: &'static str = "Welcome to Cosmic Garden!";
-pub const PROMPT_LOGIN: &'static str = "Login: ";
-
 /// The main culprit of many things main…
 #[tokio::main]
 async fn main() {
-
     let _ = env_logger::try_init();
     let args = Cli::parse();
     let _ = DATA.set(args.data_path.clone());

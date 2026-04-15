@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::Error, identity::IdentityQuery, io::DATA_PATH, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
+use crate::{r#const::ROOM_PATH, error::Error, identity::IdentityQuery, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -47,8 +47,8 @@ fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariant
 
 impl Room {
     pub fn load_sync(id: &str) -> Result<Self, Error> {
-        let path = format!("{}/room/{id}.json", *DATA_PATH);
-        log::debug!("Loading '{path}'…");
+        let path = ROOM_PATH.join(format!("{id}.room"));
+        log::debug!("Loading '{}'…", path.display());
         let room: Room = serde_json::from_str(
             &sync_fs::read_to_string(path)?
         )?;
@@ -73,8 +73,8 @@ impl Room {
     }
 
     pub async fn save(&self) -> Result<(), Error> {
-        let path = format!("{}/room/{}.json", *DATA_PATH, self.id());
-        log::debug!("Saving '{path}'…");
+        let path = ROOM_PATH.join(format!("{}.room", self.id()));
+        log::debug!("Saving '{}'…", path.display());
         async_fs::write(path, serde_json::to_string_pretty(self)?).await?;
         Ok(())
     }
@@ -139,20 +139,20 @@ mod room_tests {
 
     use tokio::sync::RwLock;
 
-    use crate::{Cli, DATA, io::DATA_PATH, util::direction::Direction, world::World};
+    use crate::{Cli, DATA, util::direction::Direction, world::World};
 
     #[tokio::test]
     async fn room_linking() {
         let _ = env_logger::try_init();
-        let _ = DATA.set(std::env::var("COSMIC_GARDEN_DATA").unwrap());
         let args = Cli {
             autosave_queue_interval: None,
             host_listen_addr: "0.0.0.0".into(),
             host_listen_port: 8080,
             world: "cosmic-garden".into(),
-            data_path: (*DATA_PATH).clone(),
+            data_path: std::env::var("COSMIC_GARDEN_DATA").unwrap_or("data".into()),
             bootstrap_url: None,
         };
+        let _ = DATA.set(args.data_path.clone());
         let mut w = World::load_or_bootstrap(&args).await.unwrap_or_else(|e| panic!("Oh noes! Not the dreaded {e:?}"));
         w.link_rooms().await;
         let rooms = w.rooms.clone();

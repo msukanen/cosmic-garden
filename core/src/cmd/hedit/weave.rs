@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, cmd_alias::AbortCommand}, thread::lib::HELP_LIBRARY, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke}, thread::lib::HELP_LIBRARY, tell_user, validate_access};
 
 pub struct WeaveCommand;
 
@@ -12,7 +12,7 @@ impl Command for WeaveCommand {
         let plr = validate_access!(ctx, builder);
         if !ctx.state.is_dirty() {
             tell_user!(ctx.writer, "*stretch* - done with edits?\n");
-            AbortCommand.exec({ctx.args = "quiet";ctx}).await;
+            BufferNuke.exec({ctx.args = "quiet";ctx}).await;
             return;
         }
 
@@ -31,6 +31,6 @@ impl Command for WeaveCommand {
         }
 
         tell_user!(ctx.writer, "*stretch* - done with edits?\n");
-        AbortCommand.exec({ctx.args = "quiet";ctx}).await;
+        BufferNuke.exec({ctx.args = "quiet";ctx}).await;
     }
 }

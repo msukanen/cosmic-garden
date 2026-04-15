@@ -1,18 +1,11 @@
-use std::collections::{HashMap, HashSet};
+use std::{collections::{HashMap, HashSet}};
 
 use convert_case::{Case, Casing};
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{identity::{IdError, IdentityQuery}, io::WORLD_ID, string::{Slugger, UNNAMED, Uuid}, thread::{SystemSignal, librarian::{HELP_LIBRARY, HELP_PATH, string_vec_to_bool_map}, signal::SignalChannels}, util::access::{Access, StrictAccess}};
-
-#[derive(Debug, Clone)]
-pub enum HelpLibraryState {
-    Pending,
-    Stable,
-    Reindex,
-}
+use crate::{r#const::WORLD_ID, identity::{IdError, IdentityQuery}, io::{help_entry_fp, help_lib_fp}, string::{Slugger, StrUuid, UNNAMED, Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::{HELP_LIBRARY, string_vec_to_bool_map}, signal::SignalChannels}, util::{access::{Access, StrictAccess}, page}};
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct HelpPage {
@@ -70,11 +63,10 @@ impl HelpPage {
 
     /// Save me!
     pub async fn save(&self) -> Result<(), HelpSystemError> {
-        let nouuid = self.id().no_uuid();
-        let path = format!("{}/{}/{nouuid}.help", HELP_PATH.display(), WORLD_ID.as_str());
+        let nouuid = self.id().show_uuid(false);
         match toml::to_string_pretty(self) {
             Ok(contents) => {
-                if let Err(e) = fs::write(path, contents).await {
+                if let Err(e) = fs::write(help_entry_fp(&self.id()), contents).await {
                     log::error!("FAILURE: could not write '{nouuid}' onto disk: {e}");
                     return Err(e.into());
                 } else {
@@ -99,6 +91,8 @@ pub struct HelpLibrary {
     #[serde(skip)]
     //             human,  ID
     alias: HashMap<String, String>,
+    #[serde(skip)]
+    new_docs: Vec<HelpPage>,
 }
 
 impl Default for HelpLibrary {
@@ -107,7 +101,8 @@ impl Default for HelpLibrary {
             world_id: UNNAMED.into(),
             id_stem: HashMap::new(),
             items: HashMap::new(),
-            alias: HashMap::new()
+            alias: HashMap::new(),
+            new_docs: vec![],
         }
     }
 }
@@ -128,19 +123,17 @@ impl From<toml::ser::Error> for HelpSystemError { fn from(value: toml::ser::Erro
 impl From<IdError> for HelpSystemError { fn from(value: IdError) -> Self { Self::IdError(value) }}
 
 impl HelpLibrary {
+    // Load or bootstrap the help library.
     pub async fn load_or_bootstrap() -> Result<(), HelpSystemError> {
-        let world_id = WORLD_ID.as_str();
-        fs::create_dir_all(&format!("{}/{}", HELP_PATH.display(), world_id)).await?;
-
         // Bootstrap a brand new library if none exists yet.
-        let Ok(mf) = fs::read_to_string(&format!("{}/{}.library", HELP_PATH.display(), world_id)).await else {
+        let Ok(mf) = fs::read_to_string(help_lib_fp()).await else {
             log::warn!("No papers, no ID? Ah well — preparing anyway…");
 
             let mut lock = (*HELP_LIBRARY).write().await;
             *lock = HelpLibrary::default();
-            lock.world_id = world_id.into();
+            lock.world_id = WORLD_ID.as_str().into();
 
-            let mut xfiles = HelpPage::new(world_id)?;
+            let mut xfiles = HelpPage::new(&lock.world_id)?;
             xfiles.alias.insert("world".into());
             xfiles.alias.insert("cosmic-garden".into());
             xfiles.contents = format!("This entry was written by Cosmic Garden v{} bootstrap.\n", env!("CARGO_PKG_VERSION"));
@@ -154,16 +147,16 @@ impl HelpLibrary {
         };
 
         let mut lib: HelpLibrary = serde_json::from_str(&mf)?;
-        lib.world_id = world_id.into();
+        lib.world_id = WORLD_ID.as_str().into();
         for id in lib.id_stem.keys() {
-            let item_path = format!("{}/{}/{}.help", HELP_PATH.display(), world_id, id);
+            let item_path = help_entry_fp(id);
             match fs::read_to_string(&item_path).await {
                 Ok(item_toml) => {
                     if let Ok(item) = toml::from_str(&item_toml) {
                         lib.items.insert(id.clone(), item);
                     }
                 }
-                Err(e) => log::warn!("Failed to fetch the '{id}' from {item_path}: {e}")
+                Err(e) => log::warn!("Failed to fetch the '{id}' from {}: {e}", item_path.display())
             }
         }
 
@@ -181,7 +174,7 @@ impl HelpLibrary {
 
         let mut lock = (*HELP_LIBRARY).write().await;
         *lock = lib;
-        log::info!("Helpful documents for '{world_id}' are now readable, live with {} entries.", lock.items.len());
+        log::info!("Helpful documents for '{}' are now readable, live with {} entries.", WORLD_ID.as_str(), lock.items.len());
 
         Ok(())
     }
@@ -189,7 +182,8 @@ impl HelpLibrary {
     /// Save the library and all the dirty entries.
     pub async fn save(&mut self) -> Result<(), HelpSystemError> {
         let contents = serde_json::to_string_pretty(&self)?;
-        fs::write(&format!("{}/{}.library", HELP_PATH.display(), WORLD_ID.as_str()), contents).await?;
+
+        fs::write(help_lib_fp(), contents).await?;
         
         for (id, dirty) in self.id_stem.iter_mut() {
             if !*dirty { continue; }
@@ -217,6 +211,56 @@ impl HelpLibrary {
         None
     }
 
+    /// See if there's any new docs in new_docs queue.
+    pub fn check_new_docs(&mut self) -> &mut Self {
+        if self.new_docs.is_empty() { return self }
+
+        for page in self.new_docs.iter_mut() {
+            // mop up any potential UUID dust, normalize, and … Just in Case™
+            page.id = page.id.show_uuid(false).to_lowercase();
+            page.alias = page.alias.iter()
+                .map(|alias| alias.show_uuid(false).to_lowercase())
+                .collect::<HashSet<String>>();
+            page.see_also = page.see_also.iter()
+                .map(|sa| sa.show_uuid(false).to_lowercase())
+                .collect::<HashSet<String>>();
+            // there is a copy?
+            if let Some(existing) = self.items.get(&page.id) {
+                // remove old aliases that refer to it…
+                for alias in &existing.alias {
+                    self.alias.remove(alias);
+                }
+            }
+            self.id_stem.insert(page.id.clone(), true);
+            self.items.insert(page.id.clone(), page.clone());
+        }
+
+        self.new_docs = vec![];
+        self
+    }
+
+    /// Reorganize the shelves.
+    pub fn rebuild_aliases(&mut self) {
+        log::trace!("Librarian is adjusting his glasses… re-indexing aliases.");
+
+        self.alias.clear();
+
+        for (id, page) in self.items.iter_mut() {
+            let primary_id = id.clone().to_lowercase();
+            self.id_stem.insert(primary_id.clone(), true);
+            self.alias.insert(primary_id.clone(), primary_id.clone());
+            
+            for nick in &page.alias {
+                self.alias.insert(nick.clone(), primary_id.clone());
+            }
+        }
+
+        let alen = self.alias.len();
+        let ilen = self.items.len();
+        log::info!("Re-index complete. Librarian now knows {alen} path{} to {ilen} document{}.",
+            maybe_plural(alen as i32), maybe_plural(ilen as i32));// the document number highly unlikely ever exceeds i32::MAX …
+    }
+
     /// Shelve a document.
     /// 
     /// # Args
@@ -227,9 +271,9 @@ impl HelpLibrary {
     /// `true` if shelved for real.
     pub fn shelve(&mut self, entry: &HelpPage, system_ch: &SignalChannels) -> bool {
         // TODO content checking?
-        self.id_stem.insert(entry.id().no_uuid(), true);
-        self.items.insert(entry.id().no_uuid(), entry.clone());
-        system_ch.librarian_tx.try_send(SystemSignal::NewLibraryEntry);
+        self.new_docs.push(entry.clone());
+        // poke the librarian but don't stand waiting…
+        system_ch.librarian_tx.try_send(SystemSignal::NewLibraryEntry).ok();
         true
     }
 }

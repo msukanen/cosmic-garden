@@ -6,4 +6,4 @@ target
 .cargo
 .bak
 *.lock
-data
+data*

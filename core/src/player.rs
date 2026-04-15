@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::Error, identity::IdentityQuery, io::{ClientState, SAVE_PATH}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}, world::World};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -90,17 +90,16 @@ impl Player {
 
     pub async fn load(owner_id: &str, id: &str) -> Result<Arc<RwLock<Self>>, Error> {
         let mut player: Self = serde_json::from_str(
-            &fs::read_to_string(&format!("{}/{}-{}.player", SAVE_PATH.display(), owner_id, id)).await?
+            &fs::read_to_string(player_save_fp(owner_id, id)).await?
         )?;
         player.activity_type = ActivityType::Playing;
         Ok(Arc::new(RwLock::new(player)))
     }
 
     pub async fn save(&self) -> Result<(), Error> {
-        let path = format!("{}/{}-{}.player", SAVE_PATH.display(), self.owner_id, self.id);
         #[cfg(feature = "stresstest")]
         log::debug!("Storing {path}");
-        fs::write(path, serde_json::to_string_pretty(self)?).await?;
+        fs::write(player_save_fp(self.owner_id(), self.id()), serde_json::to_string_pretty(self)?).await?;
         Ok(())
     }
 
@@ -144,7 +143,8 @@ impl Player {
     pub async fn act(&mut self, player: Arc<RwLock<Player>>, system_ch: &SignalChannels, act_wt: ActionWeight) -> usize {
         self.actions_taken += act_wt;
         if self.actions_taken >= SAVE_ASAP_THRESHOLD {
-            system_ch.janitor_tx.send(SystemSignal::PlayerNeedsSaving(player.clone(), player.read().await.id().to_string())).await;
+            // He'll pick up, sooner or later…
+            system_ch.janitor_tx.try_send(SystemSignal::PlayerNeedsSaving(player.clone(), player.read().await.id().to_string())).ok();
         }
         self.actions_taken
     }
@@ -162,6 +162,13 @@ impl Player {
             StatType::SN => *(self.sn_mut()) += drain,
             StatType::San => *(self.san_mut()) += drain,
         }
+    }
+
+    /// Purge all the editor buffers without care.
+    pub fn purge_buffers(&mut self) {
+        self.hedit_buffer = None;
+        self.iedit_buffer = None;
+        self.redit_buffer = None;
     }
 }
 
