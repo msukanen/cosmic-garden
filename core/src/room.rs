@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{r#const::ROOM_PATH, error::Error, identity::IdentityQuery, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::Error, identity::IdentityQuery, io::room_fp, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -47,10 +47,8 @@ fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariant
 
 impl Room {
     pub fn load_sync(id: &str) -> Result<Self, Error> {
-        let path = ROOM_PATH.join(format!("{id}.room"));
-        log::debug!("Loading '{}'…", path.display());
         let room: Room = serde_json::from_str(
-            &sync_fs::read_to_string(path)?
+            &sync_fs::read_to_string(room_fp(id))?
         )?;
         Ok(room)
     }
@@ -73,7 +71,7 @@ impl Room {
     }
 
     pub async fn save(&self) -> Result<(), Error> {
-        let path = ROOM_PATH.join(format!("{}.room", self.id()));
+        let path = room_fp(&self.id);
         log::debug!("Saving '{}'…", path.display());
         async_fs::write(path, serde_json::to_string_pretty(self)?).await?;
         Ok(())
