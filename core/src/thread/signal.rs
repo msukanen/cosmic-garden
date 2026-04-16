@@ -11,17 +11,23 @@ use crate::player::Player;
 pub enum SystemSignal {
     /// Generic "we're shutting down, brace for impact".
     Shutdown,
-    /// Player in logout queue.
+
+    //--- Janitor ---
+    /// Player logging out, queue or otherwise.
     PlayerNeedsSaving (Arc<RwLock<Player>>, String),
     /// Save the whales, now!
     SaveWorld,
     /// Item tucked into L'n'F.
     LostAndFound,
+
+    //--- Librarian ---
     /// sent by Librarian -> IO, save the library
     /// sent by IO -> Librarian, reindex your aliases
     ReindexLibrary,
     /// New library entry, from e.g. builders.
     NewLibraryEntry,
+    /// New blueprint entry, from e.g. builders.
+    NewBlueprintEntry,
 }
 
 #[derive(Debug, Clone)]

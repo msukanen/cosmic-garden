@@ -1,7 +1,7 @@
 //! Blueprint library.
 
 use std::{collections::HashMap, fmt::Display};
-use crate::{r#const::WORLD_ID, identity::{IdentityMut, IdentityQuery}, io::{blueprint_entry_fp, blueprint_lib_fp}, item::Item, serial::string_vec_to_bool_map, string::Uuid, thread::librarian::BP_LIBRARY};
+use crate::{r#const::WORLD_ID, identity::{IdentityMut, IdentityQuery}, io::{blueprint_entry_fp, blueprint_lib_fp}, item::Item, serial::string_vec_to_bool_map, string::{StrUuid, Uuid}, thread::librarian::BP_LIBRARY};
 
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -14,16 +14,10 @@ pub struct BlueprintLibrary {
     items: HashMap<String, Item>,
 }
 
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct BlueprintEntry {
-    id: String,
-    item: Item,
-}
-
 impl BlueprintLibrary {
+    /// Try get blueprint with `id` from library.
     pub fn get(&self, id: &str) -> Option<Item> {
-        self.items.get(id).cloned()
+        self.items.get(id.show_uuid(false)).cloned()
     }
 
     /// Shelve a (possibly new) blueprint, maybe `replace` old version while at it.
@@ -51,6 +45,7 @@ impl BlueprintLibrary {
     }
 }
 
+/// Various blueprint related errors…
 #[derive(Debug)]
 pub enum BlueprintError {
     Io(std::io::Error),

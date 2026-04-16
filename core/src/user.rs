@@ -6,7 +6,7 @@ use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_ha
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{error::Error, identity::IdError, io::user_save_fp, password::{PasswordError, validate_passwd}, string::Slugger};
+use crate::{error::CgError, identity::IdError, io::user_save_fp, password::{PasswordError, validate_passwd}, string::Slugger};
 
 /// Generic user info.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -21,18 +21,18 @@ pub struct UserInfo {
 
 impl UserInfo {
     /// Load user info chunk.
-    pub async fn load(id: &str, pwd: &str) -> Result<UserInfo, Error> {
+    pub async fn load(id: &str, pwd: &str) -> Result<UserInfo, CgError> {
         let info: UserInfo = serde_json::from_str(
             &fs::read_to_string(user_save_fp(&id.as_id()?)).await?
         )?;
         if info.verify_passwd(pwd) {
             return Ok(info);
         }
-        Err(Error::from(IdError::PasswordMismatch))
+        Err(CgError::from(IdError::PasswordMismatch))
     }
 
     /// Save the user info chunk.
-    pub async fn save(&self) -> Result<(), Error> {
+    pub async fn save(&self) -> Result<(), CgError> {
         fs::write(user_save_fp(&self.id), serde_json::to_string_pretty(self)?).await?;
         Ok(())
     }
@@ -92,7 +92,7 @@ impl UserInfo {
     }
 
     /// Create a brand new [UserInfo]
-    pub async fn new(name: &str, pwd: &str) -> Result<Self, Error> {
+    pub async fn new(name: &str, pwd: &str) -> Result<Self, CgError> {
         let info = Self {
             argon2: UserInfo::argonize_passwd(pwd).await?,
             id: name.into(),

@@ -6,7 +6,7 @@ use cosmic_garden_pm::{IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::Error, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}};
+use crate::{error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -96,7 +96,7 @@ impl Player {
     /// 
     /// # Returns
     /// `Arc<RwLock<Player>>` if successful.
-    pub async fn load(owner_id: &str, id: &str) -> Result<Arc<RwLock<Self>>, Error> {
+    pub async fn load(owner_id: &str, id: &str) -> Result<Arc<RwLock<Self>>, CgError> {
         let mut player: Self = serde_json::from_str(
             &fs::read_to_string(player_save_fp(owner_id, id)).await?
         )?;
@@ -105,7 +105,7 @@ impl Player {
     }
 
     /// Attempt to save self…
-    pub async fn save(&self) -> Result<(), Error> {
+    pub async fn save(&self) -> Result<(), CgError> {
         fs::write(player_save_fp(self.owner_id(), self.id()),
         serde_json::to_string_pretty(self)?).await?;
         Ok(())
@@ -123,7 +123,7 @@ impl Player {
     /// Place [Player] directly in `target_arc` [Room].
     /// 
     //NOTE: potential deadlock if not careful.
-    pub async fn place_direct(player: Arc<RwLock<Player>>, target_arc: Arc<RwLock<Room>>) -> Result<(), Error> {
+    pub async fn place_direct(player: Arc<RwLock<Player>>, target_arc: Arc<RwLock<Room>>) -> Result<(), CgError> {
         let tgt_id = {
             let mut tgt_lock = target_arc.write().await;
             let p_lock = player.read().await;

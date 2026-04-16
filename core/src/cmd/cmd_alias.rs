@@ -38,7 +38,56 @@ impl Command for BufferNuke {
     }
 }
 
+#[macro_export]
+macro_rules! cmd_xedit_title {
+    ($ctx:ident, $ed:ident) => {{
+        let plr = crate::validate_access!($ctx, builder);
+        crate::show_help_if_needed!($ctx, "edit-title");
 
+        let mut lock = plr.write().await;
+        paste::paste! {
+        let Some(ref mut ed) = lock.[<$ed _buffer>] else {
+            crate::tell_user!($ctx.writer, "Something weird in the neighborhood…\n");
+            return;
+        };
+        }
+        ed.set_title($ctx.args);
+        crate::tell_user!($ctx.writer, "Shadow buffer title set to: {}\n", $ctx.args);
+        $ctx.state.set_dirty(true);
+    }};
+}
+
+#[macro_export]
+macro_rules! cmd_xedit_desc {
+    ($iam:expr, $ctx:ident, $ed:ident, $ed_v:literal) => {{
+        let plr = crate::validate_access!($ctx, builder);
+        let res = crate::util::ed::edit_text($ctx.writer, $ctx.args, crate::access_ed_entry!(plr, $ed).desc()).await;
+        let verbose = match res {
+            Ok(crate::util::ed::EdResult::ContentReady { text, verbose, .. }) => {
+                let Some(ref mut b) = plr.write().await.iedit_buffer else {
+                    log::error!("Whatever happened to Iedit buffer here...?");
+                    return ;
+                };
+                b.set_desc(&text);
+                $ctx.state.set_dirty(true);
+                verbose
+            },
+            Ok(crate::util::ed::EdResult::NoChanges(true)) => true,
+            Ok(crate::util::ed::EdResult::HelpRequested) => {
+                crate::show_help!($ctx, "edit-desc");
+            },
+            _ => false
+        };
+        
+        if verbose {// re-run argless to pretty-print current description.
+            $iam.exec({$ctx.args = ""; $ctx}).await;
+        }
+
+        if $ctx.args.starts_with('?') {
+            crate::show_help!($ctx, "edit-desc");
+        }
+    }};
+}
 #[cfg(test)]
 mod cmd_alias_tests {
     use std::env;

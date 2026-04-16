@@ -2,8 +2,10 @@
 
 use crate::{identity::IdError, item::container::StorageError, password::PasswordError, room::RoomError};
 
+/// Cosmic Garden error type - a thin wrapper around more specific ones.
+// Rarely of any use for other but sanitizing [Debug] output.
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum CgError {
     #[error("Matter-Collapse: {0}")]
     Json(#[from] serde_json::Error),
 
@@ -21,4 +23,10 @@ pub enum Error {
 
     #[error("Room fail! {0}")]
     Room(#[from] RoomError),
+
+    #[error("Document-Illegible: {0}")]
+    TomlDe(#[from] toml::de::Error),
+
+    #[error("Document-Fire: {0}")]
+    TomlSer(#[from] toml::ser::Error)
 }

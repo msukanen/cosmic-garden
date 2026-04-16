@@ -4,7 +4,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
 
-use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::Error, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::signal::SignalChannels, user::UserInfo, world::World};
+use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::signal::SignalChannels, user::UserInfo, world::World};
 
 pub mod broadcast; pub use broadcast::*;
 pub mod file; pub use file::*;
@@ -79,7 +79,7 @@ impl ClientState {
                         Self::ChoosingPlayer { info }
                     },
                     // Brand new user:
-                    Err(Error::Io(_)) => {
+                    Err(CgError::Io(_)) => {
                         log::info!("Brand new user: {name}");
                         tell_user!(&mut writer, "{}: ", get_prompt!(world, PromptType::PasswordV));
                         Self::EnteringPasswordV { name, pw1: input.to_string() }
@@ -95,7 +95,7 @@ impl ClientState {
             Self::EnteringPasswordV { name, pw1 } => {
                 if input == pw1 {
                     return match UserInfo::new(&name, &pw1).await {
-                        Err(Error::Password(e)) => {
+                        Err(CgError::Password(e)) => {
                             log::warn!("Argonizing… {e:?}");
                             tell_user!(&mut writer, "{}\n{}", e, get_prompt!(world, PromptType::Password1));
                             Self::EnteringPassword1 { name }

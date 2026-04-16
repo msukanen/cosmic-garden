@@ -216,40 +216,38 @@ mod cmd_iedit_set_tests {
     async fn iedit_set_something_on_primordial() {
         let mut buffer: Vec<u8> = Vec::new();
         let mut mock_sock = std::io::Cursor::new(&mut buffer);
-        let (tx, _) = tokio::sync::broadcast::channel::<crate::Broadcast>(16);
-        let (world, plr) = get_operational_mock_world().await;
+        let (world, tx, sigs, plr) = get_operational_mock_world().await;
         plr.write().await.access = Access::Builder;
         
         log::debug!("Debugging the Kobolds away!");// <-- for posterity
-        ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);
-        ctx!(IexCommand, "", mock_sock, tx, world, plr);
-        ctx!(SetCommand, "pot cons", mock_sock, tx, world, plr);
-        ctx!(SetCommand, "nut inedible", mock_sock, tx, world, plr);
-        ctx!(SetCommand, "nut heal hp 10.0", mock_sock, tx, world, plr);
-        ctx!(DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, world, plr);
-        ctx!(DescCommand, "+3 ...", mock_sock, tx, world, plr);
-        ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, world, plr);
-        ctx!(IexCommand, "", mock_sock, tx, world, plr);
-        ctx!(DescCommand, "", mock_sock, tx, world, plr);
+        ctx!(IeditCommand, "apple", mock_sock, tx, sigs, world, plr);
+        ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
+        ctx!(SetCommand, "pot cons", mock_sock, tx, sigs, world, plr);
+        ctx!(SetCommand, "nut inedible", mock_sock, tx, sigs, world, plr);
+        ctx!(SetCommand, "nut heal hp 10.0", mock_sock, tx, sigs, world, plr);
+        ctx!(DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, sigs, world, plr);
+        ctx!(DescCommand, "+3 ...", mock_sock, tx, sigs, world, plr);
+        ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, sigs, world, plr);
+        ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
+        ctx!(DescCommand, "", mock_sock, tx, sigs, world, plr);
     }
 
     #[tokio::test]
     async fn iedit_crank_something_on_primordial() {
         let mut buffer: Vec<u8> = Vec::new();
         let mut mock_sock = std::io::Cursor::new(&mut buffer);
-        let (tx, _) = tokio::sync::broadcast::channel::<crate::Broadcast>(16);
-        let (world, plr) = get_operational_mock_world().await;
+        let (world, tx, sigs, plr) = get_operational_mock_world().await;
         plr.write().await.access = Access::Builder;
         
-        ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);
-        ctx!(IexCommand, "", mock_sock, tx, world, plr);
-        ctx!(SetCommand, "pot cons", mock_sock, tx, world, plr);
-        ctx!(SetCommand, "nut inedible", mock_sock, tx, world, plr);
-        ctx!(SetCommand, "nut heal hp 10.0", mock_sock, tx, world, plr);
-        ctx!(DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, world, plr);
-        ctx!(DescCommand, "+3 ...", mock_sock, tx, world, plr);
-        ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, world, plr);
-        ctx!(IexCommand, "", mock_sock, tx, world, plr);
-        ctx!(DescCommand, "", mock_sock, tx, world, plr);
+        ctx!(IeditCommand, "apple", mock_sock, tx, sigs, world, plr);
+        ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
+        ctx!(SetCommand, "pot cons", mock_sock, tx, sigs, world, plr);
+        ctx!(SetCommand, "nut inedible", mock_sock, tx, sigs, world, plr);
+        ctx!(SetCommand, "nut heal hp 10.0", mock_sock, tx, sigs, world, plr);
+        ctx!(DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, sigs, world, plr);
+        ctx!(DescCommand, "+3 ...", mock_sock, tx, sigs, world, plr);
+        ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, sigs, world, plr);
+        ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
+        ctx!(DescCommand, "", mock_sock, tx, sigs, world, plr);
     }
 }

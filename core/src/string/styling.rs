@@ -45,6 +45,19 @@ fn parse_color(name: &str) -> Option<Colour> {
     }
 }
 
+#[macro_export]
+macro_rules! cformat {
+    ($($arg:tt)*) => {{
+        use crate::string::styling::ColorExt;
+        format!($($arg)*).colored()
+    }};
+}
+#[allow(dead_code)]// just to appease VS Code + rust analyzer for visuals
+pub trait ColorExt {
+    fn colored(&self) -> String;
+}
+impl<T: Display> ColorExt for T {fn colored(&self) -> String { format_color(&self) }}
+
 /// Formats a string with custom color tags into an ANSI-colored string.
 pub fn format_color<S: Display>(input: S) -> String {
     let input = input.to_string();

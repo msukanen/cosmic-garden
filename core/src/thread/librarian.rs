@@ -56,18 +56,19 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver
 
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::NewLibraryEntry => {
-                    if reorganize_library(&outgoing.janitor_tx).await {
-                        {
-                            let phonebook = outgoing.clone();
-                            tokio::spawn(async move {
-                                tokio::time::sleep(Duration::from_secs(30)).await;
-                                if let Err(e) = phonebook.janitor_tx.send(SystemSignal::ReindexLibrary).await {
-                                    log::error!("Janitor is still not picking up the phone. Bah, he'll sort it out sooner or later… {e:?}");
-                                }
-                            });
-                        }
-                    }
-                },
+                    if reorganize_library(&outgoing.janitor_tx).await {{
+                        let phonebook = outgoing.clone();
+                        tokio::spawn(async move {
+                            tokio::time::sleep(Duration::from_secs(30)).await;
+                            if let Err(e) = phonebook.janitor_tx.send(SystemSignal::ReindexLibrary).await {
+                                log::error!("Janitor is still not picking up the phone. Bah, he'll sort it out sooner or later… {e:?}");
+                            }
+                        });
+                    }}
+                }
+
+                SystemSignal::NewBlueprintEntry => {}
+
                 _ => ()
             }
         }

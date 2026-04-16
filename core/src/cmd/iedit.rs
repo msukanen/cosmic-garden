@@ -2,16 +2,21 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{container::Storage, primordial::PrimordialItem}, show_help_if_needed, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{container::Storage, primordial::PrimordialItem}, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::BP_LIBRARY, validate_access};
 
 include!(concat!(env!("OUT_DIR"), "/iedit_registry.rs"));
 
 pub struct IeditCommand;
 
+/// IEdit
+// 
+// usage: iedit <item>
 #[async_trait]
 impl Command for IeditCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
+        let p_loc = roomloc_or_bust!(plr);
+        
         if ctx.state.is_editing() {
             tell_user!(ctx.writer, "You're already in one or other editor. Finish work there first.\n");
             return;
@@ -21,14 +26,16 @@ impl Command for IeditCommand {
         let id = ctx.args;
         let target_item = {
             let mut p = plr.write().await;
-            let p_lock = p.location.upgrade();
-            let found = p.inventory.take(id);
+            let found = p.inventory.take_by_name(id);
             drop(p);
+            // was in inventory already or not?
             if found.is_none() {
-                if let Some(arc) = p_lock {
-                    arc.write().await.contents.take(id)
+                // room maybe?
+                if let Some(item) = p_loc.write().await.contents.take_by_name(id) {
+                    Some(item)
                 } else {
-                    None
+                    // blueprint library at least…?
+                    (*BP_LIBRARY).read().await.get(id)
                 }
             } else {
                 found
@@ -42,6 +49,7 @@ impl Command for IeditCommand {
         {   // tuck it into safety of iedit_buffer which will be stored on disk the moment io_thread sez so.
             let mut w = plr.write().await;
             w.iedit_buffer = target_item.or_else(|| Some(PrimordialItem::new(id)));
+            w.activity_type = ActivityType::Building;
         }
         ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Item { dirty: true } };
     }

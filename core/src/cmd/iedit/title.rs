@@ -1,4 +1,4 @@
-//! Room tit-ler.
+//! IEdit tit-ler.
 
 use async_trait::async_trait;
 
@@ -9,6 +9,6 @@ pub struct TitleCommand;
 #[async_trait]
 impl Command for TitleCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
-        cmd_xedit_title!(ctx, redit);
+        cmd_xedit_title!(ctx, iedit);
     }
 }

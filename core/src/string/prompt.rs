@@ -42,19 +42,19 @@ macro_rules! tell_user {
 
     ($w:expr, $fmt:literal, $($arg:tt)*) => {{
         let msg = format!($fmt, $($arg)*);
-        tell_user!($w, &msg);
+        crate::tell_user!($w, &msg);
     }}
 }
 
 #[macro_export]
 macro_rules! tell_userln {
     ($w:expr, $t:expr) => {{
-        tell_user!($w, "{}\n", $t);
+        crate::tell_user!($w, "{}\n", $t);
     }};
 
     ($w:expr, $fmt:literal, $($arg:tt)*) => {{
         let msg = format!($fmt, $($arg)*);
-        tell_userln!($w, &msg);
+        crate::tell_userln!($w, &msg);
     }}
 }
 

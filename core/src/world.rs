@@ -4,7 +4,7 @@ use std::{collections::HashMap, net::SocketAddr, sync::Arc};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::Error, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, util::direction::Direction};
 
 /// The world!
 #[derive(Debug, Deserialize, Serialize)]
@@ -41,16 +41,22 @@ pub struct World {
 
 #[cfg(test)]
 impl World {
-    pub async fn dummy() -> Self {Self {
+    pub async fn dummy() -> Self {
+        let root_room = Some(Room::new("r-1", "Incineration Chamber").await.unwrap());
+        let room_2 = Some(Room::new("r-2", "Waterfall").await.unwrap());
+        Self {
         name: "Test World".into(),
         port: 8080,
         greeting: "Greetings, Crash Test Dummy!".to_string().into(),
         fixed_prompts: HashMap::new(),
         players_by_sockaddr: HashMap::new(),
         players_by_id: HashMap::new(),
-        rooms: HashMap::new(),
-        root_room_id: "room-1".into(),
-        root_room: Some(Room::new("room-1", "Incineration Chamber").await.unwrap()),
+        root_room_id: "r-1".into(),
+        rooms: {let mut m = HashMap::new();
+            m.insert("r-1".to_string(), root_room.clone().unwrap());
+            m.insert("r-2".to_string(), room_2.clone().unwrap());
+            m},
+        root_room,
         lost_and_found: HashMap::new()
     }
     }
@@ -91,7 +97,7 @@ fn default_root_room_id() -> String {
 
 impl World {
     /// Load or bootstrap the world.
-    pub async fn load_or_bootstrap(args: &Cli) -> Result<Self, Error> {
+    pub async fn load_or_bootstrap(args: &Cli) -> Result<Self, CgError> {
         match fs::read_to_string(world_fp()).await {
             Ok(content) => {
                 let world: World = serde_json::from_str( &content )?;
@@ -140,7 +146,7 @@ impl World {
     }
 
     /// Save the world! Yeah.
-    pub async fn save(&self, force_save: bool) -> Result<(), Error> {
+    pub async fn save(&self, force_save: bool) -> Result<(), CgError> {
         if !self.lost_and_found.is_empty() || force_save {
             let contents = serde_json::to_string_pretty(self)?;
             fs::write(world_fp(), contents).await?;
@@ -229,23 +235,48 @@ impl World {
 
 #[cfg(test)]
 pub(crate) mod world_tests {
+    use crate::cformat;
+
     pub(crate) async fn get_operational_mock_world() -> 
         (
             std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
+            tokio::sync::broadcast::Sender<crate::Broadcast>,
+            crate::SignalChannels,
             std::sync::Arc<tokio::sync::RwLock<crate::player::Player>>
         )
     {
-        let _ = env_logger::try_init();
+        use std::io::Write;
+        let _ = env_logger::Builder::from_default_env()
+    .format(|buf, record| {
+        let chunk = record.args().to_string();
+        let mut msg = chunk.split('\n');
+        if let Some(_) = msg.next() {
+            writeln!(buf, "{}", cformat!("<c white>[<c yellow>{}</c> <c cyan>{}</c>]</c>", record.level(), record.module_path().unwrap_or_default()))?;
+        }
+
+        for line in msg {
+            writeln!(buf, "{}", cformat!("<bg gray>    </bg>{}", line))?;
+        }
+
+        Ok(())
+        
+    }).try_init();
         let _ = crate::DATA.set("data".into());
         let _ = crate::WORLD.set("crash-test-dummy".to_string());
         use crate::identity::IdentityQuery;
         let plr = crate::player::Player::default();
-        let mut world = crate::world::World::dummy().await;
         let plr_id = plr.id().to_string();
         let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
-        world.players_by_id.insert(plr_id, plr.clone());
-        let plr = world.players_by_id.get("xxx").unwrap().clone();
-        (std::sync::Arc::new(tokio::sync::RwLock::new(world)), plr)
+        let mut world = crate::world::World::dummy().await;
+        world.players_by_id.insert(plr_id.clone(), plr.clone());
+
+        let Some(r) = world.rooms.get("r-1") else { panic!("r-1 missing?!")};
+        r.write().await.who.insert(plr_id.clone(), std::sync::Arc::downgrade(&plr));
+        plr.write().await.location = std::sync::Arc::downgrade(&r);
+
+        let (tx, _) = tokio::sync::broadcast::channel::<crate::Broadcast>(16);
+        let sigs = crate::SignalChannels::default();
+        (std::sync::Arc::new(tokio::sync::RwLock::new(world)), tx, sigs, plr.clone())
     }
 
     #[cfg(feature = "stresstest")]

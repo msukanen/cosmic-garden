@@ -1,7 +1,5 @@
 use std::num::{IntErrorKind, NonZeroU32, NonZeroUsize, ParseIntError};
 
-use tokio::net::tcp::OwnedWriteHalf;
-
 use crate::{string::{styling::{MAX_DESCRIPTION_LINES, RULER_LINE}, LineEndingExt}, tell_user};
 
 #[derive(Debug)]
@@ -202,11 +200,17 @@ fn insert_nth_line(text: &str, line_num: usize, text_to_insert: &str) -> String 
 }
 
 /// Access `$ed` (hedit, redit, etc.) of the given `$ctx`.
-// NOTE: does not work with Enum based stuff, like Iedit.
+/// 
+/// # Args
+/// - `$plr` Arc<RwLock>>
+/// - `$ed` e.g. hedit, iedit, redit …
+// NOTE: may sputter with Enum based stuff, like Iedit.
 #[macro_export]
 macro_rules! access_ed_entry {
     ($plr:ident, $ed:ident) => {
-        $plr.read().await.$ed.as_ref().unwrap()
+        paste::paste! {
+            $plr.read().await.[<$ed _buffer>].as_ref().unwrap()
+        }
     };
 }
 

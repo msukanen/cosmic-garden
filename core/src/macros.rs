@@ -35,23 +35,44 @@ macro_rules! err_iedit_buffer_inaccessible {
     /// 
     /// Requires /src/test/world_test_harness.inc contents in the test fn.
     /// 
+    /// # Args
+    /// - `cmd`
+    /// - `args`
+    /// - `mock_sock`
+    /// - `tx`
+    /// - `sigs`
+    /// - `world`
+    /// - `plr`
+    /// - `assert`ion expr
+    /// 
     /// # Examples
     /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);`
+    /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr, |out:&str| out.contains("apple"));`
     macro_rules! ctx {
-        ($cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $world:ident, $plr:ident) => {
+        ($cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $sigs:ident, $world:ident, $plr:ident) => {{
+            crate::ctx!($cmd,$args,$mock_sock,$tx,$sigs,$world,$plr,|_|true);
+        }};
+
+        ($cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $sigs:ident, $world:ident, $plr:ident, $assert:expr) => {
             {
-            let ch = crate::thread::signal::SignalChannels::default();
-            let mut ctx = CommandCtx {
-                writer: &mut $mock_sock,
-                args: $args,
-                pre_pad_n: false,
-                system: &ch,
-                state: ClientState::Playing { player: $plr.clone() },
-                world: $world.clone(),
-                tx: &$tx
-            };
-            $cmd.exec(&mut ctx).await;
+                use crate::{cmd::{Command,CommandCtx}, ClientState};
+                $mock_sock.get_mut().clear();
+                let mut ctx = CommandCtx {
+                    writer: &mut $mock_sock,
+                    args: $args,
+                    pre_pad_n: false,
+                    system: &$sigs,
+                    state: ClientState::Playing { player: $plr.clone() },
+                    world: $world.clone(),
+                    tx: &$tx
+                };
+                $cmd.exec(&mut ctx).await;
             }
-            log::debug!("{}", String::from_utf8_lossy($mock_sock.get_ref()));
+            // some assertions to do… maybe.
+            {
+                let out = String::from_utf8_lossy($mock_sock.get_ref());
+                assert!($assert(&out), "Ass fail! Out was '{}'", out.trim_end());
+            }
+            log::debug!("\n{}", String::from_utf8_lossy($mock_sock.get_ref()));
         };
     }

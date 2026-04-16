@@ -8,7 +8,7 @@ pub struct DescCommand;
 impl Command for DescCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
-        let res = edit_text(ctx.writer, ctx.args, &access_ed_entry!(plr, redit_buffer).desc).await;
+        let res = edit_text(ctx.writer, ctx.args, &access_ed_entry!(plr, redit).desc).await;
         let verbose = match res {
             Ok(EdResult::ContentReady { text, verbose, .. }) => {
                 let Some(ref mut b) = plr.write().await.redit_buffer else {

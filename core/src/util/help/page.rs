@@ -1,11 +1,11 @@
-use std::{collections::{HashMap, HashSet}};
+use std::collections::{HashMap, HashSet};
 
 use convert_case::{Case, Casing};
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{serial::string_vec_to_bool_map, r#const::WORLD_ID, identity::{IdError, IdentityQuery}, io::{help_entry_fp, help_lib_fp}, string::{Slugger, StrUuid, UNNAMED, Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::HELP_LIBRARY, signal::SignalChannels}, util::{access::{Access, StrictAccess}}};
+use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{help_entry_fp, help_lib_fp}, serial::string_vec_to_bool_map, string::{Slugger, StrUuid, UNNAMED, Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::HELP_LIBRARY, signal::SignalChannels}, util::access::{Access, StrictAccess}};
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct HelpPage {
@@ -41,7 +41,7 @@ impl HelpPage {
     }
 
     /// Produce new document with default values.
-    pub fn new(name: &str) -> Result<Self, IdError> {
+    pub fn new(name: &str) -> Result<Self, CgError> {
         // see that the name will survive as an ID…
         let name = name.as_id()?;
         let alias = name.clone();
@@ -62,7 +62,7 @@ impl HelpPage {
     }
 
     /// Save me!
-    pub async fn save(&self) -> Result<(), HelpSystemError> {
+    pub async fn save(&self) -> Result<(), CgError> {
         let nouuid = self.id().show_uuid(false);
         match toml::to_string_pretty(self) {
             Ok(contents) => {
@@ -107,24 +107,9 @@ impl Default for HelpLibrary {
     }
 }
 
-#[derive(Debug)]
-pub enum HelpSystemError {
-    Io(std::io::Error),
-    Json(serde_json::Error),
-    TomlDe(toml::de::Error),
-    TomlSer(toml::ser::Error),
-    IdError(IdError),
-}
-
-impl From<std::io::Error> for HelpSystemError { fn from(value: std::io::Error) -> Self { Self::Io(value) }}
-impl From<serde_json::Error> for HelpSystemError { fn from(value: serde_json::Error) -> Self { Self::Json(value) }}
-impl From<toml::de::Error> for HelpSystemError { fn from(value: toml::de::Error) -> Self { Self::TomlDe(value) }}
-impl From<toml::ser::Error> for HelpSystemError { fn from(value: toml::ser::Error) -> Self { Self::TomlSer(value) }}
-impl From<IdError> for HelpSystemError { fn from(value: IdError) -> Self { Self::IdError(value) }}
-
 impl HelpLibrary {
     // Load or bootstrap the help library.
-    pub async fn load_or_bootstrap() -> Result<(), HelpSystemError> {
+    pub async fn load_or_bootstrap() -> Result<(), CgError> {
         // Bootstrap a brand new library if none exists yet.
         let Ok(mf) = fs::read_to_string(help_lib_fp()).await else {
             log::warn!("No papers, no ID? Ah well — preparing anyway…");
@@ -182,7 +167,7 @@ impl HelpLibrary {
 
     /// Save the library and all the dirty entries.
     // (…especially the 'dirty' entries…)
-    pub async fn save(&mut self) -> Result<(), HelpSystemError> {
+    pub async fn save(&mut self) -> Result<(), CgError> {
         let contents = serde_json::to_string_pretty(&self)?;
 
         fs::write(help_lib_fp(), contents).await?;

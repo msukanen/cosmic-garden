@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::Error, identity::IdentityQuery, io::room_fp, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::IdentityQuery, io::room_fp, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -46,14 +46,14 @@ fn empty_room_desc() -> String { "A room.".into() }
 fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
 
 impl Room {
-    pub fn load_sync(id: &str) -> Result<Self, Error> {
+    pub fn load_sync(id: &str) -> Result<Self, CgError> {
         let room: Room = serde_json::from_str(
             &sync_fs::read_to_string(room_fp(id))?
         )?;
         Ok(room)
     }
 
-    pub async fn new(id: &str, title: &str) -> Result<Arc<RwLock<Self>>, Error> {
+    pub async fn new(id: &str, title: &str) -> Result<Arc<RwLock<Self>>, CgError> {
         // check if there is pre-existing file...
         let room = Room::load_sync(id).unwrap_or({
             log::info!("No archælogy possible, thus creating new room '{}'", id);
@@ -70,14 +70,14 @@ impl Room {
         Ok(Arc::new(RwLock::new(room)))
     }
 
-    pub async fn save(&self) -> Result<(), Error> {
+    pub async fn save(&self) -> Result<(), CgError> {
         let path = room_fp(&self.id);
         log::debug!("Saving '{}'…", path.display());
         async_fs::write(path, serde_json::to_string_pretty(self)?).await?;
         Ok(())
     }
 
-    pub async fn link_exit(&mut self, world: Arc<RwLock<World>>, dir: Direction, target_id: &str) -> Result<(), Error> {
+    pub async fn link_exit(&mut self, world: Arc<RwLock<World>>, dir: Direction, target_id: &str) -> Result<(), CgError> {
         log::debug!("Linking '{}'({dir}) to '{target_id}'…", self.id());
         if let Some(_) = self.raw_exits.insert(dir.clone(), target_id.into()) {
             log::warn!("Overriding already existing '{dir}'.");
@@ -88,7 +88,7 @@ impl Room {
             Arc::downgrade(my_arc)
         } else {
             log::error!("Wait what? Where did '{}' lock go?!", self.id());
-            return Err(Error::from(RoomError::NoSuchRoom(self.id().to_string())))
+            return Err(CgError::from(RoomError::NoSuchRoom(self.id().to_string())))
         };
         if let Some(target_arc) = w.rooms.get(target_id) {
             self.exits.insert(dir.clone(), Arc::downgrade(target_arc));
@@ -107,7 +107,7 @@ impl Room {
 
         // Exits are allowed to point to non-existing ways… Mirage entrances, etc.
         self.exits.insert(dir.clone(), Weak::new());
-        Err(Error::from(RoomError::NoSuchRoom(target_id.into())))
+        Err(CgError::from(RoomError::NoSuchRoom(target_id.into())))
     }
 
     pub fn shallow_clone(&self) -> Self {

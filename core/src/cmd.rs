@@ -7,6 +7,7 @@ use tokio::{sync::{RwLock, broadcast}};
 
 use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::{Broadcast, ClientState}, player::Player, tell_user, tell_user_unk, thread::signal::SignalChannels, util::direction::Directional, world::World};
 
+#[macro_use]
 pub mod cmd_alias;
 
 // Get modules.
@@ -110,15 +111,13 @@ pub async fn parse_and_exec<'a>(mut ctx: CommandCtx<'_>) -> ClientState {
 
 #[cfg(test)]
 mod cmd_tests {
-    use crate::{cmd::{Command, CommandCtx, look::LookCommand}, io::ClientState, thread::signal::SignalChannels, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{Command, CommandCtx, look::LookCommand}, io::ClientState, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn synthetic_commandctx() {
         let mut buffer: Vec<u8> = Vec::new();
         let mut mock_sock = std::io::Cursor::new(&mut buffer);
-        let (tx, _) = tokio::sync::broadcast::channel::<crate::Broadcast>(16);
-        let (world, plr) = get_operational_mock_world().await;
-        let sigs = SignalChannels::default();
+        let (world, tx, sigs, plr) = get_operational_mock_world().await;
         let mut ctx = CommandCtx {
             writer: &mut mock_sock,
             args: "",
