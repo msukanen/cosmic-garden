@@ -246,21 +246,23 @@ pub(crate) mod world_tests {
         )
     {
         use std::io::Write;
-        let _ = env_logger::Builder::from_default_env()
-    .format(|buf, record| {
-        let chunk = record.args().to_string();
-        let mut msg = chunk.split('\n');
-        if let Some(_) = msg.next() {
-            writeln!(buf, "{}", cformat!("<c white>[<c yellow>{}</c> <c cyan>{}</c>]</c>", record.level(), record.module_path().unwrap_or_default()))?;
-        }
+        let _ = env_logger::
+             Builder::from_default_env()
+             .format(|buf, record| {
+                 let chunk = record.args().to_string();
+                 let mut msg = chunk.split('\n');
+                 if let Some(x) = msg.next() {
+                     writeln!(buf, "{}", cformat!("<c white>[<c yellow>{}</c> <c cyan>{}</c>]</c> {x}", record.level(), record.module_path().unwrap_or_default()))?;
+                 }
 
-        for line in msg {
-            writeln!(buf, "{}", cformat!("<bg gray>    </bg>{}", line))?;
-        }
+                 for line in msg {
+                     writeln!(buf, "{}", cformat!("<bg gray>    </bg>{}", line))?;
+                 }
 
-        Ok(())
-        
-    }).try_init();
+                 Ok(())
+                
+             }).
+            try_init();
         let _ = crate::DATA.set("data".into());
         let _ = crate::WORLD.set("crash-test-dummy".to_string());
         use crate::identity::IdentityQuery;

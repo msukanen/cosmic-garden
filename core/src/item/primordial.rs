@@ -2,10 +2,10 @@
 
 use std::{collections::HashMap, fmt::Display};
 
-use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
+use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut, Storage};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, consumable::{ConsumableMatter, NutritionType}, container::{StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::Owner}, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, StorageError, StorageQueryError, consumable::{ConsumableMatter, NutritionType}, container::{Storage, StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::Owner}, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -160,6 +160,42 @@ impl StorageMut for PrimordialItem {
         self.max_space = sz;
         true
     }
+}
+
+/// [PrimordialItem] fulfils the [Storage] contract, but as it isn't a true container,
+/// most of these impls are just stubs, or report "no can do".
+impl Storage for PrimordialItem {
+    /// Always `Err`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn can_hold(&self, _item: &Item) -> Result<(), StorageQueryError> {
+        Err(StorageQueryError::NotContainer)
+    }
+    /// Always `false`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn contains(&self, _: &str) -> bool { false }
+    /// Always `None`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn eject_all(&mut self) -> Option<Vec<Item>> { None }
+    /// Always `None`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn find_id_by_name(&self, _: &str) -> Option<String> { None }
+    fn max_space(&self) -> StorageSpace { self.max_space }
+    /// Always `None`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn peek_at(&self, _: &str) -> Option<&Item> { None }
+    fn required_space(&self) -> StorageSpace { self.size }
+    /// Always `0`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn space(&self) -> StorageSpace { 0 }
+    /// Always `None`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn take(&mut self, _: &str) -> Option<Item> { None }
+    /// Always `None`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn take_by_name(&mut self, _: &str) -> Option<Item> { None }
+    /// Always `Err(item)`; [PrimordialItem] is never a true container.
+    #[inline]
+    fn try_insert(&mut self, item: Item) -> Result<(), super::StorageError> { Err(StorageError::NotContainer(item)) }
 }
 
 pub trait Metamorphize {

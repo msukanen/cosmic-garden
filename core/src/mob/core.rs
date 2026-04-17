@@ -1,11 +1,11 @@
 //! Mob core.
 
-use cosmic_garden_pm::{IdentityMut, MobMut};
+use cosmic_garden_pm::{CombatantMut, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{mob::*, string::{UNNAMED, as_id_with_uuid}};
+use crate::{mob::{StatType, Stat}, string::{UNNAMED, as_id_with_uuid}};
 
-#[derive(Debug, Deserialize, Serialize, IdentityMut, MobMut)]
+#[derive(Debug, Deserialize, Serialize, IdentityMut, MobMut, CombatantMut)]
 pub struct Entity {
     id: String,
     #[identity(title)]

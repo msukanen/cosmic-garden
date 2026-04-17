@@ -49,7 +49,7 @@ impl Command for WayCommand {
 mod cmd_redit_way {
     use std::io::Cursor;
 
-    use crate::{cmd::{goto::GotoCommand, look::LookCommand, redit::way::WayCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn way_creation_r1r2() {
@@ -66,5 +66,7 @@ mod cmd_redit_way {
         ctx!(GotoCommand, "north",s,tx,ch,w,p,|out:&str| out.contains("south"));
         ctx!(GotoCommand, "south",s,tx,ch,w,p);
         ctx!(GotoCommand, "balloon",s,tx,ch,w,p,|out:&str| out.contains("south"));
+        ctx!(PopCommand, "balloon",s,tx,ch,w,p,|out:&str| out.contains("falling"));
+        ctx!(LookCommand, "",s,tx,ch,w,p,|out:&str| out.contains("north") && out.contains("balloon"));
     }
 }

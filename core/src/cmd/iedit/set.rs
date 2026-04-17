@@ -1,5 +1,7 @@
 //! Set some detail about an item in the IEDit.
 
+use std::collections::HashMap;
+
 use async_trait::async_trait;
 
 use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::{IdentityMut, IdentityQuery}, item::{Item, ItemizedMut, consumable::NutritionType, container::{StorageMut, specs::StorageSpace}, primordial::PotentialItemType}, mob::StatType, tell_user, validate_access};
@@ -127,53 +129,92 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
 
     // Actually set some `value` after exact `what` has been determined.
     async fn go_really_nuts(ctx: &mut CommandCtx<'_>, nuts: &mut NutritionType, what: &str, value: &str) {
-            log::warn!("<what> now: {what}");
         loop {
-            log::warn!("<what> now: {what}");
         match what {
             "heal" => match nuts {
-                NutritionType::Heal { stat, drain } => 
-                    // set nut heal <stat-type> <value>
-                    // set nut heal <value-as-drain>  ;; to assign drain without bothering to re-type type
+                NutritionType::NotEdible  => {*nuts = NutritionType::Heal { stat: StatType::HP, drain: 0.0 }; continue; },
+                NutritionType::Heal { stat, drain }=> {
+                    *nuts = NutritionType::MultiHeal { stat_n_drain: {
+                        let mut m = HashMap::new();
+                        m.insert(stat.clone(), *drain);
+                        m
+                    } };
+                    continue;
+                },
+                NutritionType::MultiHeal { stat_n_drain } =>
+                    // set nut multi <stat-type> <value>
                     {
-                        let (r#type, value) = value.split_once(' ').unwrap_or((value, ""));
-                        // if a float, value is 'drain'; + heals, - damages
-                        if let Ok(v) = r#type.parse::<f32>() {
-                            *drain = v.clamp(-100.0, 100.0);// TODO drain - RECHECK min/max [14.04.2026]
-                            tell_user!(ctx.writer, "Item 'drain' value set at: {}\n", *drain);
-                            return ;
+                        let (maybe_rm, arg) = value.split_once(' ').unwrap_or((value, ""));
+                        match maybe_rm {
+                            "rm"|"del"|"remove"|"delete"|"wipe"|"erase"|"reject" => {
+                                let Ok(stat_type) = StatType::try_from(arg) else {
+                                    if arg.is_empty() {
+                                        tell_user!(ctx.writer,
+                                            "You need to specify a stat, one of <c yellow>{}</c>\n<c green>Usage:</c> set nut multi rm <c cyan><stat></c>\n",
+                                            StatType::display_list()
+                                        );
+                                    } else {
+                                        tell_user!(ctx.writer, "Well, '{}' is no stat type I'd recognize…\n", arg);
+                                    }
+                                    return ;
+                                };
+                                stat_n_drain.remove(&stat_type);
+                                if stat_n_drain.is_empty() {
+                                    *nuts = NutritionType::NotEdible;
+                                    tell_user!(ctx.writer, "It's not very edible anymore…\n");
+                                    return ;
+                                } else if stat_n_drain.len() == 1 {
+                                    // fall back to Heal
+                                    let (s,d) = stat_n_drain.iter().next().unwrap();
+                                    *nuts = NutritionType::Heal { stat: s.clone(), drain: *d };
+                                }
+                                tell_user!(ctx.writer, "Item set as {}\n", *nuts);
+                                return ;
+                            }
+                            _ => ()
                         }
 
-                        let stat_type = match r#type.to_lowercase().as_str() {
-                            "hp" => StatType::HP,
-                            "mp" => StatType::MP,
-                            "sn" => StatType::SN,
-                            "san" => StatType::San,
-                            _ => {tell_user!(ctx.writer, "Has to be one of the existing stat types: {}", StatType::display_list());return;}
-                        };
-                        // set nut heal stat <drain>
-                        *stat = stat_type;
-
-                        if let Ok(v) = value.parse::<f32>() {
-                            *drain = v.clamp(-100.0, 100.0);// TODO drain - RECHECK min/max [14.04.2026]
-                            tell_user!(ctx.writer, "Item 'drain' value set at: {}\n", *drain);
-                            return ;
+                        match parse_stat_n_val(value) {
+                            Err(e) => tell_user!(ctx.writer, "{}\n", e),
+                            Ok((None, None)) => {
+                                *nuts = NutritionType::NotEdible;
+                                tell_user!(ctx.writer, "That is *definitely* inedible…!\n");
+                            },
+                            Ok((Some(s), d)) => {
+                                let d = d.expect(&format!("LOGIC: parse_stat_n_val failure in <f32> parsing!: {value}")); // fix parse_stat_n_val if this blows up…
+                                if d.abs() < 0.001 {
+                                    // effectively zero - erase instead of zeroing.
+                                    stat_n_drain.remove(&s);
+                                    if stat_n_drain.is_empty() {
+                                        *nuts = NutritionType::NotEdible;
+                                        tell_user!(ctx.writer, "It's not very edible anymore…\n");
+                                        return ;
+                                    } else if stat_n_drain.len() == 1 {
+                                        // fall back to Heal
+                                        let (s,d) = stat_n_drain.iter().next().unwrap();
+                                        *nuts = NutritionType::Heal { stat: s.clone(), drain: *d };
+                                    }
+                                    tell_user!(ctx.writer, "Item set as {}\n", *nuts);
+                                    return ;
+                                }
+                                stat_n_drain.insert(s, d);
+                                if stat_n_drain.len() == 1 {
+                                    // fall back to Heal
+                                    let (s,d) = stat_n_drain.iter().next().unwrap();
+                                    *nuts = NutritionType::Heal { stat: s.clone(), drain: *d };
+                                }
+                                tell_user!(ctx.writer, "Item set as: {}\n", *nuts);
+                            },
+                            _ => tell_user!(ctx.writer, "<c green>Usage:</c> set nut multi <stat> <val>\n       set nut multi rm <stat>\n")
                         }
 
-                        // but - not a stat, not direct drain value...?
-                        tell_user!(ctx.writer, "Usage: set nut heal <stat> <value>\n       set nut heal <drain>\n");
                         return ;
                     },
+                }
 
-                NutritionType::NotEdible =>
-                    {
-                        *nuts = NutritionType::Heal { stat: crate::mob::StatType::HP, drain: 0.0 };
-                        continue;
-                    }
-                },
             _ => {tell_user!(ctx.writer, "Unfortunately only 'heal' is currently available.\n");return;}
-        }
-        }
+
+        }}
     }
 
     // set nut <..>
@@ -208,9 +249,31 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
     }
 }
 
+fn parse_stat_n_val(input: &str) -> Result<(Option<StatType>, Option<f32>), String> {
+    let (r#type, value) = input.split_once(' ').unwrap_or((input, ""));
+    // if a float, value is 'drain'; + heals, - damages
+    if let Ok(v) = r#type.parse::<f32>() {
+        return Ok((None, Some(v.clamp(-100.0, 100.0))));// TODO drain - RECHECK min/max [14.04.2026]
+    }
+
+    let stat_type = match r#type.to_lowercase().as_str() {
+        "hp" => StatType::HP,
+        "mp" => StatType::MP,
+        "sn" => StatType::SN,
+        "san" => StatType::San,
+        _ => return Err(format!("Has to be one of the existing stat types: {}", StatType::display_list()))
+    };
+
+    let Ok(v) = value.parse::<f32>() else {
+        return Err(format!("Drain on {stat_type} has to be a suitable numeric value…"));
+    };
+
+    Ok((stat_type.into(), v.clamp(-100.0, 100.0).into()))
+}
+
 #[cfg(test)]
 mod cmd_iedit_set_tests {
-    use crate::{cmd::{Command, CommandCtx, iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand}}, ctx, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, weave::WeaveCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
     
     #[tokio::test]
     async fn iedit_set_something_on_primordial() {
@@ -249,5 +312,38 @@ mod cmd_iedit_set_tests {
         ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, sigs, world, plr);
         ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
         ctx!(DescCommand, "", mock_sock, tx, sigs, world, plr);
+    }
+
+    #[tokio::test]
+    async fn iedit_set_multi() {
+        let mut buffer: Vec<u8> = Vec::new();
+        let mut s = std::io::Cursor::new(&mut buffer);
+        let (w, tx, ch, p) = get_operational_mock_world().await;
+        
+        ctx!(IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("Huh?"));
+        p.write().await.access = Access::Builder;
+        ctx!(IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("new"));
+        ctx!(IexCommand, "", s, tx, ch, w, p);
+        ctx!(SetCommand, "nut heal", s,tx,ch,w,p,|out:&str| out.contains("value is"));   // fail state
+        ctx!(SetCommand, "nut heal 5", s,tx,ch,w,p,|out:&str| out.contains("Usage"));           // fail state
+        ctx!(IexCommand, "", s, tx, ch, w, p,|out:&str| out.contains("Heal(HP"));               // ok
+        ctx!(SetCommand, "nut heal 1.0",s,tx,ch,w,p,|out:&str| out.contains("Usage:"));        // fail state
+        ctx!(SetCommand, "nut heal hp", s,tx,ch,w,p,|out:&str| out.contains("has to be"));     // fail state
+        ctx!(SetCommand, "nut heal hp 0", s,tx,ch,w,p,|out:&str| out.contains("edibl"));       // back in inedbile
+        ctx!(IexCommand, "", s, tx, ch, w, p,|out:&str| out.contains("type: <n/a>"));
+        ctx!(SetCommand, "nut heal hp 1", s,tx,ch,w,p,|out:&str| out.contains(": Heal"));       // ok
+        ctx!(SetCommand, "nut heal sn -0.5", s,tx,ch,w,p,|out:&str| out.contains(": Multi"));
+        ctx!(IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("SN -0.50") && out.contains("HP +"));
+        ctx!(SetCommand, "nut heal rm",s,tx,ch,w,p,|out:&str| out.contains("HP, MP"));         // fail state
+        ctx!(SetCommand, "nut heal rm hp",s,tx,ch,w,p,|out:&str| out.contains("Heal(SN -0.50)"));  // ok - fall back to Heal{..}
+        ctx!(SetCommand, "nut heal sn 0.25", s,tx,ch,w,p,|out:&str| out.contains("Heal(SN +0.25)"));  // ok
+        ctx!(SetCommand, "nut heal hp 1",s,tx,ch,w,p,|out:&str| out.contains("SN +0.25") && out.contains("HP +1.0"));//ok
+        ctx!(WeaveCommand, "",s, tx, ch, w, p,|out:&str| out.contains("created something"));
+        ctx!(IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("what it's"));
+        ctx!(IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("PrimordialItem"));         // aw poo, "forgot" to set cons
+        ctx!(SetCommand, "pot cons",s,tx,ch,w,p);
+        ctx!(WeaveCommand, "",s, tx, ch, w, p,|out:&str| out.contains("created something"));
+        ctx!(IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("what it's"));
+        ctx!(IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("Consumable"));             // yay, an edible apple, sort of.
     }
 }

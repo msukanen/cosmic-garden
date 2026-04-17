@@ -38,7 +38,7 @@ pub trait IdentityQuery {
 }
 
 /// A trait for anything and everything with mutable "identity".
-pub trait IdentityMut {
+pub trait IdentityMut : IdentityQuery {
     /// Get ref to raw ID.
     fn id_mut<'a>(&'a mut self) -> &'a mut String;
     /// Safely set ID, if possible.

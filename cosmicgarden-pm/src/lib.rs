@@ -556,3 +556,47 @@ pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
         #mut_impl
     })
 }
+
+/// Derive read-only [Combatant] token stream.
+fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+
+    let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
+
+    quote! {
+        impl crate::combat::Combatant for #name {
+            
+        }
+    }
+}
+
+/// Derive read-only [Combatant].
+#[proc_macro_derive(Combatant)]
+pub fn combatant_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    TokenStream::from(generate_combatant_impl(&input))
+}
+
+/// Derive read-only [Combatant] and mutable [Mut] both at once.
+#[proc_macro_derive(CombatantMut)]
+pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let base_impl = generate_combatant_impl(&input);
+    let Data::Struct(data) = input.data else { panic!("Struct only!") };
+    let _ = req_field!(data, "hp");
+    let mut_impl = quote! {
+        impl crate::combat::CombatantMut for #name {
+            fn take_dmg(&mut self, dmg: crate::mob::StatValue) -> bool {
+                use crate::mob::traits::{Mob,MobMut};
+                *(self.hp_mut()) -= dmg;
+                self.is_dead()
+            }
+        }
+    };
+    TokenStream::from(quote! {
+        #base_impl
+        #mut_impl
+    })
+}

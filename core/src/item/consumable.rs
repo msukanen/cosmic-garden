@@ -1,5 +1,5 @@
 //! Consumable matter. Usually food, but not always.
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display};
 
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
@@ -13,6 +13,7 @@ pub enum NutritionType {
     NotEdible,
     /// Healing (or damaging with negative `drain`) property.
     Heal { stat: StatType, drain: StatValue },
+    MultiHeal { stat_n_drain: HashMap<StatType, StatValue> }
 }
 
 impl Default for NutritionType {
@@ -25,7 +26,14 @@ impl Display for NutritionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotEdible => write!(f, "inedible"),
-            Self::Heal { stat, drain } => write!(f, "Heal({} {:+.2})", stat, drain)
+            Self::Heal { stat, drain } => write!(f, "Heal({} {:+.2})", stat, drain),
+            Self::MultiHeal { stat_n_drain } =>
+                write!(f, "MultiHeal({})",
+                        stat_n_drain
+                            .iter()
+                            .map(|(stat, drain)| format!("{} {:+.2}", stat, drain))
+                            .collect::<Vec<_>>()
+                            .join(", "))
         }
     }
 }

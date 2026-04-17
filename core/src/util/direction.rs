@@ -134,3 +134,12 @@ impl Directional for String {
         self.as_str().opposite()
     }
 }
+
+impl PartialEq<&str> for Direction {
+    fn eq(&self, other: &&str) -> bool {
+        match self {
+            Self::Custom(c) => c == other,
+            dir => Direction::from(other) == *dir
+        }
+    }
+}

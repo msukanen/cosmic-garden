@@ -104,7 +104,7 @@ pub trait Storage {
     fn eject_all(&mut self) -> Option<Vec<Item>>;
 }
 
-pub trait StorageMut {
+pub trait StorageMut : Storage {
     /// Set maximum space.
     /// 
     /// Note that this does not succeed if:

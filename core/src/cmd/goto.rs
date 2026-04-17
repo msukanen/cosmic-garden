@@ -1,5 +1,7 @@
 //! Goto somewhere, somehow
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 use crate::{cmd::{Command, CommandCtx, look::LookCommand}, identity::IdentityQuery, io::Broadcast, player::Player, tell_user, util::direction::Direction};
@@ -23,7 +25,7 @@ impl Command for GotoCommand {
             return
         };
 
-        let Some(room) = plr.read().await.location.upgrade() else {
+        let Some(origin) = plr.read().await.location.upgrade() else {
             let (p_id, p_name) = {
                 let lock = plr.read().await;
                 (lock.id().to_string(), lock.name.clone())
@@ -34,7 +36,7 @@ impl Command for GotoCommand {
         };
 
         let target_arc = {
-            let r_lock = room.read().await;
+            let r_lock = origin.read().await;
             r_lock.exits.get(&dir).and_then(|e| e.upgrade())
         };
 
@@ -47,11 +49,17 @@ impl Command for GotoCommand {
             log::error!("Translocation failure: {e:?}");
             tell_user!(ctx.writer, "Strangely enough you cannot go there…\n");
         } else {
+            // log::debug!("Maybe last goto: {:?}", plr.read().await.last_goto);
+            let mut plr = plr.write().await;
+            let origin_id = origin.read().await.id().to_string();
+            plr.last_goto = Some((dir.into(), Arc::downgrade(&origin)));
+            log::debug!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
+            drop(plr);
             LookCommand.exec({ctx.args = "";ctx}).await;
         }
 
         ctx.tx.send(Broadcast::Movement {
-            from: room.clone().into(),
+            from: origin.clone().into(),
             to: target.clone().into(),
             who: plr.clone()
         }).ok();

@@ -1,8 +1,8 @@
 //! Mob specific traits.
 
-use crate::{identity::IdentityQuery, mob::{Stat, StatError}};
+use crate::{combat::{Combatant, CombatantMut}, identity::IdentityQuery, mob::{Stat, StatError}};
 
-pub trait Mob : IdentityQuery {
+pub trait Mob : IdentityQuery + Combatant {
     fn hp<'a>(&'a self) -> &'a Stat;
     fn mp<'a>(&'a self) -> &'a Stat;
     fn sn<'a>(&'a self) -> &'a Stat;
@@ -23,10 +23,10 @@ pub trait Mob : IdentityQuery {
         }
     }
 
-    fn is_dead(&self) -> Result<bool, StatError> { self.hp().is_dead() }
+    fn is_dead(&self) -> bool { self.hp().is_dead().ok().unwrap() }
 }
 
-pub trait MobMut : Mob {
+pub trait MobMut : Mob + CombatantMut {
     fn hp_mut<'a>(&'a mut self) -> &'a mut Stat;
     fn mp_mut<'a>(&'a mut self) -> &'a mut Stat;
     fn sn_mut<'a>(&'a mut self) -> &'a mut Stat;

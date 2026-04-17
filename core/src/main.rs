@@ -1,4 +1,5 @@
 //! Cosmic Garden — a multi-threaded MUD engine.
+extern crate cosmic_garden_pm;
 use std::sync::Arc;
 
 use clap::Parser;
@@ -9,14 +10,15 @@ use tokio::{net::TcpListener, sync::{RwLock, broadcast, mpsc}};
 
 use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{DATA, WORLD}, thread::{SystemSignal, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
 
-mod r#const;
 mod cmd;
+pub mod combat;
+mod r#const;
 mod edit;
 mod error;
 mod identity;
 mod item;
 #[macro_use]
-mod macros;
+  mod macros;
 mod mob;
 mod password;
 mod player;

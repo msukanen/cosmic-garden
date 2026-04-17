@@ -19,6 +19,7 @@ const SMR_THRESHOLD: StatValue = -100.0;// HP -100
 pub enum StatError {
     NoDrain,
     NotApplicable,
+    NotStat,
 }
 
 impl Display for StatError {
@@ -26,6 +27,7 @@ impl Display for StatError {
         match self {
             Self::NoDrain => write!(f, "Stat does not support 'drain'."),
             Self::NotApplicable => write!(f, "Something or other that was attempted isn't compatible…"),
+            Self::NotStat => write!(f, "That is not a stat type…"),
         }
     }
 }
@@ -56,6 +58,19 @@ impl Display for StatType {
             Self::SN => "SN",
             Self::San => "San",
         })
+    }
+}
+
+impl TryFrom<&str> for StatType {
+    type Error = StatError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value {
+            "hp"|"HP"|"Hp" => Ok(StatType::HP),
+            "mp"|"MP"|"Mp" => Ok(StatType::MP),
+            "sn"|"SN"|"Sn" => Ok(StatType::SN),
+            "san"|"SAN"|"San" => Ok(StatType::San),
+            _ => Err(StatError::NotStat)
+        }
     }
 }
 

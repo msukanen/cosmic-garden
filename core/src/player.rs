@@ -2,11 +2,11 @@
 
 use std::{collections::HashMap, fmt::Display, sync::{Arc, Weak}};
 
-use cosmic_garden_pm::{IdentityMut, MobMut};
+use cosmic_garden_pm::{CombatantMut, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::MobMut}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config}};
+use crate::{combat::{Combatant, CombatantMut}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -32,7 +32,7 @@ impl Display for ActivityType {
 }
 
 /// A player's character contained here…
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut, CombatantMut)]
 pub struct Player {
     /// ID of owner of this specific [Player] character.
     pub(super) owner_id: String,
@@ -73,6 +73,9 @@ pub struct Player {
 
     #[serde(default)]
     pub affects: HashMap<String, Affect>,
+
+    #[serde(default, skip)]
+    pub last_goto: Option<(Direction, Weak<RwLock<Room>>)>,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -199,6 +202,7 @@ impl Default for Player {
             activity_type: ActivityType::Other,
             inventory: player_inv_default(),
             affects: HashMap::new(),
+            last_goto: None,
         }
     }
 }
