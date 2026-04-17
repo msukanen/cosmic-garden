@@ -15,6 +15,7 @@ pub enum Access {
 
 /// [Player] access rights; coarse.
 #[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "snake_case")]
 pub enum StrictAccess {
     Admin,
     Builder,

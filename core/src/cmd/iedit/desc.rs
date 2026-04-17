@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use crate::{cmd::{Command, CommandCtx}, string::{Describable, DescribableMut}};
+use crate::{cmd::{Command, CommandCtx}};
 
 pub struct DescCommand;
 

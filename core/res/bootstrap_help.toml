@@ -1,0 +1,14 @@
+[[help_pages]]
+id = "dig"
+title = "dig"
+access = "any_builder"
+alias = ["dig"]
+contents = """
+'dig' a new room adjacent to your current location.
+
+This command handles the spatial physics of carving out a new coordinate and
+linking it back to your current anchor point.
+"""
+usage = [
+    "dig <dir> <room-id>"
+]

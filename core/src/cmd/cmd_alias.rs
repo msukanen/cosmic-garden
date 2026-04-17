@@ -60,14 +60,17 @@ macro_rules! cmd_xedit_title {
 #[macro_export]
 macro_rules! cmd_xedit_desc {
     ($iam:expr, $ctx:ident, $ed:ident, $ed_v:literal) => {{
+        use crate::string::description::{Describable, DescribableMut};
         let plr = crate::validate_access!($ctx, builder);
         let res = crate::util::ed::edit_text($ctx.writer, $ctx.args, crate::access_ed_entry!(plr, $ed).desc()).await;
         let verbose = match res {
             Ok(crate::util::ed::EdResult::ContentReady { text, verbose, .. }) => {
-                let Some(ref mut b) = plr.write().await.iedit_buffer else {
-                    log::error!("Whatever happened to Iedit buffer here...?");
+                paste::paste! {
+                let Some(ref mut b) = plr.write().await.[<$ed _buffer>] else {
+                    log::error!("Whatever happened to {} buffer here...?", $ed_v);
                     return ;
                 };
+                }
                 b.set_desc(&text);
                 $ctx.state.set_dirty(true);
                 verbose
@@ -88,6 +91,7 @@ macro_rules! cmd_xedit_desc {
         }
     }};
 }
+
 #[cfg(test)]
 mod cmd_alias_tests {
     use std::env;

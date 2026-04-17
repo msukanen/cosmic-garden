@@ -11,21 +11,31 @@ use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{hel
 pub struct HelpPage {
     /// internal ID
     id: String,
+    
     /// Title of the document.
     title: String,
+    
     /// Who can access this doc?
     #[serde(default)]
     pub(crate) access: Option<StrictAccess>,
+
+    #[serde(default)]
     /// alias / also-known-as
     pub(crate) alias: HashSet<String>,
+    
     /// What other pages are referred to, "see also".
     #[serde(default)]
     pub(crate) see_also: HashSet<String>,
-    #[description(desc)]
-    contents: String,
+    
+    #[description(desc)] contents: String,
+    
     /// Phrases to confuse anyone who doesn't have rights to read this particular page.
     #[serde(default)]
     pub(crate) obfuscation: Option<Vec<String>>,
+    
+    /// Optional 'usage' entries. Meant mainly for commands, naturally.
+    #[serde(default)]
+    pub(crate) usage: Vec<String>,
 }
 
 impl HelpPage {
@@ -57,7 +67,8 @@ impl HelpPage {
                 h.insert(alias.to_lowercase());
                 h
             },
-            obfuscation: None
+            obfuscation: None,
+            usage: vec![]
         })
     }
 
@@ -76,6 +87,19 @@ impl HelpPage {
             Err(e) => log::error!("FAIL: TOMLing of '{nouuid}' failed: {e}")
         }
         Ok(())
+    }
+
+    /// Get the usage as formatted string.
+    pub fn usage(&self) -> String {
+        let mut out = String::from("<c green>Usage:</c> ");
+        for (it, text) in self.usage.iter().enumerate() {
+            if it == 0 {
+                out.push_str(&format!("{text}\n"));
+            } else {
+                out.push_str(&format!("       {text}\n"));
+            }
+        }
+        out
     }
 }
 
@@ -117,6 +141,18 @@ impl HelpLibrary {
             let mut lock = (*HELP_LIBRARY).write().await;
             *lock = HelpLibrary::default();
             lock.world_id = WORLD_ID.as_str().into();
+
+            let primordial_toml = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/res/bootstrap_help.toml"));
+            #[derive(Deserialize)]
+            struct PrimordialLexicon {
+                help_pages: Vec<HelpPage>
+            }
+            let wrapper: PrimordialLexicon = toml::from_str(primordial_toml)?;
+            for page in wrapper.help_pages {
+                    lock.id_stem.insert(page.id().to_lowercase(), true);
+                    lock.items.insert(page.id().to_lowercase(), page);
+                    lock.save().await?;
+            }
 
             let mut xfiles = HelpPage::new(&lock.world_id)?;
             xfiles.alias.insert("world".into());

@@ -25,7 +25,7 @@ impl Command for ListCommand {
 
 #[cfg(test)]
 mod cmd_iedit_list {
-    use crate::{cmd::{iedit::list::ListCommand, look::LookCommand, redit::ReditCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{redit::list::ListCommand, look::LookCommand, redit::ReditCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn exits_listing() {

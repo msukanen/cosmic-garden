@@ -19,12 +19,15 @@ lazy_static! {
 /// This thread keeps the world's documents nice and tidy.
 /// 
 pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>)) {
+    // Bootstrap/load blueprints.
     log::info!("Library establishing… blueprints @ '{}'", blueprint_lib_fp().display());
     if let Err(e) = BlueprintLibrary::load_or_bootstrap().await {
         // Halt the printing press!!!
         log::error!("FAIL: Library in fire!!! {e:?}");
         return ;
     }
+
+    // Bootstrap/load help files.
     log::info!("Library establishing… helpful documents @ '{}'", help_lib_fp().display());
     if let Err(e) = HelpLibrary::load_or_bootstrap().await {
         // Shucks! The documents are in fire!

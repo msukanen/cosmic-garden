@@ -60,11 +60,12 @@ impl HelpRenderCmd for RenderHelpPage {
         let body = &page.desc();
         let mut alias_div = String::new();
         if !page.alias.is_empty() {
-            alias_div.push_str(&format!("<c gray>   -→ also: {}</c>\n", page.alias.iter().cloned().collect::<Vec<_>>().join(", ")));
+            alias_div.push_str(&format!("<c gray>   -→ also: {}</c>\n", page.alias.iter().map(|s|s.as_str()).collect::<Vec<_>>().join(", ")));
         }
+        let usage = &page.usage();
     
         // …and render…
-        tell_user!(ctx.writer, "{}{}\n{}\n\n", header, alias_div, body);
+        tell_user!(ctx.writer, "{}{}\n{}\n\n{}", header, alias_div, body, usage);
         true
     }
 }
