@@ -89,7 +89,7 @@ create a new one with 'hedit new <topic>'.
 
 To persist your edits, use 'weave' command.
 """
-see_also = ["weave","abort"]
+see_also = ["abort","desc","set","title","usage","weave"]
 usage = [
     "hedit <topic-id>",
     "hedit new <topic-id>"
@@ -132,7 +132,7 @@ not persistable (as blueprints), only "true matter" is.
 usage = [
     "iedit <item-id>"
 ]
-see_also = ["abort","weave"]
+see_also = ["abort","desc","devolve","iex","set","title","weave","iedit-weave"]
 [[help_pages]]
 id = "inventory"
 title = "inventory"
@@ -209,7 +209,7 @@ other place. REdit does *not* create new rooms, for that you have to use
 
 To persist your edits, call 'weave'.
 """
-see_also = ["abort", "weave"]
+see_also = ["abort", "desc", "list", "title", "way", "weave"]
 usage = [
     "redit here|room",
     "redit <room-id>"
@@ -308,9 +308,109 @@ Invoke a specialized editor to work on a wall of text.
 """
 usage = [
     "desc",
-    "desc =<text>",
-    "desc -<line-num>",
-    "desc +<line-num> <text>",
-    "desc r<line-num> <text>",
+    "desc [v]=<text>",
+    "desc [v]-<line-num>",
+    "desc [v]+<line-num> <text>",
+    "desc [v]r<line-num> <text>",
     "desc <text>"
+]
+[[help_pages]]
+id = "title"
+title = "title"
+alias = ["title"]
+access = "any_builder"
+contents = """
+Assign new title for whatever you have currently under works.
+"""
+usage = ["title <text>"]
+[[help_pages]]
+id = "hedit-usage"
+title = "usage"
+alias = ["hedit-usage"]
+access = "any_builder"
+contents = """
+Invoke a specialized editor to mutate command usage entry.
+"""
+usage = [
+    "usage",
+    "usage [v]-<line-num>",
+    "usage [v]+<line-num> <text>",
+    "usage [v]r<line-num> <text>",
+    "usage [v]=<text>",
+    "usage <text>"
+]
+[[help_pages]]
+id = "hedit-set"
+title = "set"
+alias = ["hedit-set"]
+access = "any_builder"
+contents = """
+TODO
+"""
+usage = ["set ..."]
+[[help_pages]]
+id = "iedit-iex"
+title = ["iex"]
+alias = ["iedit-iex", "iex"]
+access = "any_builder"
+contents = """
+Examines the details of the item under works.
+"""
+usage = ["iex"]
+[[help_pages]]
+id = "iedit-set"
+title = "set"
+alias = ["iedit-set"]
+access = "any_builder"
+contents = """
+TODO
+"""
+usage = ["set ..."]
+[[help_pages]]
+id = "devolve"
+title = "devolve"
+alias = ["devolve"]
+access = "builder"
+contents = """
+Converts any item under works into Primordial state regardless of what the
+item really is.
+
+Note that this command is reversible if you set the 'potential' to what the
+item had originally. But if not... well... You'll see.
+"""
+usage = ["devolve"]
+[[help_pages]]
+id = "redit-list"
+title = "list"
+alias = ["redit-list", "room list"]
+access = "any_builder"
+contents = """
+Scans the world's archives to locate rooms by their identity or title in
+bifuricated manner; identifiers and titles are both matched against
+<srch-term>.
+
+If no <srch-term> is provided, lists all rooms in the archive (naturally
+sorted). Results are given in a bunch of up to 10 per "page".
+
+To see another page, issue same search with different <page-num>.
+"""
+usage = [
+    "list",
+    "list <srch-term> [<page-num>]"
+]
+[[help_pages]]
+id = "redit-way"
+title = "way"
+alias = ["redit-way", "way"]
+access = "any_builder"
+contents = """
+'way' creates either uni- or bidirectional exit to another room from your
+whereabouts.
+
+Typical cardinal directions (including up and down) result in a bidirectional
+exit, but more custom ones end up unidirectional unless/until you create a
+return path at the endpoint manually.
+"""
+usage = [
+    "way <dir> <room-id>"
 ]
