@@ -73,6 +73,9 @@ lazy_static! {
         for name in &[
             "admin", "sys", "system", "root",
             "world", "self", "me", "omfg",
+            "room", "here", "all", "force",
+            "builder", "anybuilder", "any_builder",
+            "any"
         ] { s.insert(*name);}
         s
     };

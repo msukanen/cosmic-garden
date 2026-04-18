@@ -11,13 +11,16 @@ impl Command for WeaveCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
         if !ctx.state.is_dirty() {
-            tell_user!(ctx.writer, "*stretch* - done with edits?\n");
+            tell_user!(ctx.writer, "Not dirty... *stretch* - done with edits?\n");
             BufferNuke.exec({ctx.args = "quiet";ctx}).await;
             return;
         }
 
         let mut p = plr.write().await;
         let page = p.hedit_buffer.take();
+        if page.is_none() {
+            log::error!("WHERE DID THE PAGE GO?!");
+        }
         drop(p);
 
         if let Some(page) = page {
