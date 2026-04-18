@@ -52,9 +52,17 @@ impl HelpPage {
 
     /// Produce new document with default values.
     pub fn new(name: &str) -> Result<Self, CgError> {
-        // see that the name will survive as an ID…
-        let name = name.as_id()?;
-        let alias = name.clone();
+        // namespaced?
+        let (namespace, maybe_name) = name.split_once(':').unwrap_or((name, ""));
+        let name = if maybe_name.is_empty() {
+            namespace.as_id()?
+        } else {
+            let prefix = namespace.as_id()?;
+            let suffix = maybe_name.as_id()?;
+            format!("{prefix}-{suffix}")
+        };
+
+        let alias = name.show_uuid(false).to_string();
         let name = name.re_uuid();// everything in the 'verse has UUID (almost everything…)
         Ok(Self {
             id: name.clone(),
@@ -109,6 +117,7 @@ pub struct HelpLibrary {
     #[serde(with = "string_vec_to_bool_map")]
     id_stem: HashMap<String, bool>,
     //             ID,     entry
+    #[serde(skip, default)]
     items: HashMap<String, HelpPage>,
 
     // runtime sorted:
@@ -215,7 +224,9 @@ impl HelpLibrary {
                 log::error!("Could not find '{id}' in 'items'!");
                 continue;
             };
-            let _ = item.save().await;
+            if let Ok(_) = item.save().await {
+                *dirty = false;
+            }
         }
 
         Ok(())
@@ -223,15 +234,28 @@ impl HelpLibrary {
 
     /// Get a document, maybe…
     pub fn get(&self, id: &str, access: &Access, bypass_access: bool) -> Option<HelpPage> {
-        let query = id.to_lowercase();
-        if let Some(actual) = self.alias.get(&query) {
-            if let Some(page) = self.items.get(actual) {
-                if bypass_access || page.can_access(access) {
-                    return page.clone().into();
+        log::trace!("Librarian is looking for… '{id}'…");
+        fn actual_get(lib: &HelpLibrary, query: &str, access: &Access, bypass_access: bool) -> Option<HelpPage> {
+            if let Some(actual) = lib.alias.get(query) {
+                if let Some(page) = lib.items.get(actual) {
+                    if bypass_access || page.can_access(access) {
+                        return page.clone().into();
+                    }
                 }
             }
+            None
         }
-        None
+
+        let query = id.to_lowercase();
+        let (namespace, actual) = query.as_str().split_once(':').unwrap_or((query.as_str(), ""));
+        if !actual.is_empty() {
+            let query = format!("{}-{}", namespace, actual);
+            if let Some(page) = actual_get(self, &query, access, bypass_access) {
+                return Some(page);
+            }
+        }
+
+        actual_get(self, &query, access, bypass_access)
     }
 
     /// See if there's any new docs in new_docs queue.
@@ -293,6 +317,7 @@ impl HelpLibrary {
     /// # Return
     /// `true` if shelved for real.
     pub fn shelve(&mut self, entry: &HelpPage, system_ch: &SignalChannels) -> bool {
+        log::trace!("Shelving {} …", entry.id());
         // TODO content checking?
         self.new_docs.push(entry.clone());
         // poke the librarian but don't stand waiting…
