@@ -1,4 +1,17 @@
 [[help_pages]]
+id = "abort"
+title = "abort"
+access = "any_builder"
+alias = ["abort"]
+contents = """
+Aborts any underway edits.
+
+WARNING: this command is irreversible.
+         All edits, unless 'weave'd, are irrecovably purged.
+"""
+usage = ["abort"]
+see_also = ["weave"]
+[[help_pages]]
 id = "dig"
 title = "dig"
 access = "any_builder"
@@ -11,4 +24,293 @@ linking it back to your current anchor point.
 """
 usage = [
     "dig <dir> <room-id>"
+]
+[[help_pages]]
+id = "drop"
+title = "drop"
+alias = ["drop"]
+contents = """
+'drop' something from your inventory on ground.
+"""
+usage = ["drop <item-id>"]
+[[help_pages]]
+id = "eat"
+title = "eat"
+alias = ["eat"]
+contents = """
+'eat' something from your inventory (or your environment), if it happens to
+be edible to begin with...
+"""
+usage = ["eat <item-id>"]
+[[help_pages]]
+id = "force"
+title = "force"
+alias = ["force"]
+access = "admin"
+contents = """
+'force' someone(s) to execute any other command but 'force' itself.
+"""
+usage = [
+    "force <target-id> <cmd> [<args>]",
+    "force here|room <cmd> [<args>]",
+    "force all <cmd> [<args>]"
+]
+[[help_pages]]
+id = "get"
+title = "get"
+alias = ["get", "pick", "take"]
+contents = """
+Pick up something from somewhere, or at least try to...
+"""
+usage = [
+    "get <item-id>"
+]
+[[help_pages]]
+id = "goto"
+title = "goto"
+alias = ["go", "goto", "go-to", "go to", "move", "run", "walk", "enter"]
+contents = """
+Go somewhere, some direction, or enter some place.
+
+Examples: go north, enter portal, walk down
+"""
+usage = [
+    "goto <dir>"
+]
+[[help_pages]]
+id = "hedit"
+title = "hedit"
+alias = ["hedit", "edit-help", "help editor"]
+access = "any_builder"
+contents = """
+Invokes HEdit (help editor) to edit a help entry. If an entry exists in
+library, you get a copy to tinker with. If there is no existing document,
+create a new one with 'hedit new <topic>'.
+
+To persist your edits, use 'weave' command.
+"""
+see_also = ["weave","abort"]
+usage = [
+    "hedit <topic-id>",
+    "hedit new <topic-id>"
+]
+[[help_pages]]
+id = "help"
+title = "help"
+alias = ["help", "aid", "man", "manual", "info", "?"]
+contents = """
+'help' (and its aliases, if present) is used to read various bits of lore or
+to find out how some command works.
+
+In general, most, if not all commands show their own help by invoking the
+command with '?' as an argument. Or doing it the other way round, '?' followed
+by the command name, e.g. '?help'.
+"""
+usage = [
+    "help",
+    "help <topic>",
+    "?<cmd>",
+    "<cmd> ?"
+]
+[[help_pages]]
+id = "iedit"
+title = "iedit"
+access = "builder"
+alias = ["iedit"]
+contents = """
+Invokes IEdit (item editor) to focus on a specific item, a blueprint, or
+something brand new, depending on where the sought <item-id> sits at, if
+anywhere yet.
+
+To persist your edits, use 'weave' command.
+To persist as a permanent blueprint for later, use 'weave persist'.
+
+However, do not forget to set the potential of your item to something or
+'persist' will give you harsh words and reject it... Primordial items are
+not persistable (as blueprints), only "true matter" is.
+"""
+usage = [
+    "iedit <item-id>"
+]
+see_also = ["abort","weave"]
+[[help_pages]]
+id = "inventory"
+title = "inventory"
+alias = ["inventory", "inv", "carrying", "held", "belongings"]
+contents = """
+Rummage through your belongings with 'inventory' command.
+"""
+usage = [
+    "inventory"
+]
+[[help_pages]]
+id = "invis"
+title = "invis"
+access = "builder"
+alias = ["invis", "ghost", "spooky action"]
+contents = """
+Fade in/out of mortal vicinity. This includes various commands like 'who' and
+other such which rely on something being observable.
+
+This command is a toggle.
+
+Admins, naturally, always see anyone and and everyone. Builders a bit less so.
+Normal players are completely oblivious to ghosted personas nor can they
+interact with such directly even by guessimating who might be online.
+"""
+usage = [
+    "invis"
+]
+[[help_pages]]
+id = "look"
+title = "look"
+alias = ["look", "glance", "peer", "eye", "look at", "look for", "search"]
+contents = """
+Look around, at, or in places or things with 'look' command.
+
+Variant of 'look', namely 'search' can be used to try find something hidden...
+
+'search' in reality is an alias for 'look for ...'. It may or may not find
+what you're looking for - some things are better hidden than some others.
+"""
+usage = [
+    "look",
+    "look at <target>",
+    "look in <target>",
+    "look for <something>"
+]
+[[help_pages]]
+id = "pop"
+title = "pop"
+alias = ["pop"]
+contents = """
+'pop' something!
+"""
+usage = [
+    "pop <target>"
+]
+[[help_pages]]
+id = "quit"
+title = "quit"
+alias = ["quit", "logout", "log out", "go home", "bail", "run away"]
+contents = """
+'quit', a.k.a. 'logout', logs out safely out of the game to continue later
+at your leisure.
+"""
+usage = ["quit", "logout"]
+[[help_pages]]
+id = "redit"
+title = "redit"
+alias = ["redit"]
+contents = """
+Invokes REdit (room editor) mode to work on the very room you're in or some
+other place. REdit does *not* create new rooms, for that you have to use
+'dig' command.
+
+To persist your edits, call 'weave'.
+"""
+see_also = ["abort", "weave"]
+usage = [
+    "redit here|room",
+    "redit <room-id>"
+]
+[[help_pages]]
+id = "say"
+title = "say"
+alias = ["say", "ask", "exclaim", "talk"]
+contents = """
+Well, 'say' does what reads on the tin, makes you say something.
+
+<text> ending with '?' is treated as a question variant, while '!' makes it
+an exclaim.
+"""
+usage = [
+    "say <text>"
+]
+see_also = ["channels"]
+[[help_pages]]
+id = "teleport"
+title = "teleport"
+alias = ["teleport", "tele", "port", "yank"]
+access = "admin"
+contents = """
+Teleport someone somewhere, be it yourself or someone else.
+
+#1 teleport [me] <target|room-id>
+- Teleports you to <target> or <room-id>
+
+#2 teleport <target>
+- Yanks the <target> to where you are currently.
+
+#3 teleport <target1> <target2|room-id>
+- Teleports <target1> to either where <target2> is or to specified <room-id>.
+
+#4 teleport here|room <room-id>
+- Evicts everyone (except yourself) from the current room to <room-id>.
+"""
+usage = [
+    "teleport [me] <target|room-id>",
+    "teleport <target>",
+    "teleport <target1> <target2|room-id>",
+    "teleport here|room <room-id>"
+]
+[[help_pages]]
+id = "who"
+title = "who"
+alias = ["who"]
+contents = """
+Shows who all are online.
+"""
+usage = [
+    "who"
+]
+[[help_pages]]
+id = "iedit-weave"
+title = "weave"
+alias = ["iedit-weave"]
+access = "any_builder"
+contents = """
+'weave' something into existence. This command metamorphs your IEdit item into
+something or other more specialized than Primordial, depending on how you
+specced the item you were working on.
+
+PERMANENT STAFF:
+To persist your edits as future "blueprint", apply 'persist' as an argument
+for 'weave'.
+
+Without 'persist' your item remains truly unique, with no trace in the global
+blueprint library. You can, of course, persist it later by re-weaving it with
+'persist' flag.
+"""
+usage = [
+    "weave",
+    "weave persist"
+]
+[[help_pages]]
+id = "weave"
+title = "weave"
+alias = ["weave"]
+access = "any_builder"
+contents = """
+'weave' your edits into existence for all(?) to see.
+"""
+usage = ["weave"]
+[[help_pages]]
+id = "desc"
+title = "desc"
+alias = ["desc", "description", "edit-desc"]
+access = "any_builder"
+contents = """
+Invoke a specialized editor to work on a wall of text.
+
+# 'desc'
+'desc' alone prints whatever is currently in the buffer, with ruler line and such.
+"""
+usage = [
+    "desc",
+    "desc =<text>",
+    "desc -<line-num>",
+    "desc +<line-num> <text>",
+    "desc r<line-num> <text>",
+    "desc <text>"
 ]
