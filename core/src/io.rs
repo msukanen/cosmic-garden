@@ -280,4 +280,12 @@ impl ClientState {
     pub fn is_editing(&self) -> bool {
         matches!(self, Self::Editing { .. })
     }
+
+    /// Get [EditorMode], if any.
+    pub fn edit_mode(&self) -> Option<EditorMode> {
+        match self {
+            Self::Editing { mode,.. } => mode.clone().into(),
+            _ => None
+        }
+    }
 }
