@@ -51,24 +51,25 @@ impl Command for UsageCommand {
 mod hedit_usage_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{hedit::{HeditCommand, usage::UsageCommand}, help::HelpCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{hedit::{HeditCommand, usage::UsageCommand}, help::HelpCommand}, ctx, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn dummy_entry_usage_check() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,tx,ch,p) = get_operational_mock_world().await;
-        ctx!(HeditCommand, "dummy",s,tx,ch,w,p,|out:&str| out.contains("Huh?"));
+        let state = ClientState::Playing { player: p.clone() };
+        let state = ctx!(state, HeditCommand, "dummy",s,tx,ch,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        ctx!(HeditCommand, "dummy",s,tx,ch,w,p,|out:&str| out.contains("no such topic"));
-        ctx!(HeditCommand, "new dummy",s,tx,ch,w,p,|out:&str| out.contains("DUMMY"));
-        ctx!(UsageCommand, "",s,tx,ch,w,p,|out:&str| out.contains("Usage:"));
-        ctx!(UsageCommand, "dummy <stuff>",s,tx,ch,w,p,|out:&str| out.contains("updated"));
-        ctx!(UsageCommand, "dummy bar <foo> <baz>",s,tx,ch,w,p,|out:&str| out.contains("updated"));
-        ctx!(UsageCommand, "",s,tx,ch,w,p,|out:&str| out.contains("Usage:") && out.contains("<stuff>") && out.contains("<baz>"));
-        ctx!(UsageCommand, "-1",s,tx,ch,w,p,|out:&str| !out.contains("<stuff>"));
-        ctx!(UsageCommand, "+7 dummy baz <bar>",s,tx,ch,w,p);
-        ctx!(UsageCommand, "",s,tx,ch,w,p,|out:&str| out.contains("Usage:") && out.contains("<foo>") && out.contains("<bar>"));
-        ctx!(HelpCommand, "",s,tx,ch,w,p);
+        let state = ctx!(state, HeditCommand, "dummy",s,tx,ch,w,p,|out:&str| out.contains("no such topic"));
+        let state = ctx!(state, HeditCommand, "new dummy",s,tx,ch,w,p,|out:&str| out.contains("DUMMY"));
+        let state = ctx!(state, UsageCommand, "",s,tx,ch,w,p,|out:&str| out.contains("Usage:"));
+        let state = ctx!(state, UsageCommand, "dummy <stuff>",s,tx,ch,w,p,|out:&str| out.contains("updated"));
+        let state = ctx!(state, UsageCommand, "dummy bar <foo> <baz>",s,tx,ch,w,p,|out:&str| out.contains("updated"));
+        let state = ctx!(state, UsageCommand, "",s,tx,ch,w,p,|out:&str| out.contains("Usage:") && out.contains("<stuff>") && out.contains("<baz>"));
+        let state = ctx!(state, UsageCommand, "-1",s,tx,ch,w,p,|out:&str| !out.contains("<stuff>"));
+        let state = ctx!(state, UsageCommand, "+7 dummy baz <bar>",s,tx,ch,w,p);
+        let state = ctx!(state, UsageCommand, "",s,tx,ch,w,p,|out:&str| out.contains("Usage:") && out.contains("<foo>") && out.contains("<bar>"));
+        let state = ctx!(state, HelpCommand, "",s,tx,ch,w,p);
     }
 }

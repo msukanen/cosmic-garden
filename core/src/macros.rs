@@ -49,30 +49,32 @@ macro_rules! err_iedit_buffer_inaccessible {
     /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);`
     /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr, |out:&str| out.contains("apple"));`
     macro_rules! ctx {
-        ($cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $sigs:ident, $world:ident, $plr:ident) => {{
-            crate::ctx!($cmd,$args,$mock_sock,$tx,$sigs,$world,$plr,|_|true);
+        ($state:ident, $cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $sigs:ident, $world:ident, $plr:ident) => {{
+            crate::ctx!($state,$cmd,$args,$mock_sock,$tx,$sigs,$world,$plr,|_|true)
         }};
 
-        ($cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $sigs:ident, $world:ident, $plr:ident, $assert:expr) => {
-            {
-                use crate::{cmd::{Command,CommandCtx}, ClientState};
+        ($state:ident, $cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $sigs:ident, $world:ident, $plr:ident, $assert:expr) => {{
+            let state = {
+                use crate::cmd::{Command,CommandCtx};
                 $mock_sock.get_mut().clear();
                 let mut ctx = CommandCtx {
                     writer: &mut $mock_sock,
                     args: $args,
                     pre_pad_n: false,
                     system: &$sigs,
-                    state: ClientState::Playing { player: $plr.clone() },
+                    state: $state,
                     world: $world.clone(),
                     tx: &$tx
                 };
                 $cmd.exec(&mut ctx).await;
-            }
+                ctx.state.clone()
+            };
             // some assertions to do… maybe.
             {
                 let out = String::from_utf8_lossy($mock_sock.get_ref());
                 assert!($assert(&out), "Ass fail! Out was '{}'", out.trim_end());
             }
             log::debug!("\n{}", String::from_utf8_lossy($mock_sock.get_ref()));
-        };
+            state
+        }};
     }

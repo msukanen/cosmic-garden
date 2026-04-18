@@ -49,24 +49,25 @@ impl Command for WayCommand {
 mod cmd_redit_way {
     use std::io::Cursor;
 
-    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn way_creation_r1r2() {
         let mut buf: Vec<u8> = Vec::new();
         let mut s = Cursor::new(&mut buf);
         let (w,tx,ch,p) = get_operational_mock_world().await;
-        ctx!(LookCommand, "", s,tx,ch,w,p);
-        ctx!(WayCommand, "east r-3",s,tx,ch,w,p,|out:&str| out.contains("Huh?"));
+        let state = ClientState::Playing { player: p.clone() };
+        let state = ctx!(state, LookCommand, "", s,tx,ch,w,p);
+        let state = ctx!(state, WayCommand, "east r-3",s,tx,ch,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        ctx!(WayCommand, "east r-3",s,tx,ch,w,p,|out:&str| out.contains("No such room"));
-        ctx!(WayCommand, "balloon r-2",s,tx,ch,w,p,|out:&str| out.contains("one-way"));
-        ctx!(WayCommand, "north r-2",s,tx,ch,w,p,|out:&str| out.contains("back-link"));
-        ctx!(LookCommand, "",s,tx,ch,w,p,|out:&str| out.contains("north") && out.contains("balloon"));
-        ctx!(GotoCommand, "north",s,tx,ch,w,p,|out:&str| out.contains("south"));
-        ctx!(GotoCommand, "south",s,tx,ch,w,p);
-        ctx!(GotoCommand, "balloon",s,tx,ch,w,p,|out:&str| out.contains("south"));
-        ctx!(PopCommand, "balloon",s,tx,ch,w,p,|out:&str| out.contains("falling"));
-        ctx!(LookCommand, "",s,tx,ch,w,p,|out:&str| out.contains("north") && out.contains("balloon"));
+        let state = ctx!(state, WayCommand, "east r-3",s,tx,ch,w,p,|out:&str| out.contains("No such room"));
+        let state = ctx!(state, WayCommand, "balloon r-2",s,tx,ch,w,p,|out:&str| out.contains("one-way"));
+        let state = ctx!(state, WayCommand, "north r-2",s,tx,ch,w,p,|out:&str| out.contains("back-link"));
+        let state = ctx!(state, LookCommand, "",s,tx,ch,w,p,|out:&str| out.contains("north") && out.contains("balloon"));
+        let state = ctx!(state, GotoCommand, "north",s,tx,ch,w,p,|out:&str| out.contains("south"));
+        let state = ctx!(state, GotoCommand, "south",s,tx,ch,w,p);
+        let state = ctx!(state, GotoCommand, "balloon",s,tx,ch,w,p,|out:&str| out.contains("south"));
+        let state = ctx!(state, PopCommand, "balloon",s,tx,ch,w,p,|out:&str| out.contains("falling"));
+        let state = ctx!(state, LookCommand, "",s,tx,ch,w,p,|out:&str| out.contains("north") && out.contains("balloon"));
     }
 }

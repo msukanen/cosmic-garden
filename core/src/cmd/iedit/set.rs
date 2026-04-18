@@ -273,26 +273,26 @@ fn parse_stat_n_val(input: &str) -> Result<(Option<StatType>, Option<f32>), Stri
 
 #[cfg(test)]
 mod cmd_iedit_set_tests {
-    use crate::{cmd::iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, weave::WeaveCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, weave::WeaveCommand}, ctx, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
     
     #[tokio::test]
     async fn iedit_set_something_on_primordial() {
         let mut buffer: Vec<u8> = Vec::new();
         let mut mock_sock = std::io::Cursor::new(&mut buffer);
         let (world, tx, sigs, plr) = get_operational_mock_world().await;
+        let state = ClientState::Playing { player: plr.clone() };
+        let state = ctx!(state, IeditCommand, "apple", mock_sock, tx, sigs, world, plr, |out:&str| out.contains("Huh?"));
         plr.write().await.access = Access::Builder;
-        
-        log::debug!("Debugging the Kobolds away!");// <-- for posterity
-        ctx!(IeditCommand, "apple", mock_sock, tx, sigs, world, plr);
-        ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
-        ctx!(SetCommand, "pot cons", mock_sock, tx, sigs, world, plr);
-        ctx!(SetCommand, "nut inedible", mock_sock, tx, sigs, world, plr);
-        ctx!(SetCommand, "nut heal hp 10.0", mock_sock, tx, sigs, world, plr);
-        ctx!(DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, sigs, world, plr);
-        ctx!(DescCommand, "+3 ...", mock_sock, tx, sigs, world, plr);
-        ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, sigs, world, plr);
-        ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
-        ctx!(DescCommand, "", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, IeditCommand, "apple", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, IexCommand, "", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, SetCommand, "pot cons", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, SetCommand, "nut inedible", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, SetCommand, "nut heal hp 10.0", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, DescCommand, "+3 ...", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, DescCommand, "+5 ... an apple!", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, IexCommand, "", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, DescCommand, "", mock_sock, tx, sigs, world, plr);
     }
 
     #[tokio::test]
@@ -300,18 +300,19 @@ mod cmd_iedit_set_tests {
         let mut buffer: Vec<u8> = Vec::new();
         let mut mock_sock = std::io::Cursor::new(&mut buffer);
         let (world, tx, sigs, plr) = get_operational_mock_world().await;
+        let state = ClientState::Playing { player: plr.clone() };
+        let state = ctx!(state, IeditCommand, "apple", mock_sock, tx, sigs, world, plr,|out:&str| out.contains("Huh?"));
         plr.write().await.access = Access::Builder;
-        
-        ctx!(IeditCommand, "apple", mock_sock, tx, sigs, world, plr);
-        ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
-        ctx!(SetCommand, "pot cons", mock_sock, tx, sigs, world, plr);
-        ctx!(SetCommand, "nut inedible", mock_sock, tx, sigs, world, plr);
-        ctx!(SetCommand, "nut heal hp 10.0", mock_sock, tx, sigs, world, plr);
-        ctx!(DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, sigs, world, plr);
-        ctx!(DescCommand, "+3 ...", mock_sock, tx, sigs, world, plr);
-        ctx!(DescCommand, "+5 ... an apple!", mock_sock, tx, sigs, world, plr);
-        ctx!(IexCommand, "", mock_sock, tx, sigs, world, plr);
-        ctx!(DescCommand, "", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, IeditCommand, "apple", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, IexCommand, "", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, SetCommand, "pot cons", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, SetCommand, "nut inedible", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, SetCommand, "nut heal hp 10.0", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, DescCommand, "=It's not soup anymore. It's ...", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, DescCommand, "+3 ...", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, DescCommand, "+5 ... an apple!", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, IexCommand, "", mock_sock, tx, sigs, world, plr);
+        let state = ctx!(state, DescCommand, "", mock_sock, tx, sigs, world, plr);
     }
 
     #[tokio::test]
@@ -319,31 +320,31 @@ mod cmd_iedit_set_tests {
         let mut buffer: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut buffer);
         let (w, tx, ch, p) = get_operational_mock_world().await;
-        
-        ctx!(IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("Huh?"));
+        let state = ClientState::Playing { player: p.clone() };
+        let state = ctx!(state, IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        ctx!(IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("new"));
-        ctx!(IexCommand, "", s, tx, ch, w, p);
-        ctx!(SetCommand, "nut heal", s,tx,ch,w,p,|out:&str| out.contains("value is"));   // fail state
-        ctx!(SetCommand, "nut heal 5", s,tx,ch,w,p,|out:&str| out.contains("Usage"));           // fail state
-        ctx!(IexCommand, "", s, tx, ch, w, p,|out:&str| out.contains("Heal(HP"));               // ok
-        ctx!(SetCommand, "nut heal 1.0",s,tx,ch,w,p,|out:&str| out.contains("Usage:"));        // fail state
-        ctx!(SetCommand, "nut heal hp", s,tx,ch,w,p,|out:&str| out.contains("has to be"));     // fail state
-        ctx!(SetCommand, "nut heal hp 0", s,tx,ch,w,p,|out:&str| out.contains("edibl"));       // back in inedbile
-        ctx!(IexCommand, "", s, tx, ch, w, p,|out:&str| out.contains("type: <n/a>"));
-        ctx!(SetCommand, "nut heal hp 1", s,tx,ch,w,p,|out:&str| out.contains(": Heal"));       // ok
-        ctx!(SetCommand, "nut heal sn -0.5", s,tx,ch,w,p,|out:&str| out.contains(": Multi"));
-        ctx!(IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("SN -0.50") && out.contains("HP +"));
-        ctx!(SetCommand, "nut heal rm",s,tx,ch,w,p,|out:&str| out.contains("HP, MP"));         // fail state
-        ctx!(SetCommand, "nut heal rm hp",s,tx,ch,w,p,|out:&str| out.contains("Heal(SN -0.50)"));  // ok - fall back to Heal{..}
-        ctx!(SetCommand, "nut heal sn 0.25", s,tx,ch,w,p,|out:&str| out.contains("Heal(SN +0.25)"));  // ok
-        ctx!(SetCommand, "nut heal hp 1",s,tx,ch,w,p,|out:&str| out.contains("SN +0.25") && out.contains("HP +1.0"));//ok
-        ctx!(WeaveCommand, "",s, tx, ch, w, p,|out:&str| out.contains("created something"));
-        ctx!(IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("what it's"));
-        ctx!(IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("PrimordialItem"));         // aw poo, "forgot" to set cons
-        ctx!(SetCommand, "pot cons",s,tx,ch,w,p);
-        ctx!(WeaveCommand, "",s, tx, ch, w, p,|out:&str| out.contains("created something"));
-        ctx!(IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("what it's"));
-        ctx!(IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("Consumable"));             // yay, an edible apple, sort of.
+        let state = ctx!(state, IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("new"));
+        let state = ctx!(state, IexCommand, "", s, tx, ch, w, p);
+        let state = ctx!(state, SetCommand, "nut heal", s,tx,ch,w,p,|out:&str| out.contains("value is"));   // fail state
+        let state = ctx!(state, SetCommand, "nut heal 5", s,tx,ch,w,p,|out:&str| out.contains("Usage"));           // fail state
+        let state = ctx!(state, IexCommand, "", s, tx, ch, w, p,|out:&str| out.contains("Heal(HP"));               // ok
+        let state = ctx!(state, SetCommand, "nut heal 1.0",s,tx,ch,w,p,|out:&str| out.contains("Usage:"));        // fail state
+        let state = ctx!(state, SetCommand, "nut heal hp", s,tx,ch,w,p,|out:&str| out.contains("has to be"));     // fail state
+        let state = ctx!(state, SetCommand, "nut heal hp 0", s,tx,ch,w,p,|out:&str| out.contains("edibl"));       // back in inedbile
+        let state = ctx!(state, IexCommand, "", s, tx, ch, w, p,|out:&str| out.contains("type: <n/a>"));
+        let state = ctx!(state, SetCommand, "nut heal hp 1", s,tx,ch,w,p,|out:&str| out.contains(": Heal"));       // ok
+        let state = ctx!(state, SetCommand, "nut heal sn -0.5", s,tx,ch,w,p,|out:&str| out.contains(": Multi"));
+        let state = ctx!(state, IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("SN -0.50") && out.contains("HP +"));
+        let state = ctx!(state, SetCommand, "nut heal rm",s,tx,ch,w,p,|out:&str| out.contains("HP, MP"));         // fail state
+        let state = ctx!(state, SetCommand, "nut heal rm hp",s,tx,ch,w,p,|out:&str| out.contains("Heal(SN -0.50)"));  // ok - fall back to Heal{..}
+        let state = ctx!(state, SetCommand, "nut heal sn 0.25", s,tx,ch,w,p,|out:&str| out.contains("Heal(SN +0.25)"));  // ok
+        let state = ctx!(state, SetCommand, "nut heal hp 1",s,tx,ch,w,p,|out:&str| out.contains("SN +0.25") && out.contains("HP +1.0"));//ok
+        let state = ctx!(state, WeaveCommand, "",s, tx, ch, w, p,|out:&str| out.contains("created something"));
+        let state = ctx!(state, IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("what it's"));
+        let state = ctx!(state, IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("PrimordialItem"));         // aw poo, "forgot" to set cons
+        let state = ctx!(state, SetCommand, "pot cons",s,tx,ch,w,p);
+        let state = ctx!(state, WeaveCommand, "",s, tx, ch, w, p,|out:&str| out.contains("created something"));
+        let state = ctx!(state, IeditCommand, "apple", s,tx,ch,w,p,|out:&str| out.contains("what it's"));
+        let state = ctx!(state, IexCommand, "",s, tx, ch, w, p,|out:&str| out.contains("Consumable"));             // yay, an edible apple, sort of.
     }
 }

@@ -25,16 +25,18 @@ impl Command for ListCommand {
 
 #[cfg(test)]
 mod cmd_iedit_list {
-    use crate::{cmd::{redit::list::ListCommand, look::LookCommand, redit::ReditCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, list::ListCommand}}, ctx, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn exits_listing() {
         let mut buffer: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut buffer);
         let (w, tx, ch, p) = get_operational_mock_world().await;
+        let state = ClientState::Playing { player: p.clone() };
+        let state = ctx!(state, ReditCommand, "this", s, tx, ch, w, p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        ctx!(ReditCommand, "this", s, tx, ch, w, p);
-        ctx!(LookCommand, "", s,tx,ch,w,p, |out:&str| out.contains("***"));
-        ctx!(ListCommand, "", s,tx,ch,w,p, |out:&str| out.contains("r-1") && out.contains("r-2"));
+        let state = ctx!(state, ReditCommand, "this", s, tx, ch, w, p);
+        let state = ctx!(state, LookCommand, "", s,tx,ch,w,p, |out:&str| out.contains("***"));
+        let _ = ctx!(state, ListCommand, "", s,tx,ch,w,p, |out:&str| out.contains("r-1") && out.contains("r-2"));
     }
 }
