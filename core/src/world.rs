@@ -1,13 +1,17 @@
 //! When worlds collide…
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, usize};
 
+use futures::{StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
 use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, util::direction::Direction};
 
+const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
+const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
+
 /// The world!
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct World {
     /// World's printable name.
     pub name: String,
@@ -147,11 +151,14 @@ impl World {
 
     /// Save the world! Yeah.
     pub async fn save(&self, force_save: bool) -> Result<(), CgError> {
-        if !self.lost_and_found.is_empty() || force_save {
-            let contents = serde_json::to_string_pretty(self)?;
-            fs::write(world_fp(), contents).await?;
-            log::info!("World '{}' saved.", self.name);
-        }
+        let w = self.clone();
+        tokio::spawn(async move {
+            if !w.lost_and_found.is_empty() || force_save {
+                let contents = serde_json::to_string_pretty(&w).expect("ERROR WITH World JSON!");
+                fs::write(world_fp(), contents).await.expect("OS BEING A B****!");
+                log::info!("World '{}' saved.", w.name);
+            }
+        });
         Ok(())
     }
 
@@ -230,6 +237,43 @@ impl World {
         for r in self.rooms.values() {
             r.write().await.tick().await;
         }
+    }
+
+    pub async fn paginated_room_entries(&self, needle: &str, page: usize, mut per_page: usize) -> Vec<(String, Arc<RwLock<Room>>)> {
+        if per_page == 0 {
+            per_page = usize::MAX;
+        }
+        let needle = needle.to_lowercase();
+        let mut pages: Vec<(String, Arc<RwLock<Room>>)> = if self.rooms.len() < NUM_ROOMS_FOR_PARALLEL_SHIFT {
+            let mut res = Vec::new();
+            for (id, r) in self.rooms.iter() {
+                let title = r.read().await.title().to_lowercase();
+                if id.contains(&needle) || title.contains(&needle) {
+                    res.push((id.clone(), r.clone()));
+                }
+            }
+            res
+        } else {
+            stream::iter(self.rooms.iter())
+                .map(|(id,r)| {
+                    let needle = needle.clone();
+                    let id = id.clone();
+                    let r = r.clone();
+                    async move {
+                        let title = r.read().await.title().to_lowercase();
+                        let matches = id.contains(&needle) || title.contains(&needle);
+                        (id,r,matches)
+                    }
+                })
+                .buffered(NUM_WORLD_IDENT_ROOMS_IN_PARALLEL) // TODO adjust?
+                .filter(|(_id,_r,matches)| futures::future::ready(*matches))
+                .map(|(id,r,_)| (id,r))
+                .collect::<Vec<_>>()
+                .await
+        };
+        pages.sort_unstable_by(|a,b| a.0.cmp(&b.0));
+
+        pages.into_iter().skip(page.saturating_sub(1) * per_page).take(per_page).collect()
     }
 }
 
