@@ -57,25 +57,21 @@ pub async fn edit_text(writer: &mut (dyn tokio::io::AsyncWrite + Unpin + Send), 
         args = &args[1..];
     }
     
-    //
-    // '+' -- insert as specified line…
-    //
-    if args.starts_with('+') {
+    let op = args.chars().next();
+    if let Some(c @ ('r'|'+')) = op {
+        //
+        // 'r' -- insert as specified line…
+        //
         let args = args[1..].trim_start().splitn(2, ' ').collect::<Vec<&str>>();
-        let lno = args[0].parse::<usize>();
-        let lno = match lno {
-            Ok(lno) => {
-                if lno > MAX_DESCRIPTION_LINES {
-                    return {
-                        tell_user!(writer,
+        let lno = match args[0].parse::<usize>() {
+            Ok(lno) if lno > MAX_DESCRIPTION_LINES => {
+                tell_user!(writer,
                             "<c red>Warning!</c> Maximum help entry description length is limited to {} lines.\n\
                             Command cancelled — no changes made.\n",
                             MAX_DESCRIPTION_LINES);
-                        Err(EditorError::MaxLineCount)
-                    };
-                }
-                lno
-            },
+                return Err(EditorError::MaxLineCount)
+            }
+            Ok(lno) => lno,
             Err(e) => {
                 return {
                     tell_user!(writer, "<c red>Error! </c>{:?}\n", e);
@@ -84,7 +80,12 @@ pub async fn edit_text(writer: &mut (dyn tokio::io::AsyncWrite + Unpin + Send), 
             }
         };
 
-        let text = insert_nth_line(&source, lno, if args.len() < 2 {""} else {args[1]});
+        let new_line = args.get(1).unwrap_or(&"");
+        let text = match c {
+            'r' => replace_nth_line(&source, lno, new_line),
+            '+' => insert_nth_line(&source, lno, new_line),
+            _ => unreachable!()
+        };
         return Ok(EdResult::ContentReady { text, dirty: true, verbose });
     }
 
@@ -194,6 +195,27 @@ fn insert_nth_line(text: &str, line_num: usize, text_to_insert: &str) -> String 
         lines.push(text_to_insert);
     } else {
         lines.insert(index, text_to_insert);
+    }
+
+    format!("{}\n", lines.join("\n"))
+}
+
+/// Replaces a line in a string string at the nth position (1-based index).
+fn replace_nth_line(text: &str, line_num: usize, text_to_insert: &str) -> String {
+    if line_num == 0 {
+        return text.to_string(); // Or handle as an error
+    }
+
+    let mut lines: Vec<&str> = text.lines().collect();
+    let index = (line_num - 1).min(lines.len() + 10);
+
+    if index >= lines.len() {
+        while lines.len() < index {
+            lines.push("");
+        }
+        lines.push(text_to_insert);
+    } else {
+        lines[index] = text_to_insert;
     }
 
     format!("{}\n", lines.join("\n"))
