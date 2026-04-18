@@ -5,7 +5,7 @@ use futures::{StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, as_id, prompt::PromptType}, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
@@ -232,6 +232,16 @@ impl World {
     }
 }
 
+/// Room pagination result type.
+pub struct RoomPaginateResult {
+    /// ID/Arc
+    pub entries: Vec<(String, Arc<RwLock<Room>>)>,
+    /// Total num of search matches.
+    pub total_found: usize,
+    /// Total pages (relative to `per_page` of the search).
+    pub total_pages: usize,
+}
+
 impl World {
     pub async fn tick(&mut self) {
         for r in self.rooms.values() {
@@ -239,41 +249,49 @@ impl World {
         }
     }
 
-    pub async fn paginated_room_entries(&self, needle: &str, page: usize, mut per_page: usize) -> Vec<(String, Arc<RwLock<Room>>)> {
+    /// Get room entries as per id/title needle search in "pages" (see [RoomPaginateResult]).
+    pub async fn paginated_room_entries(&self, needle: &str, page: usize, mut per_page: usize) -> RoomPaginateResult {
         if per_page == 0 {
             per_page = usize::MAX;
         }
         let needle = needle.to_lowercase();
-        let mut pages: Vec<(String, Arc<RwLock<Room>>)> = if self.rooms.len() < NUM_ROOMS_FOR_PARALLEL_SHIFT {
+        let id_needle = as_id(&needle).unwrap_or("**garbage**".into());
+        let mut pages = if self.rooms.len() < NUM_ROOMS_FOR_PARALLEL_SHIFT {
             let mut res = Vec::new();
             for (id, r) in self.rooms.iter() {
                 let title = r.read().await.title().to_lowercase();
-                if id.contains(&needle) || title.contains(&needle) {
+                log::debug!("{id} @ {title}");
+                if id.contains(&id_needle) || title.contains(&needle) {
                     res.push((id.clone(), r.clone()));
                 }
             }
             res
         } else {
-            stream::iter(self.rooms.iter())
+            let room_clones: Vec<(String,Arc<RwLock<Room>>)> = self.rooms.iter().map(|(id,r)|(id.clone(),r.clone())).collect();
+            stream::iter(room_clones)
                 .map(|(id,r)| {
+                    let id_needle = id_needle.clone();
                     let needle = needle.clone();
                     let id = id.clone();
                     let r = r.clone();
                     async move {
                         let title = r.read().await.title().to_lowercase();
-                        let matches = id.contains(&needle) || title.contains(&needle);
-                        (id,r,matches)
+                        let matches = id.contains(&id_needle) || title.contains(&needle);
+                        (id,r.clone(),matches)
                     }
                 })
                 .buffered(NUM_WORLD_IDENT_ROOMS_IN_PARALLEL) // TODO adjust?
-                .filter(|(_id,_r,matches)| futures::future::ready(*matches))
+                .filter(|(_,_,matches)| futures::future::ready(*matches))
                 .map(|(id,r,_)| (id,r))
                 .collect::<Vec<_>>()
                 .await
         };
         pages.sort_unstable_by(|a,b| a.0.cmp(&b.0));
-
-        pages.into_iter().skip(page.saturating_sub(1) * per_page).take(per_page).collect()
+        let total_found = pages.len();
+        let entries = pages.into_iter().skip(page.saturating_sub(1) * per_page).take(per_page).collect();
+        RoomPaginateResult {
+            entries, total_found, total_pages: (total_found + per_page - 1) / per_page // saturating_add would be safer, but anywhere close to usize::MAX rooms, really?
+        }
     }
 }
 
