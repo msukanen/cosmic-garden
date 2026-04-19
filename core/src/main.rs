@@ -80,10 +80,11 @@ async fn main() {
         librarian_tx: librarian_tx,
         game_tx: game_tx,
     };
+    let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
 
-    tokio::spawn(thread::io::io_thread((private_channels.clone(), io_rx), world.clone(), args.clone()));
-    tokio::spawn(thread::game::life_thread((private_channels.clone(), game_rx), world.clone()));
-    tokio::spawn(thread::lib::librarian((private_channels.clone(), lib_rx)));
+    let io_t = tokio::spawn(thread::io::io_thread((private_channels.clone(), io_rx), world.clone(), args.clone().into(), done_tx));
+    let life_t = tokio::spawn(thread::game::life_thread((private_channels.clone(), game_rx), world.clone()));
+    let lib_t = tokio::spawn(thread::lib::librarian((private_channels.clone(), lib_rx)));
 
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);
@@ -97,22 +98,32 @@ async fn main() {
     // This is the main-loop for all …
     //
     loop {
-        // Wait for a new client to connect.
-        let (socket, addr) = listener.accept().await.unwrap();
-        log::info!("New connection from: {}", addr);
+        tokio::select! {
+            conn = listener.accept() => {
+                let (socket, addr) = conn.unwrap();
+                log::info!("New connection from: {}", addr);
+                let system_ch = private_channels.clone();
+                let world = world.clone();
 
-        let system_ch = private_channels.clone();
-        let world = world.clone();
+                // Get a between client I/O
+                let (tx, rx) = (tx.clone(), tx.subscribe());
 
-        // Get a between client I/O
-        let (tx, rx) = (tx.clone(), tx.subscribe());
+                let client_data = PerClientData {
+                    socket, addr, system_ch, world, tx, rx
+                };
 
-        let client_data = PerClientData {
-            socket, addr, system_ch, world, tx, rx
-        };
+                // Spawn a new task to handle this client's connection,
+                // = handle multiple clients concurrently.
+                tokio::spawn(async move { per_client::per_client_thread( client_data ).await });
+            }
 
-        // Spawn a new task to handle this client's connection,
-        // which lets us to handle multiple clients concurrently.
-        tokio::spawn(async move { per_client::per_client_thread( client_data ).await });
+            _ = &mut done_rx => {
+                break;
+            }
+        }
     }
+
+    io_t.await.ok();
+    life_t.await.ok();
+    lib_t.await.ok();
 }
