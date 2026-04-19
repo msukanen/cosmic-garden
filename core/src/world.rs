@@ -5,7 +5,7 @@ use futures::{StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, as_id, prompt::PromptType}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, as_id, prompt::PromptType}, thread::SystemSignal, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
@@ -167,6 +167,9 @@ impl World {
         {// map the soul…
             let mut w = world.write().await;
             w.players_by_sockaddr.insert(addr.clone(), arc.clone());
+            if w.players_by_id.contains_key(id) {
+                w.send(w.ch.janitor_tx, SystemSignal::PlayerLogout { who: id.to_string() });
+            }
             w.players_by_id.insert(id.into(), arc.clone());
         }
 
@@ -297,7 +300,7 @@ impl World {
 
 #[cfg(test)]
 pub(crate) mod world_tests {
-    use crate::cformat;
+    use crate::{cformat, identity::IdentityMut};
 
     pub(crate) async fn get_operational_mock_world() -> 
         (
@@ -328,7 +331,8 @@ pub(crate) mod world_tests {
         let _ = crate::DATA.set("data".into());
         let _ = crate::WORLD.set("crash-test-dummy".to_string());
         use crate::identity::IdentityQuery;
-        let plr = crate::player::Player::default();
+        let mut plr = crate::player::Player::default();
+        *(plr.id_mut()) = "test-player-1".into();
         let plr_id = plr.id().to_string();
         let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
         let mut world = crate::world::World::dummy().await;

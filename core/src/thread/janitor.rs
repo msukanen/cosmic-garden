@@ -20,7 +20,7 @@ pub const SAVE_ASAP_THRESHOLD: usize = 100;
 /// in (relative) sync.
 /// 
 pub(crate) async fn io_thread(
-    (outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>),
+    (outgoing, mut incoming): (SignalChannels, mpsc::UnboundedReceiver<SystemSignal>),
     world: Arc<RwLock<World>>,
     args: Option<Cli>,
     done_tx: tokio::sync::oneshot::Sender<()>
@@ -178,11 +178,11 @@ async fn lost_and_found(world: Arc<RwLock<World>>) {
 }
 
 /// ASAP save of [HelpPage]s.
-async fn save_help_asap(librarian_tx: &mpsc::Sender<SystemSignal>) {
+async fn save_help_asap(librarian_tx: &mpsc::UnboundedSender<SystemSignal>) {
     if let Err(e) = (*BP_LIBRARY).write().await.save().await {
         log::error!("Blueprint anomaly! {e:?}");
         return ;
     }
     // Nudge the librarian, but don't wait if he's asleep…
-    librarian_tx.try_send(SystemSignal::ReindexLibrary).ok();
+    librarian_tx.send(SystemSignal::ReindexLibrary).ok();
 }

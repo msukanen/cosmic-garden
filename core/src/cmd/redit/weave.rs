@@ -32,7 +32,7 @@ impl Command for WeaveCommand {
         tell_user!(ctx.writer, "<c green>Reality is being rewritten…\n");
         let rooms: Vec<_> = vec![room_arc.clone()];
         ctx.tx.send(Broadcast::System {
-            sender: None,
+            from: None,
             rooms,
             message: "<c yellow>The reality shifts around you!</c>".into(),
         }).ok();

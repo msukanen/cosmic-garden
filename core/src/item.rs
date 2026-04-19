@@ -3,7 +3,7 @@
 use cosmic_garden_pm::{IdentityMut, Itemized, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageMut, specs::StorageSpace, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}}, string::{Describable, DescribableMut, Uuid}, traits::{Reflector, Tickable}};
+use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageMut, specs::StorageSpace, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut, Uuid}, traits::{Reflector, Tickable}};
 
 pub mod blueprint; pub use blueprint::BlueprintLibrary;
 pub mod owner;
@@ -65,7 +65,7 @@ impl DescribableMut for TemporaryStructToAppeaseAnalyzerDuringWIP {
 /// Root [Item] types.
 pub enum Item {
     Container(ContainerVariant),
-    Weapon(TemporaryStructToAppeaseAnalyzerDuringWIP),
+    Weapon(WeaponSpec),
     Tool(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Key(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Consumable(ConsumableMatter),

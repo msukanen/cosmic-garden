@@ -19,7 +19,7 @@ lazy_static! {
 /// 
 /// This thread keeps the world's documents nice and tidy.
 /// 
-pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>)) {
+pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::UnboundedReceiver<SystemSignal>)) {
     // Bootstrap/load blueprints.
     log::info!("Library establishing… blueprints @ '{}'", blueprint_lib_fp().display());
     if let Err(e) = BlueprintLibrary::load_or_bootstrap().await {
@@ -82,7 +82,7 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver
                         let phonebook = outgoing.clone();
                         tokio::spawn(async move {
                             tokio::time::sleep(Duration::from_secs(30)).await;
-                            if let Err(e) = phonebook.janitor_tx.send(SystemSignal::ReindexLibrary).await {
+                            if let Err(e) = phonebook.janitor_tx.send(SystemSignal::ReindexLibrary) {
                                 log::error!("Janitor is still not picking up the phone. Bah, he'll sort it out sooner or later… {e:?}");
                             }
                         });
@@ -107,12 +107,12 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver
 /// 
 /// # Return
 /// Anything to report?
-async fn reorganize_library(janitor_tx: &mpsc::Sender<SystemSignal>) -> bool {
+async fn reorganize_library(janitor_tx: &mpsc::UnboundedSender<SystemSignal>) -> bool {
     (*HELP_LIBRARY).write().await
         .check_new_docs()
         .rebuild_aliases();
     // ring the janitor …
-    if let Err(e) = janitor_tx.send(SystemSignal::ReindexLibrary).await {
+    if let Err(e) = janitor_tx.send(SystemSignal::ReindexLibrary) {
         log::warn!("Janitor seems to be busy… I'll schedule call for later… {e:?}");
         return true;
     }

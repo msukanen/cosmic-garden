@@ -6,7 +6,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::Combatant, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::Combatant, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -52,14 +52,14 @@ pub struct Player {
     pub(crate) location_id: String,
     #[serde(skip)]
     pub location: Weak<RwLock<Room>>,
-    #[serde(default = "player_hp_default")]
-    pub hp: Stat,
-    #[serde(default = "player_mp_default")]
-    pub mp: Stat,
-    #[serde(default = "player_sn_default")]
-    pub sn: Stat,
-    #[serde(default = "player_san_default")]
-    pub san: Stat,
+    
+    #[serde(default = "player_hp_default")] pub hp: Stat,
+    #[serde(default = "player_mp_default")] pub mp: Stat,
+    #[serde(default = "player_sn_default")] pub sn: Stat,
+    #[serde(default = "player_san_default")] pub san: Stat,
+    #[serde(default = "player_brn_default")] pub brn: Stat,
+    #[serde(default = "player_nim_default")] pub nim: Stat,
+    #[serde(default = "player_str_default")] pub strn: Stat,
     
     #[serde(default)] pub redit_buffer: Option<Room>,
     #[serde(default)] pub iedit_buffer: Option<Item>,
@@ -79,6 +79,12 @@ pub struct Player {
 
     #[serde(skip, default = "player_faction_default")]
     pub faction: EntityFaction,
+
+    #[serde(default)]
+    pub equipped_weapon: Option<Item>,
+
+    #[serde(default = "player_rep_default")]
+    pub reputation: Stat,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -86,11 +92,15 @@ fn player_hp_default() -> Stat { Stat::new(StatType::HP) }
 fn player_mp_default() -> Stat { Stat::new(StatType::MP) }
 fn player_sn_default() -> Stat { Stat::new(StatType::SN) }
 fn player_san_default() -> Stat { Stat::new(StatType::San) }
+fn player_brn_default() -> Stat { Stat::new(StatType::Brn) }
+fn player_nim_default() -> Stat { Stat::new(StatType::Nim) }
+fn player_str_default() -> Stat { Stat::new(StatType::Str) }
 fn player_default_atype() -> ActivityType { ActivityType::default() }
 fn player_inv_default() -> ContainerVariant {
     ContainerVariant::raw(ContainerVariantType::PlayerInventory)
 }
-fn player_faction_default() -> EntityFaction { EntityFaction::Player { pvp: false } }
+fn player_faction_default() -> EntityFaction { EntityFaction::Player { pvp: false }}
+fn player_rep_default() -> Stat { Stat::Rep { curr: 0.0 }}
 
 impl Player {
     pub fn owner_id<'a>(&'a self) -> &'a str { &self.owner_id }
@@ -156,7 +166,7 @@ impl Player {
         self.actions_taken += act_wt;
         if self.actions_taken >= SAVE_ASAP_THRESHOLD {
             // He'll pick up, sooner or later…
-            system_ch.janitor_tx.try_send(SystemSignal::PlayerNeedsSaving(player.clone(), player.read().await.id().to_string())).ok();
+            system_ch.janitor_tx.send(SystemSignal::PlayerNeedsSaving(player.clone(), player.read().await.id().to_string())).ok();
         }
         self.actions_taken
     }
@@ -169,10 +179,14 @@ impl Player {
     /// Apply ± on a stat.
     pub fn apply_stat_change(&mut self, stat: StatType, drain: StatValue) {
         match stat {
-            StatType::HP => *(self.hp_mut()) += drain,
-            StatType::MP => *(self.mp_mut()) += drain,
-            StatType::SN => *(self.sn_mut()) += drain,
+            StatType::Brn => *(self.brn_mut()) += drain,
+            StatType::HP  => *(self.hp_mut())  += drain,
+            StatType::MP  => *(self.mp_mut())  += drain,
+            StatType::Nim => *(self.nim_mut()) += drain,
+            StatType::SN  => *(self.sn_mut())  += drain,
             StatType::San => *(self.san_mut()) += drain,
+            StatType::Str => *(self.str_mut()) += drain,
+            StatType::Rep => *(self.rep_mut()) += drain,
         }
     }
 
@@ -181,6 +195,11 @@ impl Player {
         self.hedit_buffer = None;
         self.iedit_buffer = None;
         self.redit_buffer = None;
+    }
+
+    /// Get mutable [reputation][Stat].
+    pub fn rep_mut(&mut self) -> &mut Stat {
+        &mut self.reputation
     }
 }
 
@@ -199,6 +218,10 @@ impl Default for Player {
             mp: player_mp_default(),
             sn: player_sn_default(),
             san: player_san_default(),
+            brn: player_brn_default(),
+            nim: player_nim_default(),
+            strn: player_str_default(),
+            reputation: Stat::Rep { curr: 0.0 },
             config: Config::default(),
             redit_buffer: None,
             iedit_buffer: None,
@@ -208,6 +231,7 @@ impl Default for Player {
             affects: HashMap::new(),
             last_goto: None,
             faction: EntityFaction::Player { pvp: false },
+            equipped_weapon: None,
         }
     }
 }
@@ -272,8 +296,13 @@ impl FactionMut for Player {
 }
 
 impl Combatant for Player {
+    fn max_weapon_size(&self) -> WeaponSize {
+        // Players *cannot* wield the largest weapons, obviously…
+        WeaponSize::Large
+    }
+
     fn dmg(&self) -> StatValue {
         // TODO dmg calculation based on held weapon, strength, etc.
-        2.0
+        20.0
     }
 }

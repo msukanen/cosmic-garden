@@ -66,7 +66,7 @@ impl Command for TeleportCommand {
                 if !is_ghost {
                     ctx.tx.send(Broadcast::System {
                         rooms: vec![target_arc.clone()],
-                        sender: plr.clone().into(),
+                        from: plr.clone().into(),
                         message: format!("<c red>Something startling materializes in the field of vicinity…!</c>"),
                     }).ok();
                 }

@@ -44,7 +44,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
             if let Some(p) = w.players_by_sockaddr.remove(&pcd.addr) {
                 // drop the named mapping here as it's not needed for logout.
                 let lock = p.read().await;
-                pcd.system_ch.game_tx.try_send(SystemSignal::PlayerLogout { who: lock.id().to_string() }).ok();
+                pcd.system_ch.game_tx.send(SystemSignal::PlayerLogout { who: lock.id().to_string() }).ok();
                 let (id, name) = 
                     (lock.id().to_string(), lock.name.clone());
                 w.players_by_id.remove(lock.id());
@@ -53,7 +53,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                     log::trace!("Clean exit by '{id}'");
                 }
                 drop(lock);
-                pcd.system_ch.janitor_tx.send(SystemSignal::PlayerNeedsSaving(p, id)).await.ok();
+                pcd.system_ch.janitor_tx.send(SystemSignal::PlayerNeedsSaving(p, id)).ok();
                 log::trace!("Player '{name}' added to logout queue.");
             }
             break;
@@ -124,9 +124,9 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                             }
                         }
 
-                        Broadcast::System { rooms, message, sender } => {
+                        Broadcast::System { rooms, message, from } => {
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
-                            if let Some(sender) = sender {
+                            if let Some(sender) = from {
                                 // we'll ignore system messages we sent ourselves
                                 if Arc::ptr_eq(&player, &sender) { continue; }
                             }
@@ -148,9 +148,14 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                             }
                             // just skip if in the void
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                            // at either 'to' or 'from'?
                             if !Arc::ptr_eq(&to, &ploc) && !Arc::ptr_eq(&from, &ploc) { continue; }
-                            tell_user!(&mut writer, "\n{}\n", if Arc::ptr_eq(&to, &ploc) { message_to } else { message_from} );
-                            reprompt_playing_user!(writer, state);
+
+                            let msg = if Arc::ptr_eq(&to, &ploc) { &message_to } else { &message_from };
+                            if !msg.is_empty() {
+                                tell_user!(&mut writer, "\n{}\n", msg);
+                                reprompt_playing_user!(writer, state);
+                            }
                         }
 
                         Broadcast::SystemInRoom { room, actor, message_actor, message_other } => {
@@ -162,7 +167,20 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 tell_user!(&mut writer, "\n{}\n", message_other);
                             }
                             reprompt_playing_user!(writer, state);
-                            continue;
+                        }
+
+                        Broadcast::SystemInRoomAt { room, atk, vct, message_atk, message_other, message_vct } => {
+                            let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                            if !Arc::ptr_eq(&room, &ploc) { continue; }// not there
+                            tell_user!(&mut writer, "\n{}\n",
+                                if Arc::ptr_eq(&player, &atk) {
+                                    message_atk
+                                } else if Arc::ptr_eq(&player, &vct) {
+                                    message_vct
+                                } else {
+                                    message_other
+                                });
+                            reprompt_playing_user!(writer, state);
                         }
 
                         Broadcast::Force { command, who, by, delivery } => {
@@ -170,7 +188,9 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                             // ignore re-force, no matter what.
                             if command.trim().to_lowercase().starts_with("force") { continue; }
                             // nope if 'by' self
-                            if Arc::ptr_eq(&player, &by) { continue; }
+                            if let Some(by) = &by {
+                                if Arc::ptr_eq(&player, &by) { continue; }
+                            }
                             // craft synthetic command.
                             let ctx = CommandCtx {
                                 pre_pad_n: true,
@@ -213,6 +233,12 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                         Broadcast::Shutdown => {
                             tell_user!(&mut writer, "\n<c red>---[ SERVER SHUTTING DOWN ]---</c>\n");
                             state = ClientState::Logout
+                        }
+
+                        Broadcast::Message { to, message } => {
+                            if !Arc::ptr_eq(&player, &to) { continue; }// not for us
+                            tell_user!(&mut writer, "\n{}\n", message);
+                            reprompt_playing_user!(writer, state);
                         }
                     },
                     _ => ()

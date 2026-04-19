@@ -1,6 +1,6 @@
 //! Mob stats.
 
-use std::{fmt::Display, ops::{AddAssign, SubAssign}};
+use std::{fmt::Display, ops::{AddAssign, Mul, SubAssign}};
 
 use serde::{Deserialize, Serialize};
 use dicebag::InclusiveRandomRange;
@@ -40,13 +40,17 @@ pub type StatValue = f32;
 pub enum StatType {
     HP,
     MP,
-    San,
     SN,
+    San,
+    Str,
+    Nim,
+    Brn,
+    Rep,
 }
 
 impl StatType {
     pub const fn display_list() -> &'static str {
-        "HP, MP, SN, SAN"
+        "BRN, HP, MP, NIM, REP, SAN, SN, STR"
     }
 }
 
@@ -56,7 +60,11 @@ impl Display for StatType {
             Self::HP => "HP",
             Self::MP => "MP",
             Self::SN => "SN",
-            Self::San => "San",
+            Self::Brn => "BRN",
+            Self::Nim => "NIM",
+            Self::Str => "STR",
+            Self::San => "SAN",
+            Self::Rep => "REP",
         })
     }
 }
@@ -69,6 +77,10 @@ impl TryFrom<&str> for StatType {
             "mp"|"MP"|"Mp" => Ok(StatType::MP),
             "sn"|"SN"|"Sn" => Ok(StatType::SN),
             "san"|"SAN"|"San" => Ok(StatType::San),
+            "brn"|"BRN"|"Brn" => Ok(StatType::Brn),
+            "nim"|"NIM"|"Nim" => Ok(StatType::Nim),
+            "str"|"STR"|"Str" => Ok(StatType::Str),
+            "rep"|"REP"|"Rep" => Ok(StatType::Rep),
             _ => Err(StatError::NotStat)
         }
     }
@@ -85,15 +97,27 @@ pub enum Stat {
     San { curr: StatValue, max: StatValue, drain: StatValue },
     /// Stamina.
     SN { curr: StatValue, max: StatValue, drain: StatValue },
+    /// Braininess, IQ, etc.
+    Brn { curr: StatValue, max: StatValue },
+    /// Strength.
+    Str { curr: StatValue, max: StatValue },
+    /// Nimbleness, dexterity, etc.
+    Nim { curr: StatValue, max: StatValue },
+    /// Reputation. Rep doesn't have max value, but it does clamp to -100 at bottom range.
+    Rep { curr: StatValue },
 }
 
 impl Stat {
     pub fn new(typ: StatType) -> Self {
         match typ {
-            StatType::HP => Self::HP { curr: 100.0, max: 100.0 },
-            StatType::MP => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
+            StatType::Brn => Self::Brn { curr: 100.0, max: 100.0 },
+            StatType::HP  => Self::HP { curr: 100.0, max: 100.0 },
+            StatType::Nim => Self::Nim { curr: 100.0, max: 100.0 },
+            StatType::Str => Self::Str { curr: 100.0, max: 100.0 },
+            StatType::Rep => Self::Rep { curr: 100.0 },
+            StatType::MP  => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
             StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0 },
-            StatType::SN => Self::SN { curr: 100.0, max: 100.0, drain: 0.0 },
+            StatType::SN  => Self::SN { curr: 100.0, max: 100.0, drain: 0.0 },
         }
     }
 
@@ -103,13 +127,20 @@ impl Stat {
 impl AddAssign<StatValue> for Stat {
     fn add_assign(&mut self, rhs: StatValue) {
         match self {
-            // HP clamps to -100..max range
+            // HP and REP clamp to [-100..max] range
             // * 1+ = alive and kicking
             // * -10+ = unconscious
             // * <-10 = dead, deader, a smear on the floor (at -100)…
-            Self::HP { curr, max }     => *curr = (*curr + rhs).clamp(SMR_THRESHOLD, *max),
+            Self::HP { curr, max } => *curr = (*curr + rhs).clamp(SMR_THRESHOLD, *max),
+            
+            // Rep min: -100, no max.
+            Self::Rep { curr } => *curr = (*curr + rhs).max(-100.0),
+            
             // others clamp to 0..max range
+            Self::Brn { curr, max, ..} |
             Self::MP { curr, max, ..}  |
+            Self::Nim { curr, max, ..} |
+            Self::Str { curr, max, ..} |
             Self::SN { curr, max, ..}  |
             Self::San { curr, max, ..} => *curr = (*curr + rhs).clamp(0.0, *max)
         }
@@ -149,10 +180,15 @@ impl Stat {
         let value = value.abs().min(MAX_STAT_VALUE);
         let delta = value - self.max();
         match self {
-            Self::HP { max, ..} |
-            Self::MP { max, ..} |
-            Self::SN { max, ..} => *max = value,
+            Self::HP { max, ..}  |
+            Self::Brn { max, ..} |
+            Self::Nim { max, ..} |
+            Self::Str { max, ..} |
+            Self::MP { max, ..}  |
+            Self::SN { max, ..}  => *max = value,
             Self::San { max, ..} => *max = value.min(100.0),
+
+            Self::Rep { .. } => ()
         }
 
         if self.current() > self.max() {
@@ -177,7 +213,7 @@ impl Stat {
     /// 
     pub fn set_drain(&mut self, value: StatValue) -> &mut Self {
         match self {
-            Self::MP { drain, max, ..}|
+            Self::MP { drain, max, ..} |
             Self::San { max, drain, ..}|
             Self::SN { max, drain, ..}
             => {
@@ -197,11 +233,14 @@ impl Stat {
     /// * `value` *cannot* exceed [Stat::max].
     pub fn set_curr(&mut self, value: StatValue) -> &mut Self{
         match self {
-            Self::HP { curr, max }    |
+            Self::HP { curr, max }    => *curr = value.clamp(SMR_THRESHOLD, *max),
             Self::MP { curr, max, ..} |
             Self::San { curr, max, ..}|
-            Self::SN { curr, max, ..}
-            => *curr = value.min(*max),
+            Self::SN { curr, max, ..} |
+            Self::Str { curr, max, ..}|
+            Self::Brn { curr, max, ..}|
+            Self::Nim { curr, max, ..}=> *curr = value.clamp(0.0, *max),
+            Self::Rep { curr } => *curr = value.max(-100.0),
         }
         self
     }
@@ -209,10 +248,14 @@ impl Stat {
     /// Get [Stat] max value.
     pub fn max(&self) -> StatValue {
         match self {
-            Self::HP { max, ..} |
-            Self::MP { max, ..} |
-            Self::SN { max, ..} |
-            Self::San { max, ..}=> *max
+            Self::HP { max, ..}  |
+            Self::MP { max, ..}  |
+            Self::Brn { max, ..} |
+            Self::Nim { max, ..} |
+            Self::SN { max, ..}  |
+            Self::Str { max, ..} |
+            Self::San { max, ..} => *max,
+            Self::Rep { .. } => StatValue::MAX,
         }
     }
 
@@ -226,7 +269,11 @@ impl Stat {
         match self {
             Self::HP { curr, ..} |
             Self::MP { curr, ..} |
+            Self::Brn { curr, ..}|
+            Self::Nim { curr, ..}|
             Self::SN { curr, ..} |
+            Self::Str { curr, ..}|
+            Self::Rep { curr}    |
             Self::San { curr, ..}=> *curr
         }
     }
@@ -287,7 +334,13 @@ impl Display for Stat {
         match self {
             // HP: (12/34)
             Self::HP { curr, max } => write!(f, "HP: ({:.0}/{:.0})", curr, max),
+            Self::Brn { curr, max } => write!(f, "BRN: ({:.0}/{:.0})", curr, max),
+            Self::Nim { curr, max } => write!(f, "NIM: ({:.0}/{:.0})", curr, max),
+            Self::Str { curr, max } => write!(f, "STR: ({:.0}/{:.0})", curr, max),
 
+            // REP: (+100.0)
+            Self::Rep { curr } => write!(f, "REP: ({:+.1})", curr),
+            
             // MP: (12/34)[-1.1]
             // MP: (12/34)
             Self::MP { curr, max, drain } => if *drain != 0.0 {
@@ -374,6 +427,13 @@ impl PartialEq<i32> for &Stat {
     }
 }
 
+impl Mul<&Stat> for f32 {
+    type Output = Self;
+    fn mul(self, rhs: &Stat) -> Self::Output {
+        self * rhs.current()
+    }
+}
+
 #[cfg(test)]
 mod stat_tests {
     use super::*;
@@ -418,7 +478,9 @@ mod stat_tests {
     /// Enforce that StatType enum count and its display_list() are kept in strict sync.
     #[test]
     fn stat_display_list_is_in_sync() {
-        assert_eq!("HP, MP, SN, SAN", StatType::display_list(), "Update StatType::display_list()! Out of sync.");
+        assert_eq!("BRN, HP, MP, NIM, REP, SAN, SN, STR",
+            StatType::display_list(),
+            "Update StatType::display_list()! Out of sync.");
         trait StatKill {
             fn check_it(&self) -> bool;
         }
@@ -428,6 +490,10 @@ mod stat_tests {
                 Self::HP |
                 Self::MP |
                 Self::SN |
+                Self::Brn |
+                Self::Nim |
+                Self::Str |
+                Self::Rep |
                 Self::San => true,
                 }
             }

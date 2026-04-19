@@ -204,12 +204,18 @@ fn generate_mob_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let mp_field = req_field!(data, "mp");
     let sn_field = req_field!(data, "sn");
     let san_field = req_field!(data, "san");
+    let brn_field = req_field!(data, "brn");
+    let str_field = req_field!(data, "strn");
+    let nim_field = req_field!(data, "nim");
     quote! {
         impl crate::mob::traits::Mob for #name {
             fn hp(&self) -> &crate::mob::stat::Stat { &self.#hp_field }
             fn mp(&self) -> &crate::mob::stat::Stat { &self.#mp_field }
             fn sn(&self) -> &crate::mob::stat::Stat { &self.#sn_field }
             fn san(&self) -> &crate::mob::stat::Stat { &self.#san_field }
+            fn nim(&self) -> &crate::mob::stat::Stat { &self.#nim_field }
+            fn brn(&self) -> &crate::mob::stat::Stat { &self.#brn_field }
+            fn str(&self) -> &crate::mob::stat::Stat { &self.#str_field }
         }
     }
 }
@@ -233,12 +239,18 @@ pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
     let mp_field = req_field!(data, "mp");
     let sn_field = req_field!(data, "sn");
     let san_field = req_field!(data, "san");
+    let brn_field = req_field!(data, "brn");
+    let nim_field = req_field!(data, "nim");
+    let str_field = req_field!(data, "strn");
     let mut_impl = quote! {
         impl crate::mob::traits::MobMut for #name {
             fn hp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#hp_field }
             fn mp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#mp_field }
             fn sn_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#sn_field }
             fn san_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#san_field }
+            fn brn_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#brn_field }
+            fn nim_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#nim_field }
+            fn str_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#str_field }
         }
     };
     TokenStream::from(quote! {
@@ -316,7 +328,9 @@ pub fn itemized_mut_derive(input: TokenStream) -> TokenStream {
     })
 }
 
+//
 /// [Storage] related derive.
+//
 #[proc_macro_derive(Storage)]
 pub fn storage_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -357,7 +371,9 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
     }
 }
 
+//
 /// Generate [Describable] impl.
+// 
 fn generate_describable_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
@@ -383,14 +399,18 @@ fn generate_describable_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     }
 }
 
+//
 /// Derive [Describable].
+//
 #[proc_macro_derive(Describable, attributes(description))]
 pub fn describable_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(generate_describable_impl(&input))
 }
 
+//
 /// Derive [DescribableMut] (and [Describable]).
+//
 #[proc_macro_derive(DescribableMut, attributes(description))]
 pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -428,7 +448,9 @@ pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
     })
 }
 
+//
 /// Generate read-only [Owned] variant's internals to be reused by [OwnedMut] deriver.
+//
 fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
 
@@ -479,14 +501,18 @@ fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     }
 }
 
+//
 /// Derive [Owned].
+//
 #[proc_macro_derive(Owned)]
 pub fn owned_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(generate_owned_impl(&input))
 }
 
+//
 /// Derive [OwnedMut] and [Owned].
+//
 #[proc_macro_derive(OwnedMut)]
 pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

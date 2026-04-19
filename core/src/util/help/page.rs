@@ -329,7 +329,7 @@ impl HelpLibrary {
         // TODO content checking?
         self.new_docs.push(entry.clone());
         // poke the librarian but don't stand waiting…
-        system_ch.librarian_tx.try_send(SystemSignal::NewLibraryEntry).ok();
+        system_ch.librarian_tx.send(SystemSignal::NewLibraryEntry).ok();
         true
     }
 }

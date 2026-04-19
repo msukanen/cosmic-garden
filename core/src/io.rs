@@ -152,7 +152,7 @@ impl ClientState {
                         
                         // Insert player to world:
                         World::insert_player(world.clone(), addr, &id, p.clone()).await;
-                        system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).await.ok();
+                        system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).ok();
                     }
                     return state;
                 }
@@ -175,7 +175,7 @@ impl ClientState {
                         let id = player.read().await.id().to_string();
 
                         World::insert_player(world.clone(), addr, &id, player.clone()).await;
-                        system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).await.ok();
+                        system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).ok();
 
                         return state;
                     } else {
@@ -201,7 +201,7 @@ impl ClientState {
                             let state = Self::Playing { player: player.clone() };
                             let id = player.read().await.id().to_string();
 
-                            system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).await.ok();
+                            system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).ok();
                             World::insert_player(world.clone(), addr, &id, player.clone()).await;
                             
                             tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
@@ -232,7 +232,7 @@ impl ClientState {
                         p.id().to_string()
                     };
                     
-                    system_ch.game_tx.send(SystemSignal::PlayerLogin { who: p_id.clone(), tx: tx.clone() }).await.ok();
+                    system_ch.game_tx.send(SystemSignal::PlayerLogin { who: p_id.clone(), tx: tx.clone() }).ok();
                     World::insert_player(world.clone(), addr, &p_id, p.clone()).await;
                     
                     let lock = p.read().await;

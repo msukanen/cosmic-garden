@@ -4,7 +4,7 @@ use cosmic_garden_pm::{CombatantMut, FactionMut, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{combat::Combatant, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, mob::{Stat, StatType, StatValue, faction::EntityFaction}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
+use crate::{combat::Combatant, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, faction::EntityFaction, traits::Mob}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut, CombatantMut, FactionMut)]
 pub struct Entity {
@@ -15,7 +15,12 @@ pub struct Entity {
     mp: Stat,
     san: Stat,
     sn: Stat,
+    brn: Stat,
+    nim: Stat,
+    strn: Stat,
     faction: EntityFaction,
+    max_weapon_size: WeaponSize,
+    equipped_weapon: Option<Item>,
 }
 
 impl Default for Entity {
@@ -27,7 +32,12 @@ impl Default for Entity {
             mp: Stat::new(StatType::MP),
             san: Stat::new(StatType::San),
             sn: Stat::new(StatType::SN),
+            brn: Stat::new(StatType::Brn),
+            nim: Stat::new(StatType::Nim),
+            strn: Stat::new(StatType::Str),
             faction: EntityFaction::Neutral,
+            max_weapon_size: WeaponSize::Large,
+            equipped_weapon: None,
         }
     }
 }
@@ -61,8 +71,13 @@ impl Entity {
 
 impl Combatant for Entity {
     fn dmg(&self) -> StatValue {
-        // TODO dmg calculation based on possible weapon, strength, etc.
-        1.0
+        let Some(Item::Weapon(w)) = &self.equipped_weapon else { return 1.0 * self.str() / 100.0 };
+        let dmg = w.dmg();
+        dmg * self.str() / 100.0
+    }
+
+    fn max_weapon_size(&self) -> WeaponSize {
+        self.max_weapon_size
     }
 }
 
@@ -120,7 +135,7 @@ mod entity_tests {
         if let Err(e) = mob.save_bp().await {
             panic!("goblin fail: {e:?}");
         }
-        let _ = c.0.game_tx.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() }).await;
+        let _ = c.0.game_tx.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() });
         tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
         let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(state, LookCommand, "",s,tx,c,w,p,|out:&str| out.contains("goblin is here"));

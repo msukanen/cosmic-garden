@@ -72,9 +72,9 @@ async fn main() {
     let world = Arc::new(RwLock::new(world));
 
     // Establish system thread interconnection channels.
-    let (janitor_tx, io_rx) = mpsc::channel::<SystemSignal>(32);
-    let (librarian_tx, lib_rx) = mpsc::channel::<SystemSignal>(8);
-    let (game_tx, game_rx) = mpsc::channel::<SystemSignal>(64);
+    let (janitor_tx, io_rx) = mpsc::unbounded_channel::<SystemSignal>();
+    let (librarian_tx, lib_rx) = mpsc::unbounded_channel::<SystemSignal>();
+    let (game_tx, game_rx) = mpsc::unbounded_channel::<SystemSignal>();
     let private_channels = SignalChannels {
         janitor_tx: janitor_tx,
         librarian_tx: librarian_tx,

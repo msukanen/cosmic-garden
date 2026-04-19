@@ -42,7 +42,7 @@ impl Command for WeaveCommand {
             let mut lib = (*BP_LIBRARY).write().await;
             persist = lib.shelve(&final_item, true);
             // ping the librarian. If they don't hear, just move along. They'll notice sooner or later.
-            ctx.system.librarian_tx.try_send(SystemSignal::NewBlueprintEntry).ok();
+            ctx.system.librarian_tx.send(SystemSignal::NewBlueprintEntry).ok();
         }
 
         log::trace!("Builder metamorph: {final_item:?}");

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, look::LookCommand}, identity::IdentityQuery, io::Broadcast, player::Player, tell_user, util::direction::Direction};
+use crate::{cmd::{Command, CommandCtx, look::LookCommand}, identity::IdentityQuery, io::Broadcast, player::Player, tell_user, thread::SystemSignal, util::direction::Direction};
 
 pub struct GotoCommand;
 
@@ -45,23 +45,29 @@ impl Command for GotoCommand {
             return
         };
 
-        if let Err(e) = Player::place_direct(plr.clone(), target.clone()).await {
-            log::error!("Translocation failure: {e:?}");
-            tell_user!(ctx.writer, "Strangely enough you cannot go there…\n");
-        } else {
-            // log::debug!("Maybe last goto: {:?}", plr.read().await.last_goto);
-            let mut plr = plr.write().await;
-            let origin_id = origin.read().await.id().to_string();
-            plr.last_goto = Some((dir.into(), Arc::downgrade(&origin)));
-            log::debug!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
-            drop(plr);
-            LookCommand.exec({ctx.args = "";ctx}).await;
+        if let Err(e) = ctx.system.game_tx.send(SystemSignal::WantTransportFromTo { who: plr.clone(), from: origin.clone(), to: target.clone() }) {
+            log::warn!("Transport system clogged… {e:?}");
+            tell_user!(ctx.writer, "You trip briefly, losing your orientation…\n");
+            return;
         }
 
-        ctx.tx.send(Broadcast::Movement {
-            from: origin.clone().into(),
-            to: target.clone().into(),
-            who: plr.clone()
-        }).ok();
+        // if let Err(e) = Player::place_direct(plr.clone(), target.clone()).await {
+        //     log::error!("Translocation failure: {e:?}");
+        //     tell_user!(ctx.writer, "Strangely enough you cannot go there…\n");
+        // } else {
+        //     // log::debug!("Maybe last goto: {:?}", plr.read().await.last_goto);
+        //     let mut plr = plr.write().await;
+        //     let origin_id = origin.read().await.id().to_string();
+        //     plr.last_goto = Some((dir.into(), Arc::downgrade(&origin)));
+        //     log::debug!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
+        //     drop(plr);
+        //     LookCommand.exec({ctx.args = "";ctx}).await;
+        // }
+
+        // ctx.tx.send(Broadcast::Movement {
+        //     from: origin.clone().into(),
+        //     to: target.clone().into(),
+        //     who: plr.clone()
+        // }).ok();
     }
 }

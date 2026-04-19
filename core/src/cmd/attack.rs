@@ -16,7 +16,7 @@ impl Command for AttackCommand {
             let r = loc.read().await;
             for ent_id in r.entities.keys() {
                 if ent_id.show_uuid(false).starts_with(ctx.args) {
-                    ctx.system.game_tx.send(SystemSignal::Attack { who: plr.clone(), victim_id: ent_id.into() }).await.ok();
+                    ctx.system.game_tx.send(SystemSignal::Attack { who: plr.clone(), victim_id: ent_id.into() }).ok();
                     return ;
                 }
             }

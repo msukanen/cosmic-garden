@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{combat::CombatantMut, identity::{IdentityMut, IdentityQuery}, io::Broadcast, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SignalChannels, SpawnType}}, world::World, player::Player};
+use crate::{combat::CombatantMut, identity::{IdentityMut, IdentityQuery}, io::Broadcast, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SignalChannels, SpawnType}}, translocate, world::World};
 
 type Battler = Arc<RwLock<dyn CombatantMut + Send + Sync>>;
 /// Threshold above which we'll stop nagging the World and pre-fetch list(s) in one sweep…
@@ -20,12 +20,22 @@ impl Default for BattleStage {
     }
 }
 
+trait IdentityQueryLite {
+    async fn id(&self) -> String;
+}
+
+impl IdentityQueryLite for Battler {
+    async fn id(&self) -> String {
+        self.read().await.id().into()
+    }
+}
+
 /// Life-thread. Lives hang on in balance here!
 /// 
 /// Life-thread is the game's "pulse" that ticks the clocks of everything.
 //TODO (It'll do) much more than that Soon™.
 /// 
-pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>), world: Arc<RwLock<World>>) {
+pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc::UnboundedReceiver<SystemSignal>), world: Arc<RwLock<World>>) {
     let mut tick_interval = time::interval(Duration::from_millis(10));// 100Hz
     let mut battle_interval = time::interval(Duration::from_millis(1000));// 1Hz
     let mut tick = 0;
@@ -35,6 +45,9 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
 
     loop {
         tokio::select! {
+            //
+            // The "World Clock".
+            //
             _ = tick_interval.tick() => {
                 {
                     let mut w = world.write().await;
@@ -47,6 +60,9 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                 }
             }
 
+            //
+            // Battle handler tick.
+            //
             _ = battle_interval.tick() => {
                 if bs.vs.is_empty() { continue; }
                 let mut deathrow = vec![];
@@ -58,17 +74,26 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                     parallel_congestion = true;
                 }
 
+                // Resolve the ongoing combats for this tick…
                 for (atk_id, (atk, vct, room)) in bs.vs.iter_mut() {
                     let resolution = punt(atk, vct, &room).await;
-                    let msg = match resolution {
-                        Resolution::Inconclusive => format!("...."),
-                        Resolution::AtkVictory => format!("AtkV"),
-                        Resolution::AtkRetreat => format!("AtkR"),
-                        Resolution::VctRetreat => format!("VctR"),
-                        Resolution::VctVictory => format!("VctV"),
-                        Resolution::BothDead => format!("BDED"),
+                    let message_actor = match resolution {
+                        Resolution::Inconclusive => format!("You hit {}.", vct.id().await),
+                        Resolution::AtkVictory => format!("You're victorious against {}!", vct.id().await),
+                        Resolution::AtkRetreat => format!("Better run while you can…"),
+                        Resolution::VctRetreat => format!("Hey, {} is running away!", vct.id().await),
+                        Resolution::VctVictory => format!("Ouch… *you faint*"),
+                        Resolution::BothDead => format!("You fall… flat on your face. R.I.P."),
                     };
-                    log::debug!("Round resolved as … {msg}");
+                    let message_other = match resolution {
+                        Resolution::Inconclusive => format!("{atk_id} hits {}.", vct.id().await),
+                        Resolution::AtkVictory => format!("{atk_id} has slain {}!", vct.id().await),
+                        Resolution::AtkRetreat => format!("{atk_id} runs away for their dear life…"),
+                        Resolution::VctRetreat => format!("Huh, {} is running away…", vct.id().await),
+                        Resolution::VctVictory => format!("{atk_id} collapses due numerous, too numerous, wounds."),
+                        Resolution::BothDead => format!("Unexpected… Both {atk_id} and {} fall over at the same time, either dead or exhausted.", vct.id().await),
+                    };
+                    log::debug!("Round for {atk_id} vs {} resolved as … {message_actor}", vct.id().await);
                     let p = if parallel_congestion {
                         active_players.get(atk_id.as_str()).cloned()
                     } else {
@@ -81,8 +106,8 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                             tx.send(Broadcast::SystemInRoom {
                                 room: room.clone(),
                                 actor: plr.clone(),
-                                message_actor: msg,
-                                message_other: "fite!?".into()
+                                message_actor,
+                                message_other
                             }).ok();
                         }
                     } else {
@@ -98,6 +123,9 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                 }
             }
 
+            //
+            // System signals.
+            //
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::Shutdown => break,
                 SystemSignal::Spawn {what, room_id} => spawn_something(what, &room_id, world.clone()).await,
@@ -108,11 +136,27 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                     if let Some(ent) = room.read().await.entities.get(&victim_id) {
                         target_arc = ent.clone() as Battler;
                     } else if let Some(pvp) = room.read().await.who.get(&victim_id) {
+                        let atk_id = who.read().await.id().to_string();
+                        let atk_name = who.read().await.title().to_string();
                         let Some(pvp) = pvp.upgrade() else {
-                            // TODO - direct comms to player; Broadcast - just need player thread to hand us their tx when they pop online...
+                            // they're gone...? (or never were there to begin with)
+                            who_online.get(&atk_id).and_then(|tx|
+                                tx.send(Broadcast::Message { to: who.clone(), message: "They're not here…".into() }).ok()
+                            );
                             continue;
                         };
+                        let vct_name = pvp.read().await.title().to_string();
                         target_arc = pvp.clone() as Battler;
+                        who_online.get(&atk_id).and_then(|tx|
+                            tx.send(Broadcast::SystemInRoomAt {
+                                room: room.clone(),
+                                atk: who.clone(),
+                                vct: pvp.clone(),
+                                message_atk: format!("You attack {vct_name}!"),
+                                message_vct: format!("{atk_name} attacks you!"),
+                                message_other: format!("{atk_name} attacks {vct_name}!")
+                            }).ok()
+                        );
                     } else {
                         // TODO - Broadcast to player that their target ran off...
                         log::debug!("Where'd '{victim_id}' go?");
@@ -125,6 +169,21 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                     bs.vs.remove(&who);
                     who_online.remove(&who);
                 },
+                SystemSignal::WantTransportFromTo { who, from, to } => {
+                    let who_id = who.read().await.id().to_string();
+                    if bs.vs.contains_key(&who_id) {
+                        // in combat, transit denied
+                        who_online.get(&who_id).and_then(|tx| {
+                            tx.send(Broadcast::Message { to: who.clone(), message: "You're in middle of combat! Try <c yellow>flee</c> first…".into() }).ok()
+                        });
+                        continue;
+                    }
+
+                    translocate!(who, from, to);
+                },
+                SystemSignal::AbortBattleNow { who } => {
+                    bs.vs.remove(&who);
+                }
                 _ => {}
             }
         }
