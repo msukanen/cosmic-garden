@@ -44,7 +44,9 @@ pub enum Broadcast {
         who: ForceTarget,
         by: Arc<RwLock<Player>>,
         delivery: Option<String>,
-    }
+    },
+
+    Shutdown,
 }
 
 #[derive(Debug, Clone)]
