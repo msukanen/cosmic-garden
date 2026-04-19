@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::IdentityQuery, io::room_fp, item::container::variants::{ContainerVariant, ContainerVariantType}, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::IdentityQuery, io::room_fp, item::container::variants::{ContainerVariant, ContainerVariantType}, mob::core::Entity, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -40,10 +40,50 @@ pub struct Room {
 
     #[serde(default = "room_inventory")]
     pub contents: ContainerVariant,
+
+    #[serde(default, with = "arc_n_t_transform")]
+    pub entities: HashMap<String, Arc<RwLock<Entity>>>,
 }
 
 fn empty_room_desc() -> String { "A room.".into() }
 fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
+
+mod arc_n_t_transform {
+    use std::{collections::HashMap, sync::Arc};
+
+    use serde::{Deserialize, Deserializer, Serializer, ser::SerializeMap};
+    use tokio::sync::RwLock;
+
+    use crate::mob::core::Entity;
+
+    pub fn serialize<S>(what: &HashMap<String, Arc<RwLock<Entity>>>, s:S) -> Result<S::Ok, S::Error>
+    where S: Serializer
+    {
+        let mut map = s.serialize_map(Some(what.len()))?;
+        for (id, arc) in what {
+            // try_read - skip if contested atm.
+            if let Ok(guard) = arc.try_read() {
+                map.serialize_entry(id, &*guard)?;
+            } else {
+                // skip for now, Janitor'll get this done sooner or later…
+                log::debug!("Skipping {id} in save: lock busy.")
+            }
+        }
+        map.end()
+    }
+
+    pub fn deserialize<'de, D>(d: D) -> Result< HashMap<String, Arc<RwLock<Entity>>>, D::Error>
+    where D: Deserializer<'de>
+    {
+        let raw: HashMap<String, Entity> = HashMap::deserialize(d)?;
+        let mut arced = HashMap::with_capacity(raw.len());
+        for (id, ent) in raw {
+            arced.insert(id, Arc::new(RwLock::new(ent)));
+        }
+
+        Ok(arced)
+    }
+}
 
 impl Room {
     pub fn load_sync(id: &str) -> Result<Self, CgError> {
@@ -58,14 +98,16 @@ impl Room {
         let room = Room::load_sync(id).unwrap_or({
             log::info!("No archælogy possible, thus creating new room '{}'", id);
             Self {
-            id: id.as_id()?,
-            title: title.into(),
-            desc: empty_room_desc(),
-            who: HashMap::new(),
-            exits: HashMap::new(),
-            raw_exits: HashMap::new(),
-            contents: room_inventory(),
-        }});
+                id: id.as_id()?,
+                title: title.into(),
+                desc: empty_room_desc(),
+                who: HashMap::new(),
+                exits: HashMap::new(),
+                raw_exits: HashMap::new(),
+                contents: room_inventory(),
+                entities: HashMap::new(),
+            }
+        });
 
         Ok(Arc::new(RwLock::new(room)))
     }
@@ -115,10 +157,12 @@ impl Room {
             id: self.id.clone(),
             title: self.title.clone(),
             desc: self.desc.clone(),
-            who: HashMap::new(),
             exits: self.exits.clone(),
             raw_exits: self.raw_exits.clone(),
+            // we skip everything else:
+            who: HashMap::new(),
             contents: room_inventory(),
+            entities: HashMap::new(),
         }
     }
 
