@@ -2,11 +2,11 @@
 
 use std::{collections::HashMap, fmt::Display, sync::{Arc, Weak}};
 
-use cosmic_garden_pm::{CombatantMut, IdentityMut, MobMut};
+use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -32,7 +32,7 @@ impl Display for ActivityType {
 }
 
 /// A player's character contained here…
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut, CombatantMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut, CombatantMut, Factioned)]
 pub struct Player {
     /// ID of owner of this specific [Player] character.
     pub(super) owner_id: String,
@@ -76,6 +76,9 @@ pub struct Player {
 
     #[serde(default, skip)]
     pub last_goto: Option<(Direction, Weak<RwLock<Room>>)>,
+
+    #[serde(skip, default = "player_faction_default")]
+    pub faction: EntityFaction,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -87,6 +90,7 @@ fn player_default_atype() -> ActivityType { ActivityType::default() }
 fn player_inv_default() -> ContainerVariant {
     ContainerVariant::raw(ContainerVariantType::PlayerInventory)
 }
+fn player_faction_default() -> EntityFaction { EntityFaction::Player { pvp: false } }
 
 impl Player {
     pub fn owner_id<'a>(&'a self) -> &'a str { &self.owner_id }
@@ -203,6 +207,7 @@ impl Default for Player {
             inventory: player_inv_default(),
             affects: HashMap::new(),
             last_goto: None,
+            faction: EntityFaction::Player { pvp: false },
         }
     }
 }
@@ -257,5 +262,11 @@ impl Tickable for Player {
             }
         }
         meaningful
+    }
+}
+
+impl FactionMut for Player {
+    fn faction_mut(&mut self) -> &mut EntityFaction {
+        &mut self.faction
     }
 }
