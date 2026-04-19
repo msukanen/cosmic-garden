@@ -38,6 +38,7 @@ impl Command for HelpCommand {
             Some(EditorMode::Help { .. }) => format!("hedit:{}", ctx.args),
             Some(EditorMode::Room { .. }) => format!("redit:{}", ctx.args),
             Some(EditorMode::Item { .. }) => format!("iedit:{}", ctx.args),
+            Some(EditorMode::Mob { .. }) => format!("medit:{}", ctx.args),
             None => ctx.args.to_string()
         };
 
@@ -143,6 +144,6 @@ mod cmd_help_tests {
         let state = ctx!(state, HelpCommand, "set",s,tx,ch,w,p,|out:&str| out.contains("nothing about"));
         let state = ctx!(state, AbortCommand, "",s,tx,ch,w,p);
         let state = ctx!(state, IeditCommand, "apple",s,tx,ch,w,p);
-        let state = ctx!(state, HelpCommand, "set",s,tx,ch,w,p,|out:&str| out.contains("New stuff?\n\n"));
+        let _ = ctx!(state, HelpCommand, "set",s,tx,ch,w,p,|out:&str| out.contains("New stuff?\n\n"));
     }
 }
