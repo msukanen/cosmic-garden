@@ -91,10 +91,16 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver
 
                 SystemSignal::NewBlueprintEntry => {}
 
+                SystemSignal::Shutdown => { break; }
                 _ => ()
             }
         }
     }
+
+    BP_LIBRARY.write().await.save().await.ok();
+    ENT_BP_LIBRARY.write().await.save().await.ok();
+    HELP_LIBRARY.write().await.save().await.ok();
+    log::info!("Librarian checking out.");
 }
 
 /// Reorganize the library, reindex, etc.
