@@ -590,8 +590,56 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
         impl crate::combat::CombatantMut for #name {
             fn take_dmg(&mut self, dmg: crate::mob::StatValue) -> bool {
                 use crate::mob::traits::{Mob,MobMut};
-                *(self.hp_mut()) -= dmg;
+                *(self.hp_mut()) -= dmg.abs();// no "healing" with dmg…
                 self.is_dead()
+            }
+
+            fn heal(&mut self, dmg: crate::mob::StatValue) {
+                use crate::mob::traits::{Mob,MobMut};
+                *(self.hp_mut()) += dmg.abs();// no "dmg" with healing…
+            }
+        }
+    };
+    TokenStream::from(quote! {
+        #base_impl
+        #mut_impl
+    })
+}
+
+/// Derive read-only [Factioned] token stream.
+fn generate_factioned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+
+    let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
+    let fact_field = req_field!(data, "faction");
+
+    quote! {
+        impl crate::mob::faction::Factioned for #name {
+            fn faction(&self) -> crate::mob::faction::EntityFaction { self.#fact_field.clone() }
+        }
+    }
+}
+
+/// Derive read-only [Factioned].
+#[proc_macro_derive(Factioned)]
+pub fn factioned_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    TokenStream::from(generate_factioned_impl(&input))
+}
+
+/// Derive read-only [Factioned] and mutable [FactionMut] both at once.
+#[proc_macro_derive(FactionMut)]
+pub fn faction_mut_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let name = &input.ident;
+
+    let base_impl = generate_factioned_impl(&input);
+    let Data::Struct(data) = input.data else { panic!("Struct only!") };
+    let fact_field = req_field!(data, "faction");
+    let mut_impl = quote! {
+        impl crate::mob::faction::FactionMut for #name {
+            fn faction_mut(&mut self) -> &mut crate::mob::faction::EntityFaction {
+                &mut self.#fact_field
             }
         }
     };
