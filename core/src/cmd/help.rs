@@ -131,9 +131,7 @@ mod cmd_help_tests {
         let state = ctx!(state, HelpCommand, "iedit:set",s,tx,ch,w,p,|out:&str| out.contains("nothing about"));
         let state = ctx!(state, HelpCommand, "",s,tx,ch,w,p,|out:&str| out.contains("desc ="));
         // as librarian is not running by default... fire a mock one up
-        let lrx = mpsc::channel::<SystemSignal>(8);
-        ch.librarian_tx = lrx.0;
-        tokio::spawn(librarian((ch.clone(), lrx.1)));
+        tokio::spawn(librarian((ch.0.clone(), ch.1.librarian_rx)));
         tokio::time::sleep(Duration::from_secs(2)).await;// let the lib stabilize...
         let state = ctx!(state, DescCommand, "= New stuff?",s,tx,ch,w,p);
         let state = ctx!(state, WeaveCommand, "",s,tx,ch,w,p);

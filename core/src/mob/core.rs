@@ -108,10 +108,8 @@ mod entity_tests {
         let (w,tx,mut c,p) = get_operational_mock_world().await;
         let (ltx,lrx) = mpsc::channel::<SystemSignal>(2);
         let (gtx,grx) = mpsc::channel::<SystemSignal>(64);
-        c.librarian_tx = ltx;
-        c.game_tx = gtx.clone();
-        tokio::spawn(librarian((c.clone(), lrx)));
-        tokio::spawn(life_thread((c.clone(), grx), w.clone()));
+        tokio::spawn(librarian((c.0.clone(), c.1.librarian_rx)));
+        tokio::spawn(life_thread((c.0.clone(), c.1.game_rx), w.clone()));
         tokio::time::sleep(Duration::from_secs(3)).await;// let things stabilize in peace…
         let Ok(mob) = Entity::new("goblin").await else {
             panic!("Where'd the lil goblin go?!");
