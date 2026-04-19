@@ -74,6 +74,7 @@ pub async fn parse_and_exec<'a>(mut ctx: CommandCtx<'_>) -> ClientState {
             EditorMode::Room { .. } => &REDIT_COMMANDS,
             EditorMode::Help { .. } => &HEDIT_COMMANDS,
             EditorMode::Item { .. } => &IEDIT_COMMANDS,
+            EditorMode::Mob { .. } => &MEDIT_COMMANDS,
         },
         _ => {// should not happen, but…
             log::error!("Player state '{:?}' invalid for cmd processing?!", ctx.state);
