@@ -55,6 +55,11 @@ lazy_static! {
         maybe_fs_issue!(path, fs::create_dir(&path));
         path
     };
+    pub(crate) static ref ENTITY_BP_PATH: PathBuf = {
+        let path = WORLD_PATH.join("entities");
+        maybe_fs_issue!(path, fs::create_dir(&path));
+        path
+    };
 
     /// Immutable [IdError::ReservedName] sources.
     pub static ref HARDCODED_RESERVED: HashSet<&'static str> = {
