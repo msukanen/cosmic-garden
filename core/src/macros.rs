@@ -61,7 +61,7 @@ macro_rules! err_iedit_buffer_inaccessible {
                     writer: &mut $mock_sock,
                     args: $args,
                     pre_pad_n: false,
-                    system: &$sigs,
+                    system: &$sigs.0,
                     state: $state,
                     world: $world.clone(),
                     tx: &$tx

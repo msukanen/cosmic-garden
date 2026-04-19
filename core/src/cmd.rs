@@ -123,7 +123,7 @@ mod cmd_tests {
             writer: &mut mock_sock,
             args: "",
             pre_pad_n: false,
-            system: &sigs,
+            system: &sigs.0,
             state: ClientState::Playing { player: plr.clone() },
             world: world.clone(),
             tx: &tx

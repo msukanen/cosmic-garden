@@ -303,7 +303,7 @@ pub(crate) mod world_tests {
         (
             std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
             tokio::sync::broadcast::Sender<crate::Broadcast>,
-            crate::SignalChannels,
+            (crate::SignalChannels, crate::thread::signal::SignalReceiverChannels),
             std::sync::Arc<tokio::sync::RwLock<crate::player::Player>>
         )
     {

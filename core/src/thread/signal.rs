@@ -42,12 +42,30 @@ pub(crate) struct SignalChannels {
 }
 
 #[cfg(test)]
-impl Default for SignalChannels {
-    fn default() -> Self {
-        let (jtx,_) = mpsc::channel::<SystemSignal>(2);
-        let (ltx,_) = mpsc::channel::<SystemSignal>(2);
-        let (gtx,_) = mpsc::channel::<SystemSignal>(2);
-        Self { janitor_tx: jtx, librarian_tx: ltx, game_tx: gtx }
+#[derive(Debug)]
+pub(crate) struct SignalReceiverChannels {
+    pub janitor_rx: mpsc::Receiver<SystemSignal>,
+    pub librarian_rx: mpsc::Receiver<SystemSignal>,
+    pub game_rx: mpsc::Receiver<SystemSignal>,
+}
+
+#[cfg(test)]
+impl SignalChannels {
+    pub fn default() -> (Self, SignalReceiverChannels) {
+        let (jtx,jrx) = mpsc::channel::<SystemSignal>(2);
+        let (ltx,lrx) = mpsc::channel::<SystemSignal>(2);
+        let (gtx,grx) = mpsc::channel::<SystemSignal>(2);
+        (   Self {
+                janitor_tx: jtx,
+                librarian_tx: ltx,
+                game_tx: gtx
+            },
+            SignalReceiverChannels {
+                janitor_rx: jrx,
+                librarian_rx: lrx,
+                game_rx: grx
+            }
+        )
     }
 }
 
@@ -56,4 +74,12 @@ impl Default for SignalChannels {
 pub enum SpawnType {
     Mob { id: String },
     Item { id: String },
+}
+
+impl SignalChannels {
+    pub async fn shutdown(&self) {
+        self.game_tx.send(SystemSignal::Shutdown).await;
+        self.librarian_tx.send(SystemSignal::Shutdown).await;
+        self.janitor_tx.send(SystemSignal::Shutdown).await;
+    }
 }
