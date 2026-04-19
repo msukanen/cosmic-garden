@@ -28,6 +28,10 @@ pub enum SystemSignal {
     NewLibraryEntry,
     /// New blueprint entry, from e.g. builders.
     NewBlueprintEntry,
+
+    ///--- Life Thread
+    /// Notion to spawn something…
+    Spawn { what: SpawnType, room_id: String },
 }
 
 #[derive(Debug, Clone)]
@@ -45,4 +49,11 @@ impl Default for SignalChannels {
         let (gtx,_) = mpsc::channel::<SystemSignal>(2);
         Self { janitor_tx: jtx, librarian_tx: ltx, game_tx: gtx }
     }
+}
+
+/// Spawn types for life-thread signals.
+#[derive(Debug, Clone)]
+pub enum SpawnType {
+    Mob { id: String },
+    Item { id: String },
 }

@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{thread::{SystemSignal, signal::SignalChannels}, world::World};
+use crate::{identity::{IdentityMut, IdentityQuery}, string::Uuid, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SignalChannels, SpawnType}}, world::World};
 
 /// Life-thread. Lives hang on in balance here!
 /// 
@@ -31,10 +31,35 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
 
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::Shutdown => break,
+                SystemSignal::Spawn {what, room_id} => spawn_something(what, &room_id, world.clone()).await,
                 _ => {}
             }
         }
     }
 
     log::info!("Bye now!");
+}
+
+/// Spawn a [Mob] or [Item] at given [Room] (by ID).
+/// 
+/// # Args
+/// - `what` to spawn.
+/// - `where` to spawn ([Room] ID).
+async fn spawn_something(what: SpawnType, r#where: &str, world: Arc<RwLock<World>>) {
+    match what {
+        SpawnType::Mob { id } => {
+            if let Some(mut mob) = (*ENT_BP_LIBRARY).read().await.get(&id) {
+                *(mob.id_mut()) = mob.id().re_uuid();
+                if let Some(r_arc) = world.read().await.rooms.get(r#where) {
+                    r_arc.write().await.entities.insert(mob.id().into(), Arc::new(RwLock::new(mob)));
+                } else {
+                    log::error!("Ayy! We don't have room '{}' to spawn '{}' at!", r#where, mob.id());
+                }
+            } else {
+                log::warn!("There's no record of '{id}' in the entity catalogue…");
+            }
+        }
+
+        _ => ()
+    }
 }
