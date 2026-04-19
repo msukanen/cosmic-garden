@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, thread::io::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::container::Storage, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user, thread::io::add_item_to_lnf, util::activity::ActionWeight};
 
 pub struct GetCommand;
 
@@ -27,8 +27,10 @@ impl Command for GetCommand {
             return;
         };
         let item_name = item.title().to_string();
+        let act_w = item.required_space();
         let Err(item_err) = plr.write().await.inventory.try_insert(item) else {
             tell_user!(ctx.writer, "You nab '{}'!\n", item_name);
+            plr.write().await.act(plr.clone(),  &ctx.system, ActionWeight::ItemTransfer { count: act_w as usize }).await;
             return;
         };
         // bugger, no space in inventory, lets put it back...
