@@ -158,9 +158,8 @@ impl HelpLibrary {
             }
             let wrapper: PrimordialLexicon = toml::from_str(primordial_toml)?;
             for page in wrapper.help_pages {
-                    lock.id_stem.insert(page.id().to_lowercase(), true);
-                    lock.items.insert(page.id().to_lowercase(), page);
-                    lock.save().await?;
+                lock.id_stem.insert(page.id().to_lowercase(), true);
+                lock.items.insert(page.id().to_lowercase(), page);
             }
 
             let mut xfiles = HelpPage::new(&lock.world_id)?;
@@ -176,15 +175,19 @@ impl HelpLibrary {
             return Ok(());
         };
 
-        // We got either a bootstrapped or a loaded source in `mf`.
+        // We got a loaded source in `mf`.
         let mut lib: HelpLibrary = serde_json::from_str(&mf)?;
+        if lib.world_id != WORLD_ID.as_str() {
+            log::warn!("Loading help entries of a different world ('{}')… Adjusting accordingly…", lib.world_id);
+        }
         lib.world_id = WORLD_ID.as_str().into();
-        for id in lib.id_stem.keys() {
+        for (id, dirty) in lib.id_stem.iter_mut() {
             let item_path = help_entry_fp(id);
             match fs::read_to_string(&item_path).await {
                 Ok(item_toml) => {
                     if let Ok(item) = toml::from_str(&item_toml) {
                         lib.items.insert(id.clone(), item);
+                        *dirty = false;
                     }
                 }
                 Err(e) => log::warn!("Failed to fetch the '{id}' from {}: {e}", item_path.display())
@@ -233,6 +236,11 @@ impl HelpLibrary {
     }
 
     /// Get a document, maybe…
+    /// 
+    /// # Args
+    /// - `id` of the document. May be namespaced with ':' as separator.
+    /// - `access` rights of the querier.
+    /// - `bypass_access` rights should be used *sparingly*…
     pub fn get(&self, id: &str, access: &Access, bypass_access: bool) -> Option<HelpPage> {
         log::trace!("Librarian is looking for… '{id}'…");
         fn actual_get(lib: &HelpLibrary, query: &str, access: &Access, bypass_access: bool) -> Option<HelpPage> {
