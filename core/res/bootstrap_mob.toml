@@ -1,0 +1,23 @@
+[[mobs]]
+id = "goblin"
+name = "A goblin"
+faction = "Neutral"
+
+[mobs.hp.HP]
+curr = 100.0
+max = 100.0
+
+[mobs.mp.MP]
+curr = 100.0
+max = 100.0
+drain = 0.0
+
+[mobs.san.San]
+curr = 100.0
+max = 100.0
+drain = 0.0
+
+[mobs.sn.SN]
+curr = 100.0
+max = 100.0
+drain = 0.0
