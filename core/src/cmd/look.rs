@@ -23,7 +23,7 @@ impl Command for LookCommand {
             (p.access.is_builder(), p.config.show_id)
         };
 
-        let (title, desc, who, exits, content) = {
+        let (title, desc, who, exits, content, entities) = {
             let lock = room.read().await;
             (
                 lock.title().to_string(),
@@ -32,7 +32,18 @@ impl Command for LookCommand {
                 lock.exits.clone(),
                 lock.contents.into_iter().map(|(id,item)| 
                     (id.clone(), item.title().to_string())
-                ).collect::<Vec<_>>()
+                ).collect::<Vec<_>>(),
+                {
+                    let mut ents = vec![];
+                    for (id, ent) in lock.entities.iter() {
+                        if let Ok(ent) = ent.try_read() {
+                            ents.push((id.clone(), ent.title().to_string()));
+                        } else {
+                            ents.push((id.clone(), "Something moving fast".into()));
+                        }
+                    }
+                    ents
+                },
             )
         };
         // Room lore:
@@ -48,6 +59,17 @@ impl Command for LookCommand {
             }
         }
         output.push('\n');
+        // Entities:
+        for (id,title) in &entities {
+            if is_builder && show_id {
+                output.push_str(&format!("  - {title}<c gray>({id})</c> is here…\n"));
+            } else {
+                output.push_str(&format!("  - {title} is here…\n"));
+            }
+        }
+        if !entities.is_empty() {
+            output.push('\n');
+        }
         // People:
         let ppl_arcs = who.iter()
             .filter_map(|(_,w)| w.upgrade())
