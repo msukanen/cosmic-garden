@@ -15,7 +15,7 @@ lazy_static! {
 pub trait Uuid {
     fn with_uuid(&self) -> String;
     fn no_uuid(&self) -> String;
-    fn re_uuid(&self) -> String { self.no_uuid().with_uuid() }
+    fn re_uuid(&self) -> String;
 }
 
 /// Append UUID if no such yet.
@@ -46,22 +46,19 @@ impl StrUuid for str {
 }
 
 impl Uuid for &str {
-    #[inline]
-    fn with_uuid(&self) -> String { append_uuid(self) }
-    #[inline]
-    fn no_uuid(&self) -> String { remove_uuid(self) }
+    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
+    #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
+    #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
 }
 
 impl Uuid for String {
-    #[inline]
-    fn with_uuid(&self) -> String { append_uuid(self) }
-    #[inline]
-    fn no_uuid(&self) -> String { remove_uuid(self) }
+    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
+    #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
+    #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
 }
 
 impl Uuid for &String {
-    #[inline]
-    fn with_uuid(&self) -> String { append_uuid(self) }
-    #[inline]
-    fn no_uuid(&self) -> String { remove_uuid(self) }
+    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
+    #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
+    #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
 }
