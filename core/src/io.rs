@@ -4,7 +4,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
 
-use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::signal::SignalChannels, user::UserInfo, world::World};
+use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::{SystemSignal, signal::SignalChannels}, user::UserInfo, world::World};
 
 pub mod broadcast; pub use broadcast::*;
 pub mod file; pub use file::*;
@@ -149,7 +149,10 @@ impl ClientState {
                             drop(lock);
                             id
                         };
+                        
+                        // Insert player to world:
                         World::insert_player(world.clone(), addr, &id, p.clone()).await;
+                        system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).await.ok();
                     }
                     return state;
                 }
@@ -170,7 +173,10 @@ impl ClientState {
                         let state = Self::Playing { player: player.clone() };
                         tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
                         let id = player.read().await.id().to_string();
+
                         World::insert_player(world.clone(), addr, &id, player.clone()).await;
+                        system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).await.ok();
+
                         return state;
                     } else {
                         let err = Player::load(&info.id, &p_id).await;
@@ -194,7 +200,10 @@ impl ClientState {
                         Ok(player) => {
                             let state = Self::Playing { player: player.clone() };
                             let id = player.read().await.id().to_string();
+
+                            system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).await.ok();
                             World::insert_player(world.clone(), addr, &id, player.clone()).await;
+                            
                             tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
                             state
                         }
@@ -222,10 +231,13 @@ impl ClientState {
                         let p = p.read().await;
                         p.id().to_string()
                     };
+                    
+                    system_ch.game_tx.send(SystemSignal::PlayerLogin { who: p_id.clone(), tx: tx.clone() }).await.ok();
                     World::insert_player(world.clone(), addr, &p_id, p.clone()).await;
+                    
                     let lock = p.read().await;
                     tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
-                    info.players.push((lock.id().into(), lock.name.clone()));
+                    info.players.push((p_id.clone(), lock.name.clone()));
                     if let Err(e) = info.save().await {
                         log::error!("FATAL: {e:?}");
                         tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));

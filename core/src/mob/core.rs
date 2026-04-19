@@ -4,7 +4,7 @@ use cosmic_garden_pm::{CombatantMut, FactionMut, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, mob::{Stat, StatType, faction::EntityFaction}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
+use crate::{combat::Combatant, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, mob::{Stat, StatType, StatValue, faction::EntityFaction}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut, CombatantMut, FactionMut)]
 pub struct Entity {
@@ -39,7 +39,7 @@ impl Entity {
         *self.id_mut() = self.id().re_uuid()
     }
 
-    async fn new(id: &str) -> Result<Self, CgError> {
+    pub async fn new(id: &str) -> Result<Self, CgError> {
         let Some(mut ent) = (*ENT_BP_LIBRARY).read().await.get(&id) else {
             return Ok(Self {
                 id: id.show_uuid(false).into(),
@@ -59,11 +59,16 @@ impl Entity {
     }
 }
 
+impl Combatant for Entity {
+    fn dmg(&self) -> StatValue {
+        // TODO dmg calculation based on possible weapon, strength, etc.
+        1.0
+    }
+}
+
 #[cfg(test)]
 mod entity_tests {
     use std::{io::Cursor, time::Duration};
-
-    use tokio::sync::mpsc;
 
     use crate::{cmd::look::LookCommand, identity::IdentityQuery, io::ClientState, mob::{core::Entity, traits::{Mob, MobMut}}, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, librarian::librarian, life_thread::life_thread, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
@@ -105,9 +110,7 @@ mod entity_tests {
     async fn entity_save() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,tx,mut c,p) = get_operational_mock_world().await;
-        let (ltx,lrx) = mpsc::channel::<SystemSignal>(2);
-        let (gtx,grx) = mpsc::channel::<SystemSignal>(64);
+        let (w,tx, c,p) = get_operational_mock_world().await;
         tokio::spawn(librarian((c.0.clone(), c.1.librarian_rx)));
         tokio::spawn(life_thread((c.0.clone(), c.1.game_rx), w.clone()));
         tokio::time::sleep(Duration::from_secs(3)).await;// let things stabilize in peace…
@@ -117,12 +120,12 @@ mod entity_tests {
         if let Err(e) = mob.save_bp().await {
             panic!("goblin fail: {e:?}");
         }
-        let _ = gtx.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() }).await;
-        tokio::time::sleep(Duration::from_secs(2)).await;// let things stabilize in peace…
+        let _ = c.0.game_tx.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() }).await;
+        tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
         let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(state, LookCommand, "",s,tx,c,w,p,|out:&str| out.contains("goblin is here"));
         p.write().await.config.show_id = true;
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, LookCommand, "",s,tx,c,w,p,|out:&str| out.contains("goblin-"));
+        let _ = ctx!(state, LookCommand, "",s,tx,c,w,p,|out:&str| out.contains("goblin-"));
     }
 }

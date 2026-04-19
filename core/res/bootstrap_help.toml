@@ -414,3 +414,25 @@ return path at the endpoint manually.
 usage = [
     "way <dir> <room-id>"
 ]
+[[help_pages]]
+id = "shutdown"
+title = "shutdown"
+access = "admin"
+alias = ["shutdown"]
+contents = """
+'shutdown' instructs the server to wind down and switch off the lights in a
+graceful and orderly manner.
+
+Shutdown isn't instantaneous, it'll take a moment to pack the bags and save
+the files...
+"""
+usage = ["shutdown"]
+[[help_pages]]
+id = "attack"
+title = "attack"
+alias = ["attack", "kill"]
+contents = """
+'attack' something or someone... The <target> may be a mob, another player, or
+even (some of the) inanimate objects.
+"""
+usage = ["attack <target>"]

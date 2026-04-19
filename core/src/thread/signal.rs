@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use tokio::sync::{RwLock, mpsc};
 
-use crate::player::Player;
+use crate::{io::Broadcast, player::Player};
 
 /// Various system signals between threads.
 #[derive(Debug, Clone)]
@@ -32,6 +32,9 @@ pub enum SystemSignal {
     ///--- Life Thread
     /// Notion to spawn something…
     Spawn { what: SpawnType, room_id: String },
+    Attack { who: Arc<RwLock<Player>>, victim_id: String },
+    PlayerLogout { who: String },
+    PlayerLogin { who: String, tx: tokio::sync::broadcast::Sender<Broadcast> },
 }
 
 #[derive(Debug, Clone)]

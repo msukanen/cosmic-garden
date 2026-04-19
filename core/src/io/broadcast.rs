@@ -39,6 +39,13 @@ pub enum Broadcast {
         message_who: String,
     },
 
+    SystemInRoom {
+        room: Arc<RwLock<Room>>,
+        actor: Arc<RwLock<Player>>,
+        message_actor: String,
+        message_other: String,
+    },
+
     Force {
         command: String,
         who: ForceTarget,

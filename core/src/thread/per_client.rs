@@ -44,6 +44,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
             if let Some(p) = w.players_by_sockaddr.remove(&pcd.addr) {
                 // drop the named mapping here as it's not needed for logout.
                 let lock = p.read().await;
+                pcd.system_ch.game_tx.try_send(SystemSignal::PlayerLogout { who: lock.id().to_string() }).ok();
                 let (id, name) = 
                     (lock.id().to_string(), lock.name.clone());
                 w.players_by_id.remove(lock.id());
@@ -95,7 +96,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                     reprompt_playing_user!(writer, state);
                                 }
                             }
-                        },
+                        }
 
                         Broadcast::Movement { to, from, who } => {
                             // no need to tell yourself that you just switched rooms…
@@ -113,7 +114,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 continue;
                             }
                             reprompt_playing_user!(writer, state);
-                        },
+                        }
 
                         Broadcast::Logout { from, who } => {
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
@@ -121,7 +122,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 tell_user!(&mut writer, "\n<c cyan>{}</c> vanishes into the mists…\n", who);
                                 reprompt_playing_user!(writer, state);
                             }
-                        },
+                        }
 
                         Broadcast::System { rooms, message, sender } => {
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
@@ -136,7 +137,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                     break;
                                 }
                             }
-                        },
+                        }
 
                         Broadcast::BiSignal { to, from, who, message_to, message_from, message_who } => {
                             // am I the 'who'?
@@ -145,12 +146,24 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 reprompt_playing_user!(writer, state);
                                 continue;
                             }
-                            // just skip if in void
+                            // just skip if in the void
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
                             if !Arc::ptr_eq(&to, &ploc) && !Arc::ptr_eq(&from, &ploc) { continue; }
                             tell_user!(&mut writer, "\n{}\n", if Arc::ptr_eq(&to, &ploc) { message_to } else { message_from} );
                             reprompt_playing_user!(writer, state);
-                        },
+                        }
+
+                        Broadcast::SystemInRoom { room, actor, message_actor, message_other } => {
+                            let Some(ploc) = player.read().await.location.upgrade() else { continue; };
+                            if !Arc::ptr_eq(&room, &ploc) { continue; }// not there
+                            if Arc::ptr_eq(&player, &actor) {
+                                tell_user!(&mut writer, "\n{}\n", message_actor);
+                            } else {
+                                tell_user!(&mut writer, "\n{}\n", message_other);
+                            }
+                            reprompt_playing_user!(writer, state);
+                            continue;
+                        }
 
                         Broadcast::Force { command, who, by, delivery } => {
                             static UNK_FORCE: &'static str = "<c red>Unseen forces commanded your mind for a moment…!";
@@ -195,7 +208,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                     tell_user!(&mut writer, "\n{}\n{}", delivery, prompt);
                                 }
                             }
-                        },
+                        }
 
                         Broadcast::Shutdown => {
                             tell_user!(&mut writer, "\n<c red>---[ SERVER SHUTTING DOWN ]---</c>\n");
