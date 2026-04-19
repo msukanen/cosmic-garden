@@ -5,12 +5,13 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::sync::{RwLock, mpsc};
 
-use crate::{io::{blueprint_lib_fp, help_lib_fp}, item::BlueprintLibrary, thread::{SystemSignal, signal::SignalChannels}, util::HelpLibrary};
+use crate::{io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::BlueprintLibrary, mob::spawn_lib::EntityLibrary, thread::{SystemSignal, signal::SignalChannels}, util::HelpLibrary};
 
 lazy_static! {
-    pub static ref BP_LIBRARY: Arc<RwLock<BlueprintLibrary>> = Arc::new(RwLock::new(BlueprintLibrary::default()));
+    pub(crate) static ref BP_LIBRARY: Arc<RwLock<BlueprintLibrary>> = Arc::new(RwLock::new(BlueprintLibrary::default()));
 
-    pub static ref HELP_LIBRARY: Arc<RwLock<HelpLibrary>> = Arc::new(RwLock::new(HelpLibrary::default()));
+    pub(crate) static ref HELP_LIBRARY: Arc<RwLock<HelpLibrary>> = Arc::new(RwLock::new(HelpLibrary::default()));
+    pub(crate) static ref ENT_BP_LIBRARY: Arc<RwLock<EntityLibrary>> = Arc::new(RwLock::new(EntityLibrary::default()));
 }
 
 /// 
@@ -35,9 +36,18 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver
         return ;
     }
 
+    // Bootstrap/load entity blueprints.
+    log::info!("Library establishing… biology @ '{}'", entity_lib_fp().display());
+    if let Err(e) = EntityLibrary::load_or_bootstrap().await {
+        // Aaah! The zoo is escaping!
+        log::error!("Uwah! The zoo is in chaos! {e:?}");
+        return ;
+    }
+
     log::info!("Library didn't catch fire, yay.");
     let mut dusting_shelves_interval = tokio::time::interval(Duration::from_mins(10));
     let mut dusting_documents_interval = tokio::time::interval(Duration::from_mins(10));
+    let mut species_catalogue_interval = tokio::time::interval(Duration::from_mins(10));
     
     loop {
         tokio::select! {
@@ -54,6 +64,14 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Receiver
                 let mut lib = HELP_LIBRARY.write().await;
                 if let Err(e) = lib.save().await {
                     log::error!("\"Seriously!?…\", a snag while saving documents: {e:?}");
+                }
+            }
+
+            _ = species_catalogue_interval.tick() => {
+                log::trace!("Librarian checks through the species catalogue…");
+                let mut lib = ENT_BP_LIBRARY.write().await;
+                if let Err(e) = lib.save().await {
+                    log::error!("\"What's going on here?!…\", a snag while saving the zoological documents: {e:?}");
                 }
             }
 

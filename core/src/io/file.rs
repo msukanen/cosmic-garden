@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::{r#const::{BP_PATH, HELP_PATH, ROOM_PATH, SAVE_PATH, WORLD_ID, WORLD_PATH}, string::StrUuid};
+use crate::{r#const::{BP_PATH, ENTITY_BP_PATH, HELP_PATH, ROOM_PATH, SAVE_PATH, WORLD_ID, WORLD_PATH}, string::StrUuid};
 const EXT_BLUEPRINT: &'static str = ".blueprint";
 const EXT_SAVE: &'static str = ".player";
 const EXT_USER: &'static str = ".user";
@@ -10,6 +10,7 @@ const EXT_HELP: &'static str = ".help";
 const EXT_LIB:  &'static str = ".library";
 const EXT_WORLD: &'static str = ".world";
 const EXT_ROOM:  &'static str = ".room";
+const EXT_ENT_BP: &'static str = ".entity";
 
 #[inline] pub fn user_save_fp(owner: &str) -> PathBuf {
     SAVE_PATH.join(format!("{owner}{EXT_USER}"))
@@ -49,4 +50,12 @@ const EXT_ROOM:  &'static str = ".room";
 
 #[inline] pub fn reserved_names_fp() -> PathBuf {
     WORLD_PATH.join("reserved.names")
+}
+
+#[inline] pub fn entity_lib_fp() -> PathBuf {
+    ENTITY_BP_PATH.join(format!("{}{EXT_LIB}", WORLD_ID.as_str()))
+}
+
+#[inline] pub fn entity_entry_fp(id: &str) -> PathBuf {
+    ENTITY_BP_PATH.join(format!("{}{EXT_ENT_BP}", id.show_uuid(false)))
 }
