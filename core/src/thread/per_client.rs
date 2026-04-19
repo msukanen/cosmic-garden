@@ -196,6 +196,11 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 }
                             }
                         },
+
+                        Broadcast::Shutdown => {
+                            tell_user!(&mut writer, "\n<c red>---[ SERVER SHUTTING DOWN ]---</c>\n");
+                            state = ClientState::Logout
+                        }
                     },
                     _ => ()
                 },
@@ -203,4 +208,6 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
             },
         }
     }
+    
+    log::debug!("Client checking out.");
 }
