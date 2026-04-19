@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{identity::{IdentityMut, IdentityQuery}, string::Uuid, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SignalChannels, SpawnType}}, world::World};
+use crate::{identity::{IdentityMut, IdentityQuery}, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SignalChannels, SpawnType}}, world::World};
 
 /// Life-thread. Lives hang on in balance here!
 /// 
@@ -37,7 +37,7 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
         }
     }
 
-    log::info!("Bye now!");
+    log::info!("Lifeline checking out after {tick} tick{}. Bye now!", maybe_plural(tick));
 }
 
 /// Spawn a [Mob] or [Item] at given [Room] (by ID).

@@ -37,8 +37,7 @@ mod combatant_tests {
         let mut s = Cursor::new(&mut b);
         let (w, tx, mut ch, p) = get_operational_mock_world().await;
         let (gtx, grx) = mpsc::channel::<SystemSignal>(64);
-        ch.game_tx = gtx;
-        tokio::spawn( life_thread((ch, grx), w.clone()) );
+        tokio::spawn( life_thread((ch.0, ch.1.game_rx), w.clone()) );
         tokio::time::sleep(Duration::from_secs(10)).await;
     }
 }
