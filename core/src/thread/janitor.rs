@@ -19,8 +19,16 @@ pub const SAVE_ASAP_THRESHOLD: usize = 100;
 /// autosaves and logouts to keeping the live world and disk
 /// in (relative) sync.
 /// 
-pub(crate) async fn io_thread((outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>), world: Arc<RwLock<World>>, args: Cli) {
-    let mut autosave_queue_interval = time::interval(Duration::from_secs(args.autosave_queue_interval.unwrap_or(300)));
+pub(crate) async fn io_thread(
+    (outgoing, mut incoming): (SignalChannels, mpsc::Receiver<SystemSignal>),
+    world: Arc<RwLock<World>>,
+    args: Option<Cli>,
+    done_tx: tokio::sync::oneshot::Sender<()>
+) {
+    let asqi = if let Some(args) = &args {
+        args.autosave_queue_interval.unwrap_or(300)
+    } else { 300 };
+    let mut autosave_queue_interval = time::interval(Duration::from_secs(asqi));
     let mut world_save_interval = time::interval(Duration::from_mins(2));
     let mut room_save_interval = time::interval(Duration::from_secs(30));
     let mut lost_and_found_interval = time::interval(Duration::from_mins(2));
@@ -45,6 +53,7 @@ pub(crate) async fn io_thread((outgoing, mut incoming): (SignalChannels, mpsc::R
             // Anything in mailbox?
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::Shutdown => break,
+
                 SystemSignal::SaveWorld => {save_the_whales(world.clone(), true).await;},
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
                 SystemSignal::ReindexLibrary => save_help_asap(&outgoing.librarian_tx).await,
@@ -54,14 +63,26 @@ pub(crate) async fn io_thread((outgoing, mut incoming): (SignalChannels, mpsc::R
         }
     }
 
-    // Ok, time to close the shop.
+    // Ok, lights out …!
+    lost_and_found(world.clone()).await; // drain LOST_AND_FOUND queue just in case…
+    save_the_whales(world.clone(), true).await;// save the whales!
+    room_save().await;// …and the rooms
+    autosave_queue(world.clone()).await;// well, and players.
+
+    // notify main thread that we've closed the shop.
+    let _ = done_tx.send(());
+    log::info!("Janitor checking out.");
 }
 
-/// Save disconnected player ASAP.
+/// Save player ASAP.
 async fn save_player_now(plr: Arc<RwLock<Player>>, p_id: &str) {
-    if let Err(e) = plr.write().await.save().await {
+    let p = plr.read().await.clone();
+    let act_w = p.actions_taken;
+    if let Err(e) = p.save().await {
         log::error!("Failed to save player '{p_id}': {e:?}")
     }
+    let mut p = plr.write().await;
+    p.actions_taken = p.actions_taken.saturating_sub(act_w);
     log::trace!("Saved '{p_id}'…");
 }
 
