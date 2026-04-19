@@ -13,14 +13,14 @@ pub enum Access {
     }
 }
 
-/// [Player] access rights; coarse.
+/// [Player] access rights; coarse — mainly for [HelpPage][crate::util::help::HelpPage] purposes.
 #[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum StrictAccess {
-    Admin,
-    Builder,
-    AnyBuilder,
-    Player,
+    Admin,          // access = "admin"
+    Builder,        // access = "builder"
+    AnyBuilder,     // access = "any_builder"
+    Player,         // - access field omitted
 }
 
 impl Default for Access {
