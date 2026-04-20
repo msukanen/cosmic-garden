@@ -6,7 +6,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::Combatant, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -295,12 +295,7 @@ impl FactionMut for Player {
     }
 }
 
-impl Combatant for Player {
-    fn max_weapon_size(&self) -> WeaponSize {
-        // Players *cannot* wield the largest weapons, obviously…
-        WeaponSize::Large
-    }
-
+impl Damager for Player {
     fn dmg(&self) -> StatValue {
         // TODO dmg calculation based on held weapon, strength, etc.
         20.0

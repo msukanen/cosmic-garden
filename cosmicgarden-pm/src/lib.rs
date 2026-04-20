@@ -51,6 +51,14 @@ macro_rules! req_field {
     };
 }
 
+macro_rules! maybe_field {
+    ($data:ident, $field:literal) => {
+        $data.fields.iter().find(|f| {
+            f.ident.as_ref().map_or(false, |i| i == $field)
+        })  .map(|f| f.ident.as_ref().unwrap())
+    };
+}
+
 macro_rules! enum_getter {
     ($data:ident, $getter:ident) => {
         $data.variants.iter().map(|v| {
@@ -194,63 +202,51 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
     })
 }
 
+//
 /// Derive read-only [Mob] token stream.
+//
 fn generate_mob_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
 
     let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
 
-    let hp_field = req_field!(data, "hp");
-    let mp_field = req_field!(data, "mp");
-    let sn_field = req_field!(data, "sn");
-    let san_field = req_field!(data, "san");
-    let brn_field = req_field!(data, "brn");
-    let str_field = req_field!(data, "strn");
-    let nim_field = req_field!(data, "nim");
-    quote! {
-        impl crate::mob::traits::Mob for #name {
-            fn hp(&self) -> &crate::mob::stat::Stat { &self.#hp_field }
-            fn mp(&self) -> &crate::mob::stat::Stat { &self.#mp_field }
-            fn sn(&self) -> &crate::mob::stat::Stat { &self.#sn_field }
-            fn san(&self) -> &crate::mob::stat::Stat { &self.#san_field }
-            fn nim(&self) -> &crate::mob::stat::Stat { &self.#nim_field }
-            fn brn(&self) -> &crate::mob::stat::Stat { &self.#brn_field }
-            fn str(&self) -> &crate::mob::stat::Stat { &self.#str_field }
+    if let Some(max_weapon_size) = maybe_field!(data, "max_weapon_size") {
+        quote! {
+            impl crate::mob::traits::Mob for #name {
+                fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { &self.#max_weapon_size }
+            }
+        }
+    } else {
+        quote! {
+            impl crate::mob::traits::Mob for #name {
+                fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { crate::item::weapon::WeaponSize::Large }
+            }
         }
     }
 }
 
+//
 /// Derive read-only [Mob].
+//
 #[proc_macro_derive(Mob)]
 pub fn mob_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(generate_mob_impl(&input))
 }
 
+//
 /// Derive read-only [Mob] and mutable [MobMut] both at once.
+//
 #[proc_macro_derive(MobMut)]
 pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
     let base_impl = generate_mob_impl(&input);
-    let Data::Struct(data) = input.data else { panic!("Struct only!") };
-    let hp_field = req_field!(data, "hp");
-    let mp_field = req_field!(data, "mp");
-    let sn_field = req_field!(data, "sn");
-    let san_field = req_field!(data, "san");
-    let brn_field = req_field!(data, "brn");
-    let nim_field = req_field!(data, "nim");
-    let str_field = req_field!(data, "strn");
+    let Data::Struct(_) = input.data else { panic!("Struct only!") };
     let mut_impl = quote! {
         impl crate::mob::traits::MobMut for #name {
-            fn hp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#hp_field }
-            fn mp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#mp_field }
-            fn sn_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#sn_field }
-            fn san_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#san_field }
-            fn brn_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#brn_field }
-            fn nim_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#nim_field }
-            fn str_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#str_field }
+
         }
     };
     TokenStream::from(quote! {
@@ -583,26 +579,41 @@ pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
     })
 }
 
-// /// Derive read-only [Combatant] token stream.
-// fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
-//     let name = &input.ident;
+//
+/// Generate read-only [Combatant] token stream.
+//
+fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+    let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
+    let hp_field = req_field!(data, "hp");
+    let mp_field = req_field!(data, "mp");
+    let sn_field = req_field!(data, "sn");
+    let san_field = req_field!(data, "san");
+    let brn_field = req_field!(data, "brn");
+    let str_field = req_field!(data, "strn");
+    let nim_field = req_field!(data, "nim");
 
-//     let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
-//     let _ = req_field!(data, "hp");
+    quote! {
+        impl crate::combat::Combatant for #name {
+            fn hp(&self) -> &crate::mob::stat::Stat { &self.#hp_field }
+            fn mp(&self) -> &crate::mob::stat::Stat { &self.#mp_field }
+            fn sn(&self) -> &crate::mob::stat::Stat { &self.#sn_field }
+            fn san(&self) -> &crate::mob::stat::Stat { &self.#san_field }
+            fn nim(&self) -> &crate::mob::stat::Stat { &self.#nim_field }
+            fn brn(&self) -> &crate::mob::stat::Stat { &self.#brn_field }
+            fn str(&self) -> &crate::mob::stat::Stat { &self.#str_field }
+        }
+    }
+}
 
-//     quote! {
-//         impl crate::combat::Combatant for #name {
-            
-//         }
-//     }
-// }
-
-// /// Derive read-only [Combatant].
-// #[proc_macro_derive(Combatant)]
-// pub fn combatant_derive(input: TokenStream) -> TokenStream {
-//     let input = parse_macro_input!(input as DeriveInput);
-//     TokenStream::from(generate_combatant_impl(&input))
-// }
+//
+/// Derive read-only [Combatant].
+//
+#[proc_macro_derive(Combatant)]
+pub fn combatant_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    TokenStream::from(generate_combatant_impl(&input))
+}
 
 /// Derive read-only [Combatant] and mutable [Mut] both at once.
 #[proc_macro_derive(CombatantMut)]
@@ -610,30 +621,44 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
-    //let base_impl = generate_combatant_impl(&input);
+    let base_impl = generate_combatant_impl(&input);
     let Data::Struct(data) = input.data else { panic!("Struct only!") };
-    let _ = req_field!(data, "hp");
+
+    let hp_field = req_field!(data, "hp");
+    let mp_field = req_field!(data, "mp");
+    let sn_field = req_field!(data, "sn");
+    let san_field = req_field!(data, "san");
+    let brn_field = req_field!(data, "brn");
+    let nim_field = req_field!(data, "nim");
+    let str_field = req_field!(data, "strn");
     let mut_impl = quote! {
         impl crate::combat::CombatantMut for #name {
+            fn hp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#hp_field }
+            fn mp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#mp_field }
+            fn sn_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#sn_field }
+            fn san_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#san_field }
+            fn brn_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#brn_field }
+            fn nim_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#nim_field }
+            fn str_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#str_field }
             fn take_dmg(&mut self, dmg: crate::mob::StatValue) -> bool {
-                use crate::mob::traits::{Mob,MobMut};
                 *(self.hp_mut()) -= dmg.abs();// no "healing" with dmg…
                 self.is_dead()
             }
 
             fn heal(&mut self, dmg: crate::mob::StatValue) {
-                use crate::mob::traits::{Mob,MobMut};
                 *(self.hp_mut()) += dmg.abs();// no "dmg" with healing…
             }
         }
     };
     TokenStream::from(quote! {
-    //    #base_impl
+        #base_impl
         #mut_impl
     })
 }
 
-/// Derive read-only [Factioned] token stream.
+//
+/// Generate read-only [Factioned] token stream.
+//
 fn generate_factioned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
 
@@ -647,14 +672,18 @@ fn generate_factioned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     }
 }
 
+//
 /// Derive read-only [Factioned].
+//
 #[proc_macro_derive(Factioned)]
 pub fn factioned_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     TokenStream::from(generate_factioned_impl(&input))
 }
 
+//
 /// Derive read-only [Factioned] and mutable [FactionMut] both at once.
+//
 #[proc_macro_derive(FactionMut)]
 pub fn faction_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);

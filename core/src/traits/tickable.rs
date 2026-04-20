@@ -1,6 +1,6 @@
 //! General purpose [Tickable] trait…
 
-use crate::mob::{core::Entity, traits::MobMut};
+use crate::{combat::CombatantMut, mob::core::Entity};
 
 pub trait Tickable {
     fn tick(&mut self) -> bool;

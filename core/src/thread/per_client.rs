@@ -182,7 +182,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                             reprompt_playing_user!(writer, state);
                         }
 
-                        Broadcast::Force { command, who, by, delivery } => {
+                        Broadcast::Force { command, who, by, silent, delivery } => {
                             static UNK_FORCE: &'static str = "<c red>Unseen forces commanded your mind for a moment…!";
                             // ignore re-force, no matter what.
                             if command.trim().to_lowercase().starts_with("force") { continue; }
@@ -199,7 +199,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 args: &command,
                                 writer: &mut writer,
                             };
-                            let delivery = delivery.unwrap_or_else(|| UNK_FORCE.to_string());
+                            let delivery = delivery.unwrap_or_else(|| if silent {"".into()} else {UNK_FORCE.to_string()});
                             match who {
                                 ForceTarget::All => {
                                     state = cmd::parse_and_exec(ctx).await;

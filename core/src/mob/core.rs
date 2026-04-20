@@ -1,12 +1,13 @@
 //! Mob core.
 
-use cosmic_garden_pm::{CombatantMut, FactionMut, IdentityMut, MobMut};
+use cosmic_garden_pm::{CombatantMut, FactionMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{combat::Combatant, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, faction::EntityFaction, traits::Mob}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
+use crate::{combat::{Damager, Combatant}, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut, CombatantMut, FactionMut)]
+//#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Mob, CombatantMut, FactionMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, FactionMut, CombatantMut)]
 pub struct Entity {
     id: String,
     #[identity(title)]
@@ -69,15 +70,11 @@ impl Entity {
     }
 }
 
-impl Combatant for Entity {
+impl Damager for Entity {
     fn dmg(&self) -> StatValue {
         let Some(Item::Weapon(w)) = &self.equipped_weapon else { return 1.0 * self.str() / 100.0 };
         let dmg = w.dmg();
         dmg * self.str() / 100.0
-    }
-
-    fn max_weapon_size(&self) -> WeaponSize {
-        self.max_weapon_size
     }
 }
 
@@ -85,7 +82,7 @@ impl Combatant for Entity {
 mod entity_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::look::LookCommand, identity::IdentityQuery, io::ClientState, mob::{core::Entity, traits::{Mob, MobMut}}, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, identity::IdentityQuery, io::ClientState, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;

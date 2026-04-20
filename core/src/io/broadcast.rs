@@ -69,6 +69,7 @@ pub enum Broadcast {
         command: String,
         who: ForceTarget,
         by: Option<Arc<RwLock<Player>>>,
+        silent: bool,
         delivery: Option<String>,
     },
 

@@ -2,7 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
-use tokio::{sync::{RwLock, mpsc}, time};
+use tokio::{sync::RwLock, time};
 
 use crate::{combat::CombatantMut, identity::{IdentityMut, IdentityQuery}, io::Broadcast, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, world::World};
 
@@ -191,7 +191,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                     log::debug!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
                     drop(plr);
 
-                    if let Err(e) = out.broadcast.send(Broadcast::Force { command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
+                    if let Err(e) = out.broadcast.send(Broadcast::Force { silent: true, command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
                         log::error!("Communications blackout?! {e:?}");
                     };
                 },

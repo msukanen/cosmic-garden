@@ -55,6 +55,7 @@ impl Command for ForceCommand {
             command: full_forced_cmd.to_string(),
             who: forcetype,
             by: plr.clone().into(),
+            silent: false,
             delivery: if is_ghost {None} else {
                 Some(format!("<c red>{admin_title}</c> <c yellow>issued a command which you had to heed to…</c>"))
             },
