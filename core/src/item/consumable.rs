@@ -72,7 +72,7 @@ impl Affector for ConsumableMatter {
     fn as_affect(&self) -> Option<Affect> {
         match self.nutrition {
             NutritionType::Heal { .. } =>
-                Some(Affect::Nutrition { kind: self.nutrition.clone(), remaining: self.affect_ticks.clone() }),
+                Some(Affect::Effect { kind: self.nutrition.clone(), remaining: self.affect_ticks.clone() }),
             _ => None
         }
     }

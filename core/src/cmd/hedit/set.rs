@@ -9,8 +9,8 @@ pub struct SetCommand;
 #[async_trait]
 impl Command for SetCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
-        let plr = validate_access!(ctx, builder);
+        let _ = validate_access!(ctx, builder);
         show_help_if_needed!(ctx, "set");
-
+        todo!();
     }
 }

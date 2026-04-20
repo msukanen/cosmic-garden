@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, thread::io::add_item_to_lnf, item::{Item, container::Storage, matter::MatterState}, mob::affect::{Affector, stack_affect}, player_or_bust, roomloc_or_bust, tell_user};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, thread::add_item_to_lnf, item::{Item, container::Storage, matter::MatterState}, mob::affect::{Affector, stack_affect}, player_or_bust, roomloc_or_bust, tell_user};
 
 pub struct EatCommand;
 

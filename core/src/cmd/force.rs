@@ -51,7 +51,7 @@ impl Command for ForceCommand {
             }
         };
 
-        ctx.tx.send(Broadcast::Force {
+        ctx.out.broadcast.send(Broadcast::Force {
             command: full_forced_cmd.to_string(),
             who: forcetype,
             by: plr.clone().into(),

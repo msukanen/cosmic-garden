@@ -4,7 +4,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
 
-use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::{SystemSignal, signal::SignalChannels}, user::UserInfo, world::World};
+use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::{SystemSignal, signal::SignalSenderChannels}, user::UserInfo, world::World};
 
 pub mod broadcast; pub use broadcast::*;
 pub mod file; pub use file::*;
@@ -48,7 +48,7 @@ impl ClientState {
     }
 
     /// Big state handler…
-    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, tx: &tokio::sync::broadcast::Sender<Broadcast>, system_ch: &SignalChannels, input: &str) -> Self {
+    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, tx: &tokio::sync::broadcast::Sender<Broadcast>, system_ch: &SignalSenderChannels, input: &str) -> Self {
         match self {
             Self::EnteringLogin => {
                 let state = match input.as_id() {
@@ -126,39 +126,39 @@ impl ClientState {
                         tell_user!(&mut writer, "{}: ", get_prompt!(world, PromptType::NamingViolation));
                         return self;
                     }
+                    let id = p.id().to_string();
                     p.owner_id = info.id.clone();
                     p.name = input.into();
+                    let title = p.name.clone();
                     if let Err(e) = p.save().await {
                         log::error!("FATAL: {e:?}");
                         tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
                         return Self::Logout;
                     }
+
+                    // Final preparations…
                     let p = Arc::new(RwLock::new(p));
                     let state = Self::Playing { player: p.clone() };
                     {
-                        let lock = p.read().await;
-                        tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
-                        info.players.push((lock.id().into(), lock.name.clone()));
+                        tell_user!(&mut writer, "{}", p.read().await.prompt(&state).unwrap_or_default());
+                        // add the new [Player] to [UserInfo]'s character list.
+                        info.players.push((id.clone(), title.clone()));
                         if let Err(e) = info.save().await {
                             log::error!("FATAL: {e:?}");
                             tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
                             return Self::Logout;
                         }
-                        let id = {
-                            let id = lock.id().to_string();
-                            drop(lock);
-                            id
-                        };
                         
                         // Insert player to world:
                         World::insert_player(world.clone(), addr, &id, p.clone()).await;
-                        system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).ok();
+                        system_ch.life.send(SystemSignal::PlayerLogin { id, title }).ok();
                     }
                     return state;
                 }
 
                 // did user give an index?
                 if let Ok(num) = input.parse::<usize>() {
+                    // converty human 1+-indexing to 'puter 0+-indexing.
                     let num = num.saturating_sub(1);
                     if num >= info.players.len() {
                         // out of bounds, clearly…
@@ -166,21 +166,25 @@ impl ClientState {
                         return self;
                     }
 
-                    // printed indexes are 1+ to player; we need to wind the index back a bit - and treat user input of 0 as if they wrote 1 instead.
+                    // Get character ID by (the adjusted) index...
                     let (p_id, _) = &info.players[num];
 
                     if let Ok(player) = Player::load(&info.id, &p_id).await {
                         let state = Self::Playing { player: player.clone() };
-                        tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
-                        let id = player.read().await.id().to_string();
+                        
+                        let (id, title) = {
+                            let lock = player.read().await;
+                            tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
+                            (lock.id().to_string(), lock.title().to_string())
+                        };
 
                         World::insert_player(world.clone(), addr, &id, player.clone()).await;
-                        system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).ok();
+                        system_ch.life.send(SystemSignal::PlayerLogin { id, title }).ok();
 
                         return state;
                     } else {
                         let err = Player::load(&info.id, &p_id).await;
-                        log::error!("UserInfo of user '{}' mismatch - Player file '{}' missing (or broken)!: {err:?}", info.id, p_id);
+                        log::error!("UserInfo of user '{}' mismatch — Player file '{}' missing (or broken)!: {err:?}", info.id, p_id);
                         tell_user!(&mut writer, "A bit of misplacement error here… Do contact admin ASAP!\n");
                         return self;
                     }
@@ -193,18 +197,21 @@ impl ClientState {
                     // existing character.
                     return match Player::load(&info.id, id).await {
                         Err(e) => {
-                            log::error!("UserInfo of user '{}' mismatch - Player file '{}' missing (or broken)! {e:?}", info.id, id);
+                            log::error!("UserInfo of user '{}' mismatch — Player file '{}' missing (or broken)! {e:?}", info.id, id);
                             tell_user!(&mut writer, "A bit of misplacement error here… Do contact admin ASAP!");
                             self
                         }
                         Ok(player) => {
                             let state = Self::Playing { player: player.clone() };
-                            let id = player.read().await.id().to_string();
+                            let (id, title) = {
+                                let lock = player.read().await;
+                                tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
+                                (lock.id().to_string(), lock.title().to_string())
+                            };
 
-                            system_ch.game_tx.send(SystemSignal::PlayerLogin { who: id.clone(), tx: tx.clone() }).ok();
                             World::insert_player(world.clone(), addr, &id, player.clone()).await;
+                            system_ch.life.send(SystemSignal::PlayerLogin { id, title }).ok();
                             
-                            tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or_default());
                             state
                         }
                     }
@@ -217,8 +224,10 @@ impl ClientState {
                     tell_user!(&mut writer, "{}: ", get_prompt!(world, PromptType::NamingViolation));
                     return self;
                 }
+                let id = p.id().to_string();
                 p.owner_id = info.id.clone();
                 p.name = input.into();
+                let title = p.name.clone();
                 if let Err(e) = p.save().await {
                     log::error!("FATAL: {e:?}");
                     tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
@@ -227,22 +236,16 @@ impl ClientState {
                 let p = Arc::new(RwLock::new(p));
                 let state = Self::Playing { player: p.clone() };
                 {
-                    let p_id = {
-                        let p = p.read().await;
-                        p.id().to_string()
-                    };
+                    World::insert_player(world.clone(), addr, &id, p.clone()).await;
+                    system_ch.life.send(SystemSignal::PlayerLogin { id: id.clone(), title: title.clone() }).ok();
                     
-                    system_ch.game_tx.send(SystemSignal::PlayerLogin { who: p_id.clone(), tx: tx.clone() }).ok();
-                    World::insert_player(world.clone(), addr, &p_id, p.clone()).await;
-                    
-                    let lock = p.read().await;
-                    tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
-                    info.players.push((p_id.clone(), lock.name.clone()));
+                    info.players.push((id.clone(), title));
                     if let Err(e) = info.save().await {
                         log::error!("FATAL: {e:?}");
                         tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
                         return Self::Logout;
                     }
+                    tell_user!(&mut writer, "{}", p.read().await.prompt(&state).unwrap_or_default());
                 }
                 state
             },
@@ -254,17 +257,12 @@ impl ClientState {
                     pre_pad_n: false,
                     state: self.clone(),
                     world: world.clone(),
-                    system: &system_ch,
-                    tx: &tx,
+                    out: &system_ch,
                     writer: &mut writer,
                     args: input,
                 };
                 let state = parse_and_exec(ctx).await;
-                let prompt = {
-                    let lock = player.read().await;
-                    lock.prompt(&state)
-                };
-                tell_user!(&mut writer, "{}", prompt.unwrap_or("".into()));
+                tell_user!(&mut writer, "{}", player.read().await.prompt(&state).unwrap_or("".into()));
                 state
             },
 

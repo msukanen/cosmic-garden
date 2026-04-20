@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, redit::abort::AbortCommand}, io::Broadcast, thread::io::ROOMS_TO_SAVE, player_or_bust, tell_user};
+use crate::{cmd::{Command, CommandCtx, redit::abort::AbortCommand}, io::Broadcast, thread::janitor::ROOMS_TO_SAVE, player_or_bust, tell_user};
 
 pub struct WeaveCommand;
 
@@ -31,7 +31,7 @@ impl Command for WeaveCommand {
 
         tell_user!(ctx.writer, "<c green>Reality is being rewritten…\n");
         let rooms: Vec<_> = vec![room_arc.clone()];
-        ctx.tx.send(Broadcast::System {
+        ctx.out.broadcast.send(Broadcast::System {
             from: None,
             rooms,
             message: "<c yellow>The reality shifts around you!</c>".into(),

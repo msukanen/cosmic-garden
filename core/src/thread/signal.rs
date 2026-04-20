@@ -2,9 +2,12 @@
 
 use std::sync::Arc;
 
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{RwLock, broadcast, mpsc};
 
-use crate::{io::Broadcast, player::Player, room::Room};
+use crate::{io::Broadcast, player::Player, room::Room, util::direction::Direction};
+
+pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
+pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
 
 /// Various system signals between threads.
 #[derive(Debug, Clone)]
@@ -33,44 +36,51 @@ pub enum SystemSignal {
     /// Notion to spawn something…
     Spawn { what: SpawnType, room_id: String },
     Attack { who: Arc<RwLock<Player>>, victim_id: String },
-    PlayerLogout { who: String },
-    PlayerLogin { who: String, tx: tokio::sync::broadcast::Sender<Broadcast> },
-    WantTransportFromTo { who: Arc<RwLock<Player>>, from: Arc<RwLock<Room>>, to: Arc<RwLock<Room>> },
+    PlayerLogout { id: String },
+    PlayerLogin { id: String, title: String },
+    WantTransportFromTo { who: Arc<RwLock<Player>>, from: Arc<RwLock<Room>>, to: Arc<RwLock<Room>>, via: Direction },
     AbortBattleNow { who: String },
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct SignalChannels {
-    pub janitor_tx: mpsc::UnboundedSender<SystemSignal>,
-    pub librarian_tx: mpsc::UnboundedSender<SystemSignal>,
-    pub game_tx: mpsc::UnboundedSender<SystemSignal>,
+pub(crate) struct SignalSenderChannels {
+    pub broadcast: broadcast::Sender<Broadcast>,
+    pub janitor: SigSender,
+    pub librarian: SigSender,
+    pub life: SigSender,
 }
 
-#[cfg(test)]
 #[derive(Debug)]
 pub(crate) struct SignalReceiverChannels {
-    pub janitor_rx: mpsc::UnboundedReceiver<SystemSignal>,
-    pub librarian_rx: mpsc::UnboundedReceiver<SystemSignal>,
-    pub game_rx: mpsc::UnboundedReceiver<SystemSignal>,
+    pub janitor: SigReceiver,
+    pub librarian: SigReceiver,
+    pub life: SigReceiver,
 }
 
-#[cfg(test)]
+pub(crate) struct SignalChannels {
+    pub out: SignalSenderChannels,
+    pub recv: SignalReceiverChannels,
+}
+
 impl SignalChannels {
-    pub fn default() -> (Self, SignalReceiverChannels) {
+    pub fn default() -> Self {
+        let (tx, _) = broadcast::channel::<Broadcast>(16);
         let (jtx,jrx) = mpsc::unbounded_channel::<SystemSignal>();
         let (ltx,lrx) = mpsc::unbounded_channel::<SystemSignal>();
         let (gtx,grx) = mpsc::unbounded_channel::<SystemSignal>();
-        (   Self {
-                janitor_tx: jtx,
-                librarian_tx: ltx,
-                game_tx: gtx
+        Self {
+            out: SignalSenderChannels {
+                broadcast: tx,
+                janitor: jtx,
+                librarian: ltx,
+                life: gtx,
             },
-            SignalReceiverChannels {
-                janitor_rx: jrx,
-                librarian_rx: lrx,
-                game_rx: grx
+            recv: SignalReceiverChannels {
+                janitor: jrx,
+                librarian: lrx,
+                life: grx,
             }
-        )
+        }
     }
 }
 
@@ -81,10 +91,10 @@ pub enum SpawnType {
     Item { id: String },
 }
 
-impl SignalChannels {
+impl SignalSenderChannels {
     pub async fn shutdown(&self) {
-        self.game_tx.send(SystemSignal::Shutdown);
-        self.librarian_tx.send(SystemSignal::Shutdown);
-        self.janitor_tx.send(SystemSignal::Shutdown);
+        self.life.send(SystemSignal::Shutdown);
+        self.librarian.send(SystemSignal::Shutdown);
+        self.janitor.send(SystemSignal::Shutdown);
     }
 }

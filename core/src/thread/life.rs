@@ -4,7 +4,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{combat::CombatantMut, identity::{IdentityMut, IdentityQuery}, io::Broadcast, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SignalChannels, SpawnType}}, translocate, world::World};
+use crate::{combat::CombatantMut, identity::{IdentityMut, IdentityQuery}, io::Broadcast, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, world::World};
 
 type Battler = Arc<RwLock<dyn CombatantMut + Send + Sync>>;
 /// Threshold above which we'll stop nagging the World and pre-fetch list(s) in one sweep…
@@ -35,13 +35,13 @@ impl IdentityQueryLite for Battler {
 /// Life-thread is the game's "pulse" that ticks the clocks of everything.
 //TODO (It'll do) much more than that Soon™.
 /// 
-pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc::UnboundedReceiver<SystemSignal>), world: Arc<RwLock<World>>) {
+pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver), world: Arc<RwLock<World>>) {
     let mut tick_interval = time::interval(Duration::from_millis(10));// 100Hz
     let mut battle_interval = time::interval(Duration::from_millis(1000));// 1Hz
     let mut tick = 0;
     log::info!("Life thread firing up…");
     let mut bs = BattleStage::default();
-    let mut who_online: HashMap<String, tokio::sync::broadcast::Sender<Broadcast>> = HashMap::new();
+    let mut who_online: HashMap<String, String> = HashMap::new();// id, title
 
     loop {
         tokio::select! {
@@ -102,14 +102,14 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                     let p_exists = p.is_some();
                     if p_exists {
                         let plr = p.unwrap();
-                        if let Some(tx) = who_online.get(atk_id.as_str()) {
-                            tx.send(Broadcast::SystemInRoom {
+                        who_online.get(atk_id.as_str()).and_then(|_| {
+                            out.broadcast.send(Broadcast::SystemInRoom {
                                 room: room.clone(),
                                 actor: plr.clone(),
                                 message_actor,
                                 message_other
-                            }).ok();
-                        }
+                            }).ok()
+                        });
                     } else {
                         who_online.remove(atk_id.as_str());
                     }
@@ -137,18 +137,17 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                         target_arc = ent.clone() as Battler;
                     } else if let Some(pvp) = room.read().await.who.get(&victim_id) {
                         let atk_id = who.read().await.id().to_string();
-                        let atk_name = who.read().await.title().to_string();
                         let Some(pvp) = pvp.upgrade() else {
                             // they're gone...? (or never were there to begin with)
-                            who_online.get(&atk_id).and_then(|tx|
-                                tx.send(Broadcast::Message { to: who.clone(), message: "They're not here…".into() }).ok()
+                            who_online.get(&atk_id).and_then(|_|
+                                out.broadcast.send(Broadcast::Message { to: who.clone(), message: "They're not here…".into() }).ok()
                             );
                             continue;
                         };
                         let vct_name = pvp.read().await.title().to_string();
                         target_arc = pvp.clone() as Battler;
-                        who_online.get(&atk_id).and_then(|tx|
-                            tx.send(Broadcast::SystemInRoomAt {
+                        who_online.get(&atk_id).and_then(|atk_name|
+                            out.broadcast.send(Broadcast::SystemInRoomAt {
                                 room: room.clone(),
                                 atk: who.clone(),
                                 vct: pvp.clone(),
@@ -164,22 +163,37 @@ pub(crate) async fn life_thread((outgoing, mut incoming): (SignalChannels, mpsc:
                     }
                     bs.vs.insert(who.read().await.id().into(), (who.clone() as Battler, target_arc, room.clone()));
                 }
-                SystemSignal::PlayerLogin { who, tx } => {who_online.insert(who, tx);},
-                SystemSignal::PlayerLogout { who } => {
-                    bs.vs.remove(&who);
-                    who_online.remove(&who);
+                SystemSignal::PlayerLogin { id, title } => {who_online.insert(id, title);},
+                SystemSignal::PlayerLogout { id } => {
+                    bs.vs.remove(&id);
+                    who_online.remove(&id);
                 },
-                SystemSignal::WantTransportFromTo { who, from, to } => {
+
+                //
+                // Public transportation (or denial of such thereof).
+                //
+                SystemSignal::WantTransportFromTo { who, from, to, via } => {
                     let who_id = who.read().await.id().to_string();
                     if bs.vs.contains_key(&who_id) {
                         // in combat, transit denied
-                        who_online.get(&who_id).and_then(|tx| {
-                            tx.send(Broadcast::Message { to: who.clone(), message: "You're in middle of combat! Try <c yellow>flee</c> first…".into() }).ok()
+                        who_online.get(&who_id).and_then(|_| {
+                            out.broadcast.send(Broadcast::Message { to: who.clone(), message: "You're in middle of combat! Try <c yellow>flee</c> first…".into() }).ok()
                         });
                         continue;
                     }
 
+                    log::debug!("Transport request from {who_id} from {} to {}", from.read().await.id(), to.read().await.id());
                     translocate!(who, from, to);
+
+                    let mut plr = who.write().await;
+                    let origin_id = from.read().await.id().to_string();
+                    plr.last_goto = Some((via.into(), Arc::downgrade(&from)));
+                    log::debug!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
+                    drop(plr);
+
+                    if let Err(e) = out.broadcast.send(Broadcast::Force { command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
+                        log::error!("Communications blackout?! {e:?}");
+                    };
                 },
                 SystemSignal::AbortBattleNow { who } => {
                     bs.vs.remove(&who);

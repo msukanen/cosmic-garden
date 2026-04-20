@@ -112,36 +112,35 @@ impl HelpRenderCmd for RenderHelpPage {
 #[cfg(test)]
 mod cmd_help_tests {
     use std::{io::Cursor, time::Duration};
-    use tokio::sync::mpsc;
 
     use super::*;
-    use crate::{cmd::{hedit::{HeditCommand, abort::AbortCommand, desc::DescCommand, weave::WeaveCommand}, iedit::IeditCommand}, ctx, io::ClientState, thread::{SystemSignal, librarian::librarian}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{hedit::{HeditCommand, abort::AbortCommand, desc::DescCommand, weave::WeaveCommand}, iedit::IeditCommand}, ctx, io::ClientState, thread, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn namespacing_get() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,tx,mut ch,p) = get_operational_mock_world().await;
+        let (w,c,p) = get_operational_mock_world().await;
         let state = ClientState::Playing { player: p.clone() };
-        let state = ctx!(state, HelpCommand, "iedit:set",s,tx,ch,w,p,|out:&str| out.contains("nothing about"));
-        let state = ctx!(state, HeditCommand, "iedit:set",s,tx,ch,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, HelpCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("nothing about"));
+        let state = ctx!(state, HeditCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, HeditCommand, "iedit:set",s,tx,ch,w,p,|out:&str| out.contains("hedit new"));
-        let state = ctx!(state, HeditCommand, "new iedit:set",s,tx,ch,w,p,|out:&str| out.contains("desc ="));
-        let state = ctx!(state, HelpCommand, "iedit:set",s,tx,ch,w,p,|out:&str| out.contains("nothing about"));
-        let state = ctx!(state, HelpCommand, "",s,tx,ch,w,p,|out:&str| out.contains("desc ="));
+        let state = ctx!(state, HeditCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("hedit new"));
+        let state = ctx!(state, HeditCommand, "new iedit:set",s,c.out,w,p,|out:&str| out.contains("desc ="));
+        let state = ctx!(state, HelpCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("nothing about"));
+        let state = ctx!(state, HelpCommand, "",s,c.out,w,p,|out:&str| out.contains("desc ="));
         // as librarian is not running by default... fire a mock one up
-        tokio::spawn(librarian((ch.0.clone(), ch.1.librarian_rx)));
+        tokio::spawn(thread::librarian((c.out.clone(), c.recv.librarian)));
         tokio::time::sleep(Duration::from_secs(2)).await;// let the lib stabilize...
-        let state = ctx!(state, DescCommand, "= New stuff?",s,tx,ch,w,p);
-        let state = ctx!(state, WeaveCommand, "",s,tx,ch,w,p);
+        let state = ctx!(state, DescCommand, "= New stuff?",s,c.out,w,p);
+        let state = ctx!(state, WeaveCommand, "",s,c.out,w,p);
         tokio::time::sleep(Duration::from_secs(2)).await;
-        let state = ctx!(state, HelpCommand, "iedit:set",s,tx,ch,w,p,|out:&str| out.contains("New stuff?\n\n"));
-        let state = ctx!(state, HelpCommand, "iedit-set",s,tx,ch,w,p,|out:&str| out.contains("New stuff?\n\n"));
-        let state = ctx!(state, HeditCommand, "new dummy",s,tx,ch,w,p,|out:&str| out.contains("desc ="));
-        let state = ctx!(state, HelpCommand, "set",s,tx,ch,w,p,|out:&str| out.contains("nothing about"));
-        let state = ctx!(state, AbortCommand, "",s,tx,ch,w,p);
-        let state = ctx!(state, IeditCommand, "apple",s,tx,ch,w,p);
-        let _ = ctx!(state, HelpCommand, "set",s,tx,ch,w,p,|out:&str| out.contains("New stuff?\n\n"));
+        let state = ctx!(state, HelpCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
+        let state = ctx!(state, HelpCommand, "iedit-set",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
+        let state = ctx!(state, HeditCommand, "new dummy",s,c.out,w,p,|out:&str| out.contains("desc ="));
+        let state = ctx!(state, HelpCommand, "set",s,c.out,w,p,|out:&str| out.contains("nothing about"));
+        let state = ctx!(state, AbortCommand, "",s,c.out,w,p);
+        let state = ctx!(state, IeditCommand, "apple",s,c.out,w,p);
+        let _ = ctx!(state, HelpCommand, "set",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
     }
 }

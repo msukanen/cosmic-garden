@@ -350,7 +350,7 @@ TODO
 usage = ["set ..."]
 [[help_pages]]
 id = "iedit-iex"
-title = ["iex"]
+title = "iex"
 alias = ["iedit-iex", "iex"]
 access = "any_builder"
 contents = """

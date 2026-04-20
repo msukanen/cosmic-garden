@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, thread::io::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, tell_user, util::activity::ActionWeight};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, thread::add_item_to_lnf, item::container::Storage, player_or_bust, roomloc_or_bust, tell_user, util::activity::ActionWeight};
 
 pub struct DropCommand;
 
@@ -45,6 +45,6 @@ impl Command for DropCommand {
 
         tell_user!(ctx.writer, "You drop '{}' on the ground.\n", item_name);
 
-        plr.write().await.act(plr.clone(),  &ctx.system, ActionWeight::ItemTransfer { count: 1 }).await;
+        plr.write().await.act(plr.clone(),  &ctx.out, ActionWeight::ItemTransfer { count: 1 }).await;
     }
 }

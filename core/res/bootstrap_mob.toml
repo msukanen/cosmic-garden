@@ -2,6 +2,7 @@
 id = "goblin"
 name = "A goblin"
 faction = "Neutral"
+max_weapon_size = "Medium"
 
 [mobs.hp.HP]
 curr = 100.0
@@ -21,3 +22,15 @@ drain = 0.0
 curr = 100.0
 max = 100.0
 drain = 0.0
+
+[mobs.brn.Brn]
+curr = 100.0
+max = 100.0
+
+[mobs.nim.Nim]
+curr = 100.0
+max = 100.0
+
+[mobs.strn.Str]
+curr = 100.0
+max = 100.0

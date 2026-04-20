@@ -9,7 +9,7 @@ use crate::{item::consumable::NutritionType, string::Uuid, traits::Tickable};
 /// All sorts of affects from good to bad to something else…
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Affect {
-    Nutrition { kind: NutritionType, remaining: Option<usize> },
+    Effect { kind: NutritionType, remaining: Option<usize> },
     DelayedAction { kind: NutritionType, remaining: Option<usize>, delay: Option<usize> },
     RushNCrash { kind: NutritionType, remaining: Option<usize>, crash_kind: NutritionType, delay: Option<usize>, crash_remain: Option<usize> },
     Expired,
@@ -19,13 +19,13 @@ impl Tickable for Affect {
     fn tick(&mut self) -> bool {
         match self {
             // Decays:
-            Self::Nutrition { remaining: Some(1),.. } => {
+            Self::Effect { remaining: Some(1),.. } => {
                 *self = Self::Expired;
                 true
             },
             Self::DelayedAction { delay: Some(1), kind, remaining } =>
             {
-                *self = Self::Nutrition { kind: kind.clone(), remaining: remaining.clone() };
+                *self = Self::Effect { kind: kind.clone(), remaining: remaining.clone() };
                 true
             }
             Self::RushNCrash { remaining: Some(1), crash_kind, delay, crash_remain, .. } =>
@@ -37,7 +37,7 @@ impl Tickable for Affect {
             // Tick-tock goes the clock…
             Self::DelayedAction { delay: Some(x), ..}    |
             Self::DelayedAction { remaining: Some(x),..} |
-            Self::Nutrition { remaining: Some(x),.. }    |
+            Self::Effect { remaining: Some(x),.. }    |
             Self::RushNCrash { remaining: Some(x),.. }   => { *x = x.saturating_sub(1); true },
 
             // Placeholder(s)…
@@ -51,8 +51,8 @@ impl Tickable for Affect {
 impl Affect {
     pub fn expired(&self) -> bool {
         match self {
-            Self::Nutrition { remaining: None,.. } => false,
-            Self::Nutrition { remaining: Some(x),.. } => *x == 0,
+            Self::Effect { remaining: None,.. } => false,
+            Self::Effect { remaining: Some(x),.. } => *x == 0,
             Self::DelayedAction { .. } |        // Delayed decays into Nutri
             Self::RushNCrash { .. }    => false,// RNC will decay into DelayedAction
             
@@ -62,7 +62,7 @@ impl Affect {
 
     pub fn dormant(&self) -> bool {
         match self {
-            Self::Nutrition { remaining: Some(x),.. } => *x == 0,
+            Self::Effect { remaining: Some(x),.. } => *x == 0,
             Self::DelayedAction { delay: Some(_),.. } |
             Self::Expired => true,
             _ => false
@@ -81,8 +81,8 @@ pub fn stack_affect(item: &str, affect: &Affect, stash: &mut HashMap<String, Aff
     if let Some(existing) = stash.get_mut(&nouuid) {
         match (existing, affect) {
             (
-                Affect::Nutrition { kind: ek, remaining: ex_rem },
-                Affect::Nutrition { kind: nk, remaining: new_rem }
+                Affect::Effect { kind: ek, remaining: ex_rem },
+                Affect::Effect { kind: nk, remaining: new_rem }
             ) if ek == nk => {
                 *ex_rem = match (*ex_rem, *new_rem) {
                     (Some(a), Some(b)) => Some(a+b),
@@ -108,14 +108,14 @@ mod affect_tests {
 
     #[test]
     fn affect_stacking() {
-        let a = Affect::Nutrition { kind: NutritionType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
-        let b = Affect::Nutrition { kind: NutritionType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
+        let a = Affect::Effect { kind: NutritionType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
+        let b = Affect::Effect { kind: NutritionType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
         let mut stash = HashMap::new();
         stack_affect("item", &a, &mut stash);
         assert!(stash.contains_key("item"));
         stack_affect("item", &b, &mut stash);
         assert!(stash.contains_key("item"));
-        let Some(Affect::Nutrition { kind, remaining }) = stash.get("item") else {
+        let Some(Affect::Effect { kind, remaining }) = stash.get("item") else {
             panic!("Where'd it go?");
         };
         assert_eq!(Some(6), *remaining);
@@ -156,7 +156,7 @@ mod affect_tests {
         log::debug!("r = {r:?}");
         assert!(!r.dormant());
         assert!(!r.expired());
-        assert!(matches!(r, Affect::Nutrition {..}));
+        assert!(matches!(r, Affect::Effect {..}));
         for _ in 0..2 {
             r.tick();
             log::debug!(">   {r:?}");

@@ -45,7 +45,15 @@ impl Command for GotoCommand {
             return
         };
 
-        if let Err(e) = ctx.system.game_tx.send(SystemSignal::WantTransportFromTo { who: plr.clone(), from: origin.clone(), to: target.clone() }) {
+        log::debug!("Requesting transport via {dir} to {}", target.read().await.id());
+        if let Err(e) = ctx.out.life.send(
+                SystemSignal::WantTransportFromTo {
+                    who: plr.clone(),
+                    from: origin.clone(),
+                    to: target.clone(),
+                    via: dir
+                }
+        ) {
             log::warn!("Transport system clogged… {e:?}");
             tell_user!(ctx.writer, "You trip briefly, losing your orientation…\n");
             return;

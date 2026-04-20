@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::sync::{RwLock, mpsc};
 
-use crate::{io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::BlueprintLibrary, mob::spawn_lib::EntityLibrary, thread::{SystemSignal, signal::SignalChannels}, util::HelpLibrary};
+use crate::{io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::BlueprintLibrary, mob::spawn_lib::EntityLibrary, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, util::HelpLibrary};
 
 lazy_static! {
     pub(crate) static ref BP_LIBRARY: Arc<RwLock<BlueprintLibrary>> = Arc::new(RwLock::new(BlueprintLibrary::default()));
@@ -19,7 +19,7 @@ lazy_static! {
 /// 
 /// This thread keeps the world's documents nice and tidy.
 /// 
-pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::UnboundedReceiver<SystemSignal>)) {
+pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver)) {
     // Bootstrap/load blueprints.
     log::info!("Library establishing… blueprints @ '{}'", blueprint_lib_fp().display());
     if let Err(e) = BlueprintLibrary::load_or_bootstrap().await {
@@ -78,11 +78,11 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Unbounde
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::NewLibraryEntry => {
                     log::trace!("A new library entry? Let's see about that…");
-                    if reorganize_library(&outgoing.janitor_tx).await {{
-                        let phonebook = outgoing.clone();
+                    if reorganize_library(&out).await {{
+                        let phonebook = out.clone();
                         tokio::spawn(async move {
                             tokio::time::sleep(Duration::from_secs(30)).await;
-                            if let Err(e) = phonebook.janitor_tx.send(SystemSignal::ReindexLibrary) {
+                            if let Err(e) = phonebook.janitor.send(SystemSignal::ReindexLibrary) {
                                 log::error!("Janitor is still not picking up the phone. Bah, he'll sort it out sooner or later… {e:?}");
                             }
                         });
@@ -107,12 +107,12 @@ pub async fn librarian((outgoing, mut incoming): (SignalChannels, mpsc::Unbounde
 /// 
 /// # Return
 /// Anything to report?
-async fn reorganize_library(janitor_tx: &mpsc::UnboundedSender<SystemSignal>) -> bool {
+async fn reorganize_library(outgoing: &SignalSenderChannels) -> bool {
     (*HELP_LIBRARY).write().await
         .check_new_docs()
         .rebuild_aliases();
     // ring the janitor …
-    if let Err(e) = janitor_tx.send(SystemSignal::ReindexLibrary) {
+    if let Err(e) = outgoing.janitor.send(SystemSignal::ReindexLibrary) {
         log::warn!("Janitor seems to be busy… I'll schedule call for later… {e:?}");
         return true;
     }

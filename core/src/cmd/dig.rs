@@ -2,18 +2,14 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, player_or_bust, room::Room, string::Slugger, tell_user, tell_user_unk, thread::SystemSignal, translocate, util::{access::Accessor, direction::Direction}};
+use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, validate_access, room::Room, string::Slugger, tell_user, thread::SystemSignal, translocate, util::direction::Direction};
 
 pub struct DigCommand;
 
 #[async_trait]
 impl Command for DigCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
-        let plr = player_or_bust!(ctx);
-        if !plr.read().await.access.is_builder() {
-            tell_user_unk!(ctx.writer);
-            return;
-        }
+        let plr = validate_access!(ctx, builder);
         if ctx.args.is_empty() {
             tell_user!(ctx.writer, "Dig where exactly?\n");
             return;
@@ -66,7 +62,7 @@ impl Command for DigCommand {
             let _ = origin_arc.read().await.save().await;
             let _ = target_arc.read().await.save().await;
             // ping the janitor. Even if they don't respond right now, they'll save the world soon enough anyway.
-            ctx.system.janitor_tx.send(SystemSignal::SaveWorld).ok();
+            ctx.out.janitor.send(SystemSignal::SaveWorld).ok();
             tell_user!(ctx.writer, "Diggy diggy to {} — success!\n", dir);
             translocate!(plr, origin_arc, target_arc);
             ReditCommand.exec({ctx.args = "this";ctx}).await;

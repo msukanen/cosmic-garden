@@ -5,7 +5,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{help_entry_fp, help_lib_fp}, serial::string_vec_to_bool_map, string::{Slugger, StrUuid, UNNAMED, Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::HELP_LIBRARY, signal::SignalChannels}, util::access::{Access, StrictAccess}};
+use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{help_entry_fp, help_lib_fp}, serial::string_vec_to_bool_map, string::{Slugger, StrUuid, UNNAMED, Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::HELP_LIBRARY, signal::SignalSenderChannels}, util::access::{Access, StrictAccess}};
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct HelpPage {
@@ -324,12 +324,12 @@ impl HelpLibrary {
     /// 
     /// # Return
     /// `true` if shelved for real.
-    pub fn shelve(&mut self, entry: &HelpPage, system_ch: &SignalChannels) -> bool {
+    pub fn shelve(&mut self, entry: &HelpPage, system_ch: &SignalSenderChannels) -> bool {
         log::trace!("Shelving {} …", entry.id());
         // TODO content checking?
         self.new_docs.push(entry.clone());
         // poke the librarian but don't stand waiting…
-        system_ch.librarian_tx.send(SystemSignal::NewLibraryEntry).ok();
+        system_ch.librarian.send(SystemSignal::NewLibraryEntry).ok();
         true
     }
 }

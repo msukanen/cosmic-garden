@@ -26,7 +26,7 @@ impl Command for SayCommand {
 
         let message = ctx.args.to_string();
         tell_user!(ctx.writer, "You say \"{}\"\n", message);
-        ctx.tx.send(Broadcast::Say {
+        ctx.out.broadcast.send(Broadcast::Say {
             room,
             message,
             from: plr.clone(),

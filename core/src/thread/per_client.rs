@@ -4,13 +4,12 @@ use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpStream, sync::{RwLock, broadcast}};
 
-use crate::{cmd::{self, CommandCtx}, r#const::{GREETING, PROMPT_LOGIN}, identity::IdentityQuery, io::{Broadcast, ClientState, ForceTarget}, reprompt_playing_user, string::{prompt::PromptType, sanitize::Sanitizer}, tell_user, thread::{SystemSignal, signal::SignalChannels}, world::World};
+use crate::{cmd::{self, CommandCtx}, r#const::{GREETING, PROMPT_LOGIN}, identity::IdentityQuery, io::{Broadcast, ClientState, ForceTarget}, reprompt_playing_user, string::{prompt::PromptType, sanitize::Sanitizer}, tell_user, thread::{SystemSignal, signal::SignalSenderChannels}, world::World};
 pub(crate) struct PerClientData {
     pub socket: TcpStream,
     pub addr: SocketAddr,
-    pub system_ch: SignalChannels,
+    pub out: SignalSenderChannels,
     pub world: Arc<RwLock<World>>,
-    pub tx: broadcast::Sender<Broadcast>,
     pub rx: broadcast::Receiver<Broadcast>,
 }
 
@@ -43,18 +42,18 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
             let mut w = pcd.world.write().await;
             if let Some(p) = w.players_by_sockaddr.remove(&pcd.addr) {
                 // drop the named mapping here as it's not needed for logout.
-                let lock = p.read().await;
-                pcd.system_ch.game_tx.send(SystemSignal::PlayerLogout { who: lock.id().to_string() }).ok();
-                let (id, name) = 
-                    (lock.id().to_string(), lock.name.clone());
-                w.players_by_id.remove(lock.id());
+                let (id, title) = {
+                    let lock = p.read().await;
+                    (lock.id().to_string(), lock.title().to_string())
+                };
+                pcd.out.life.send(SystemSignal::PlayerLogout { id: id.clone() }).ok();
+                w.players_by_id.remove(&id);
                 if !abrupt_dc {
-                    tell_user!(&mut writer, "\n<c cyan>Goodbye {}! See you soon again!</c>\n", lock.title());
+                    tell_user!(&mut writer, "\n<c cyan>Goodbye {}! See you soon again!</c>\n", title);
                     log::trace!("Clean exit by '{id}'");
                 }
-                drop(lock);
-                pcd.system_ch.janitor_tx.send(SystemSignal::PlayerNeedsSaving(p, id)).ok();
-                log::trace!("Player '{name}' added to logout queue.");
+                pcd.out.janitor.send(SystemSignal::PlayerNeedsSaving(p, id)).ok();
+                log::trace!("Player '{title}' added to logout queue.");
             }
             break;
         }
@@ -79,7 +78,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                     break; // not in game, cut the line, wipe the floors and take a break.
                 }
 
-                state = state.handle(&mut writer, pcd.world.clone(), &pcd.addr, &pcd.tx, &pcd.system_ch, &line.trim().sanitize()).await;
+                state = state.handle(&mut writer, pcd.world.clone(), &pcd.addr, &pcd.out.broadcast, &pcd.out, &line.trim().sanitize()).await;
             },
 
             // --- Second Branch: Receive broadcast messages from other clients/system itself…
@@ -196,8 +195,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 pre_pad_n: true,
                                 state: state.clone(),
                                 world: pcd.world.clone(),
-                                system: &pcd.system_ch,
-                                tx: &pcd.tx,
+                                out: &pcd.out,
                                 args: &command,
                                 writer: &mut writer,
                             };

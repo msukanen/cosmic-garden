@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::BP_LIBRARY, signal::SignalChannels}, world::World};
+use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels}}, world::World};
 
 lazy_static! {
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
@@ -19,8 +19,8 @@ pub const SAVE_ASAP_THRESHOLD: usize = 100;
 /// autosaves and logouts to keeping the live world and disk
 /// in (relative) sync.
 /// 
-pub(crate) async fn io_thread(
-    (outgoing, mut incoming): (SignalChannels, mpsc::UnboundedReceiver<SystemSignal>),
+pub(crate) async fn janitor(
+    (out, mut incoming): (SignalSenderChannels, SigReceiver),
     world: Arc<RwLock<World>>,
     args: Option<Cli>,
     done_tx: tokio::sync::oneshot::Sender<()>
@@ -56,7 +56,7 @@ pub(crate) async fn io_thread(
 
                 SystemSignal::SaveWorld => {save_the_whales(world.clone(), true).await;},
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
-                SystemSignal::ReindexLibrary => save_help_asap(&outgoing.librarian_tx).await,
+                SystemSignal::ReindexLibrary => save_help_asap(&out.librarian).await,
                 SystemSignal::PlayerNeedsSaving(lock, p_id) => { let p_id = p_id; save_player_now(lock, &p_id).await; }
                 _ => ()
             }

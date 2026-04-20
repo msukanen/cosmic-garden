@@ -41,26 +41,25 @@ mod cmd_iedit_list {
     async fn exits_listing() {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
-        let (w, tx, ch, p) = get_operational_mock_world().await;
+        let (w, c, p) = get_operational_mock_world().await;
         let state = ClientState::Playing { player: p.clone() };
-        let state = ctx!(state, ReditCommand, "this", s, tx, ch, w, p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, ReditCommand, "this", s, tx, ch, w, p);
-        let state = ctx!(state, LookCommand, "", s,tx,ch,w,p, |out:&str| out.contains("***"));
-        let _ = ctx!(state, ListCommand, "", s,tx,ch,w,p, |out:&str| out.contains("r-1") && out.contains("r-2"));
+        let state = ctx!(state, ReditCommand, "this", s, c.out, w, p);
+        let state = ctx!(state, LookCommand, "", s,c.out,w,p, |out:&str| out.contains("***"));
+        let _ = ctx!(state, ListCommand, "", s,c.out,w,p, |out:&str| out.contains("r-1") && out.contains("r-2"));
     }
 
     #[tokio::test]
     async fn exits_listing_parallel() {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
-        let (w, tx, ch, p) = get_operational_mock_world().await;
+        let (w, c, p) = get_operational_mock_world().await;
         let state = ClientState::Playing { player: p.clone() };
-        let state = ctx!(state, ReditCommand, "this", s, tx, ch, w, p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, ReditCommand, "this", s, tx, ch, w, p);
-        //let state = ctx!(state, LookCommand, "", s,tx,ch,w,p, |out:&str| out.contains("***"));
-        let state = ctx!(state, ListCommand, "", s,tx,ch,w,p, |out:&str| out.contains("r-1") && out.contains("r-2") && !out.contains("r-3"));
+        let state = ctx!(state, ReditCommand, "this", s, c.out, w, p);
+        let state = ctx!(state, ListCommand, "", s,c.out,w,p, |out:&str| out.contains("r-1") && out.contains("r-2") && !out.contains("r-3"));
         let mut lock = w.write().await;
         for i in 3..=1_000 {
             let id = format!("{}-{i}", ('a'..='z').random_of());
@@ -71,7 +70,7 @@ mod cmd_iedit_list {
             lock.rooms.insert(id.clone(), r);
         }
         drop(lock);
-        let state = ctx!(state, ListCommand, "r- 0", s,tx,ch,w,p, |out:&str| out.contains("Waterf"));
+        let _ = ctx!(state, ListCommand, "r- 0", s,c.out,w,p, |out:&str| out.contains("Waterf"));
     }
 
 }

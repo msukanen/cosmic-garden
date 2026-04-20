@@ -5,10 +5,9 @@ use std::sync::Arc;
 use clap::Parser;
 
 mod io;             use convert_case::{Case, Casing};
-use io::*;
-use tokio::{net::TcpListener, sync::{RwLock, broadcast, mpsc}};
+use tokio::{net::TcpListener, sync::RwLock};
 
-use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{DATA, WORLD}, thread::{SystemSignal, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
+use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{DATA, WORLD}, thread::{per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
 
 mod cmd;
 pub mod combat;
@@ -69,31 +68,24 @@ async fn main() {
         });
     // connect some dots…
     world.link_rooms().await;
-    let world = Arc::new(RwLock::new(world));
 
     // Establish system thread interconnection channels.
-    let (janitor_tx, io_rx) = mpsc::unbounded_channel::<SystemSignal>();
-    let (librarian_tx, lib_rx) = mpsc::unbounded_channel::<SystemSignal>();
-    let (game_tx, game_rx) = mpsc::unbounded_channel::<SystemSignal>();
-    let private_channels = SignalChannels {
-        janitor_tx: janitor_tx,
-        librarian_tx: librarian_tx,
-        game_tx: game_tx,
-    };
+    let priv_chs = SignalChannels::default();
     let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
+    world.channels = Some(priv_chs.out.clone());
 
-    let io_t = tokio::spawn(thread::io::io_thread((private_channels.clone(), io_rx), world.clone(), args.clone().into(), done_tx));
-    let life_t = tokio::spawn(thread::game::life_thread((private_channels.clone(), game_rx), world.clone()));
-    let lib_t = tokio::spawn(thread::lib::librarian((private_channels.clone(), lib_rx)));
+    // Shared world, shared fun!
+    let world = Arc::new(RwLock::new(world));
+
+    let jan_t = tokio::spawn(thread::janitor((priv_chs.out.clone(), priv_chs.recv.janitor), world.clone(), args.clone().into(), done_tx));
+    let life_t = tokio::spawn(thread::life((priv_chs.out.clone(), priv_chs.recv.life), world.clone()));
+    let lib_t = tokio::spawn(thread::librarian((priv_chs.out.clone(), priv_chs.recv.librarian)));
 
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);
     let listener = TcpListener::bind(&listen_on).await.unwrap();
     log::info!("{} v{} listening on {}", args.world.to_case(Case::Title), env!("CARGO_PKG_VERSION"), listen_on);
 
-    // A broadcast channel is used to send e.g. messages to all connected clients.
-    let (tx, _) = broadcast::channel::<Broadcast>(16);
-    
     //
     // This is the main-loop for all …
     //
@@ -102,14 +94,12 @@ async fn main() {
             conn = listener.accept() => {
                 let (socket, addr) = conn.unwrap();
                 log::info!("New connection from: {}", addr);
-                let system_ch = private_channels.clone();
+                let out = priv_chs.out.clone();
                 let world = world.clone();
-
-                // Get a between client I/O
-                let (tx, rx) = (tx.clone(), tx.subscribe());
-
                 let client_data = PerClientData {
-                    socket, addr, system_ch, world, tx, rx
+                    socket, addr, world,
+                    rx: out.broadcast.subscribe(),
+                    out,
                 };
 
                 // Spawn a new task to handle this client's connection,
@@ -123,7 +113,7 @@ async fn main() {
         }
     }
 
-    io_t.await.ok();
+    jan_t.await.ok();
     life_t.await.ok();
     lib_t.await.ok();
 }

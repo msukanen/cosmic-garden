@@ -6,7 +6,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::Combatant, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::Combatant, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -162,11 +162,11 @@ impl Player {
     }
 
     /// Accumulate action weight.
-    pub async fn act(&mut self, player: Arc<RwLock<Player>>, system_ch: &SignalChannels, act_wt: ActionWeight) -> usize {
+    pub async fn act(&mut self, player: Arc<RwLock<Player>>, system_ch: &SignalSenderChannels, act_wt: ActionWeight) -> usize {
         self.actions_taken += act_wt;
         if self.actions_taken >= SAVE_ASAP_THRESHOLD {
             // He'll pick up, sooner or later…
-            system_ch.janitor_tx.send(SystemSignal::PlayerNeedsSaving(player.clone(), player.read().await.id().to_string())).ok();
+            system_ch.janitor.send(SystemSignal::PlayerNeedsSaving(player.clone(), player.read().await.id().to_string())).ok();
         }
         self.actions_taken
     }
@@ -264,7 +264,7 @@ impl Tickable for Player {
         let mut changes: Vec<_> = Vec::new();
         self.affects.retain(|_id, affect| {
             if affect.expired() { return false; }
-            if let Affect::Nutrition { kind, .. } = affect {
+            if let Affect::Effect { kind, .. } = affect {
                 if let NutritionType::Heal { stat, drain } = kind {
                     changes.push((*stat, *drain));
                 }

@@ -85,7 +85,7 @@ impl Combatant for Entity {
 mod entity_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::look::LookCommand, identity::IdentityQuery, io::ClientState, mob::{core::Entity, traits::{Mob, MobMut}}, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, librarian::librarian, life_thread::life_thread, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, identity::IdentityQuery, io::ClientState, mob::{core::Entity, traits::{Mob, MobMut}}, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;
@@ -125,9 +125,9 @@ mod entity_tests {
     async fn entity_save() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,tx, c,p) = get_operational_mock_world().await;
-        tokio::spawn(librarian((c.0.clone(), c.1.librarian_rx)));
-        tokio::spawn(life_thread((c.0.clone(), c.1.game_rx), w.clone()));
+        let (w, c,p) = get_operational_mock_world().await;
+        tokio::spawn(librarian((c.out.clone(), c.recv.librarian)));
+        tokio::spawn(life((c.out.clone(), c.recv.life), w.clone()));
         tokio::time::sleep(Duration::from_secs(3)).await;// let things stabilize in peace…
         let Ok(mob) = Entity::new("goblin").await else {
             panic!("Where'd the lil goblin go?!");
@@ -135,12 +135,12 @@ mod entity_tests {
         if let Err(e) = mob.save_bp().await {
             panic!("goblin fail: {e:?}");
         }
-        let _ = c.0.game_tx.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() });
+        let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() });
         tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
         let state = ClientState::Playing { player: p.clone() };
-        let state = ctx!(state, LookCommand, "",s,tx,c,w,p,|out:&str| out.contains("goblin is here"));
+        let state = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("goblin is here"));
         p.write().await.config.show_id = true;
         p.write().await.access = Access::Builder;
-        let _ = ctx!(state, LookCommand, "",s,tx,c,w,p,|out:&str| out.contains("goblin-"));
+        let _ = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("goblin-"));
     }
 }

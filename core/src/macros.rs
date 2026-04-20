@@ -31,15 +31,14 @@ macro_rules! err_iedit_buffer_inaccessible {
 
 #[cfg(test)]
 #[macro_export]
-    /// CommandCtx utilizing macro.
-    /// 
-    /// Requires /src/test/world_test_harness.inc contents in the test fn.
-    /// 
+    /// [CommandCtx][crate::cmd::CommandCtx]<'_> utilizing macro.
+    // 
+    // Requires /src/test/world_test_harness.inc contents in the test fn.
+    // 
     /// # Args
     /// - `cmd`
     /// - `args`
     /// - `mock_sock`
-    /// - `tx`
     /// - `sigs`
     /// - `world`
     /// - `plr`
@@ -49,11 +48,11 @@ macro_rules! err_iedit_buffer_inaccessible {
     /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);`
     /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr, |out:&str| out.contains("apple"));`
     macro_rules! ctx {
-        ($state:ident, $cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $sigs:ident, $world:ident, $plr:ident) => {{
-            crate::ctx!($state,$cmd,$args,$mock_sock,$tx,$sigs,$world,$plr,|_|true)
+        ($state:ident, $cmd:ident, $args:literal, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident) => {{
+            crate::ctx!($state,$cmd,$args,$mock_sock,$sigs,$world,$plr,|_|true)
         }};
 
-        ($state:ident, $cmd:ident, $args:literal, $mock_sock:ident, $tx:ident, $sigs:ident, $world:ident, $plr:ident, $assert:expr) => {{
+        ($state:ident, $cmd:ident, $args:literal, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
             let state = {
                 use crate::cmd::{Command,CommandCtx};
                 $mock_sock.get_mut().clear();
@@ -61,10 +60,9 @@ macro_rules! err_iedit_buffer_inaccessible {
                     writer: &mut $mock_sock,
                     args: $args,
                     pre_pad_n: false,
-                    system: &$sigs.0,
+                    out: &$sigs,
                     state: $state,
                     world: $world.clone(),
-                    tx: &$tx
                 };
                 $cmd.exec(&mut ctx).await;
                 ctx.state.clone()

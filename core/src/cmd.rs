@@ -3,9 +3,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::{sync::{RwLock, broadcast}};
+use tokio::sync::RwLock;
 
-use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::{Broadcast, ClientState}, player::Player, tell_user, tell_user_unk, thread::signal::SignalChannels, util::direction::Directional, world::World};
+use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::ClientState, player::Player, tell_user, tell_user_unk, thread::signal::SignalSenderChannels, util::direction::Directional, world::World};
 
 #[macro_use]
 pub mod cmd_alias;
@@ -21,8 +21,7 @@ pub struct CommandCtx<'a>
     pub pre_pad_n: bool,
     pub state: ClientState,
     pub world: Arc<RwLock<World>>,
-    pub tx: &'a broadcast::Sender<Broadcast>,
-    pub system: &'a SignalChannels,
+    pub out: &'a SignalSenderChannels,
     pub args: &'a str,
     pub writer: &'a mut (dyn tokio::io::AsyncWrite + Unpin + Send),
 }
@@ -118,15 +117,14 @@ mod cmd_tests {
     async fn synthetic_commandctx() {
         let mut buffer: Vec<u8> = Vec::new();
         let mut mock_sock = std::io::Cursor::new(&mut buffer);
-        let (world, tx, sigs, plr) = get_operational_mock_world().await;
+        let (world, sigs, plr) = get_operational_mock_world().await;
         let mut ctx = CommandCtx {
             writer: &mut mock_sock,
             args: "",
             pre_pad_n: false,
-            system: &sigs.0,
+            out: &sigs.out,
             state: ClientState::Playing { player: plr.clone() },
             world: world.clone(),
-            tx: &tx
         };
         LookCommand.exec(&mut ctx).await;
         log::debug!("{buffer:?}");

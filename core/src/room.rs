@@ -177,28 +177,13 @@ impl Room {
 
 #[cfg(test)]
 mod room_tests {
-    use std::sync::Arc;
-
-    use tokio::sync::RwLock;
-
-    use crate::{Cli, DATA, util::direction::Direction, world::World};
+    use crate::{util::direction::Direction, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn room_linking() {
-        let _ = env_logger::try_init();
-        let args = Cli {
-            autosave_queue_interval: None,
-            host_listen_addr: "0.0.0.0".into(),
-            host_listen_port: 8080,
-            world: "cosmic-garden".into(),
-            data_path: std::env::var("COSMIC_GARDEN_DATA").unwrap_or("data".into()),
-            bootstrap_url: None,
-        };
-        let _ = DATA.set(args.data_path.clone());
-        let mut w = World::load_or_bootstrap(&args).await.unwrap_or_else(|e| panic!("Oh noes! Not the dreaded {e:?}"));
-        w.link_rooms().await;
-        let rooms = w.rooms.clone();
-        let w_arc = Arc::new(RwLock::new(w));
+        let (w_arc,c,p) = get_operational_mock_world().await;
+        w_arc.write().await.link_rooms().await;
+        let rooms = w_arc.read().await.rooms.clone();
         if let Some(r_arc) = rooms.get("room-1") {
             let mut r = r_arc.write().await;
             if let Err(e) = r.link_exit(w_arc.clone(), Direction::North, "room-2_".into()).await {

@@ -64,7 +64,7 @@ impl Command for TeleportCommand {
                 translocate!(plr, plr.read().await.location.upgrade().unwrap(), target_arc);
                 drop(w);
                 if !is_ghost {
-                    ctx.tx.send(Broadcast::System {
+                    ctx.out.broadcast.send(Broadcast::System {
                         rooms: vec![target_arc.clone()],
                         from: plr.clone().into(),
                         message: format!("<c red>Something startling materializes in the field of vicinity…!</c>"),
@@ -91,7 +91,7 @@ impl Command for TeleportCommand {
                             return;
                         };
                         translocate!(p_arc.clone(), p_loc.clone(), r_arc.clone());
-                        ctx.tx.send({
+                        ctx.out.broadcast.send({
                             let name = p_arc.read().await.title().to_string();
                             Broadcast::BiSignal {
                             to: r_arc.clone(),
@@ -114,7 +114,7 @@ impl Command for TeleportCommand {
                             return;
                         };
                         translocate!(p_arc_target.clone(), r_target.clone(), r_dest.clone());
-                        ctx.tx.send({
+                        ctx.out.broadcast.send({
                             let name = p_arc_target.read().await.title().to_string();
                             Broadcast::BiSignal {
                             to: r_dest.clone(),
