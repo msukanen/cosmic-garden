@@ -48,7 +48,7 @@ impl ClientState {
     }
 
     /// Big state handler…
-    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, tx: &tokio::sync::broadcast::Sender<Broadcast>, system_ch: &SignalSenderChannels, input: &str) -> Self {
+    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, system_ch: &SignalSenderChannels, input: &str) -> Self {
         match self {
             Self::EnteringLogin => {
                 let state = match input.as_id() {

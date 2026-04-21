@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::RwLock;
 
 use crate::{io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::BlueprintLibrary, mob::spawn_lib::EntityLibrary, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, util::HelpLibrary};
 
@@ -89,7 +89,10 @@ pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver))
                     }}
                 }
 
-                SystemSignal::NewBlueprintEntry => {}
+                SystemSignal::NewBlueprintEntry => {
+                    log::trace!("A new blueprint? Let's see what's that all about…");
+                    out.janitor.send(SystemSignal::NewBlueprintEntry).ok();
+                }
 
                 SystemSignal::Shutdown => { break; }
                 _ => ()

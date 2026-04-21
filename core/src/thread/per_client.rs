@@ -78,7 +78,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                     break; // not in game, cut the line, wipe the floors and take a break.
                 }
 
-                state = state.handle(&mut writer, pcd.world.clone(), &pcd.addr, &pcd.out.broadcast, &pcd.out, &line.trim().sanitize()).await;
+                state = state.handle(&mut writer, pcd.world.clone(), &pcd.addr, &pcd.out, &line.trim().sanitize()).await;
             },
 
             // --- Second Branch: Receive broadcast messages from other clients/system itself…

@@ -47,6 +47,20 @@ macro_rules! tell_user {
 }
 
 #[macro_export]
+macro_rules! err_tell_user {
+    ($w:expr, $t:expr) => {{
+        crate::tell_user!($w, $t);
+        return;
+    }};
+
+    ($w:expr, $fmt:literal, $($arg:tt)*) => {{
+        let msg = format!($fmt, $($arg)*);
+        crate::tell_user!($w, &msg);
+        return;
+    }}
+}
+
+#[macro_export]
 macro_rules! tell_userln {
     ($w:expr, $t:expr) => {{
         crate::tell_user!($w, "{}\n", $t);

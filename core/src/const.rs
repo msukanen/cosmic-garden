@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use tokio::sync::RwLock;
 
-use crate::{io::reserved_names_fp, util::escape_hatch::VILLAIN_ID};
+use crate::{io::reserved_names_fp, item::container::specs::StorageSpace, util::escape_hatch::VILLAIN_ID};
 
 // some const to deal with [World]-specific choices that aren't present for a reason or other…
 pub const GREETING: &'static str = "Welcome to Cosmic Garden!";
@@ -137,3 +137,13 @@ impl Deref for WorldId {
         })
     }
 }
+
+//
+// Item related constants.
+//
+pub const SIZE_BALANCE: StorageSpace = 10;
+pub const TINY_ITEM: StorageSpace = 1 * SIZE_BALANCE;
+pub const SMALL_ITEM: StorageSpace = 2 * SIZE_BALANCE;
+pub const MEDIUM_ITEM: StorageSpace = 4 * SIZE_BALANCE;
+pub const LARGE_ITEM: StorageSpace = 7 * SIZE_BALANCE;
+pub const HUGE_ITEM: StorageSpace = 12 * SIZE_BALANCE;

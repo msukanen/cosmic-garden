@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::{IdentityMut, IdentityQuery}, item::{Item, ItemizedMut, consumable::EffectType, container::{StorageMut, specs::StorageSpace}, primordial::PotentialItemType}, mob::StatType, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, err_tell_user, identity::{IdentityMut, IdentityQuery}, item::{Item, ItemizedMut, consumable::EffectType, container::{StorageMut, specs::StorageSpace}, primordial::{Metamorphize, PotentialItemType, PrimordialItem}, weapon::WeaponSize}, mob::{StatType, StatValue}, tell_user, validate_access};
 
 pub struct SetCommand;
 
@@ -53,10 +53,14 @@ For description, use 'desc' command instead.
             "max_space"|
             "max" => do_max(ctx, ed, value).await,
             "potential"|
-            "pot" => do_harry_pot(ctx, ed, value).await,
+            "pot" => {
+                do_harry_pot(ctx, ed, value).await;
+                log::debug!("do_harry_pot = {ed:?}");
+            },
             "desc" => tell_user!(ctx.writer, "Well, there's the <c yellow>desc</c> command set for that…\n"),
             "use"|"uses" => do_uses(ctx, ed, value).await,
             "nut"|"nutrition" => go_nuts(ctx, ed, value).await,
+            "dmg" => do_dmg(ctx, ed, value).await,
             _ => tell_user!(ctx.writer, "No such field to alter, and I can't just whip up new fields out of nothing…\n")
         }
     }
@@ -80,18 +84,28 @@ async fn do_uses(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
 
 /// Deal with item 'potential'.
 async fn do_harry_pot(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
-    if let Item::Primordial(v) = ed {
-        let err = PotentialItemType::from(value);
-        if err.is_err() {
-            tell_user!(ctx.writer, "That doesn't work, the variants are: {}\n", err.err().unwrap());
-            return;
-        };
-        let pot = err.ok().unwrap();
-        v.set_potential(pot.clone());
-        tell_user!(ctx.writer, "Item potential set as '{}'\n", pot);
+    loop {
+    match ed {
+        Item::Primordial(v) => {
+            match PotentialItemType::from(value) {
+                Err(e) => {
+                    tell_user!(ctx.writer, "That doesn't work, the variants are: {}\n", e);
+                    return;
+                },
+                Ok(pot) => {*ed = {
+                    #[cfg(test)]{log::debug!("Metamorph!");}
+                    v.set_potential(pot);
+                    let x = v.clone().metamorph();
+                    #[cfg(test)]{log::debug!("v = {x:?}");}
+                    x
+                };
+                log::debug!("ed = {ed:?}");
+                },
+            }
+            return ;
+        },
+        _ => *ed = PrimordialItem::atomize(ed)
     }
-    else {
-        no_can_do!(ctx, "potential");
     }
 }
 
@@ -109,14 +123,35 @@ async fn do_max(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
     }
 }
 
-/// Size does matter, at times… Deal with item 'size'.
+/// Size does matter, at times… Deal with item 'size' (and 'weapon_size').
 async fn size_does_matter(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
-    if let Ok(sz) = value.parse::<StorageSpace>() {
-        if !ed.set_size(sz) {
-            tell_user!(ctx.writer, "That item's size is immutable, sorry…\n");
-            return;
+    let (field, args) = value.split_once(' ').unwrap_or((value, ""));
+    match field {
+        "wpn" => {
+            let id = ed.id().to_string();
+            if let Item::Weapon(w) = ed {
+                let Ok(category) = WeaponSize::try_from(args) else {
+                    err_tell_user!(ctx.writer, "<c green>Usage:</c> <c yellow>set size wpn <category>");                
+                };
+                w.weapon_size = category;
+                w.size = w.size.max(w.weapon_size.required_space());
+                tell_user!(ctx.writer, "'{}' weapon size set as '{}'.\n", id, w.weapon_size);
+            } else {
+                err_tell_user!(ctx.writer, "'{}' is not set as weapon, use <c yellow>set pot wpn</c> first.", id);
+            }
+        },
+
+        _ => if let Ok(sz) = value.parse::<StorageSpace>()
+        {
+            let sz = if let Item::Weapon(w) = ed {
+                w.size = sz.max(w.weapon_size.required_space());
+                w.size
+            } else if !ed.set_size(sz) {
+                tell_user!(ctx.writer, "That item's size is immutable, sorry…\n");
+                return;
+            } else { sz };
+            tell_user!(ctx.writer, "Size set to: {}\n", sz);
         }
-        tell_user!(ctx.writer, "Size set to: {}\n", sz);
     }
 }
 
@@ -271,9 +306,33 @@ fn parse_stat_n_val(input: &str) -> Result<(Option<StatType>, Option<f32>), Stri
     Ok((stat_type.into(), v.clamp(-100.0, 100.0).into()))
 }
 
+/// Deal with 'base_dmg' field.
+async fn do_dmg(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
+    if !matches!(ed, Item::Weapon(_)|Item::Primordial(_)) {
+        err_tell_user!(ctx.writer, "Item is not a weapon; <c yellow>set pot wpn</c> first…\n");
+    }
+    
+    let Ok(val) = value.parse::<StatValue>() else {
+        err_tell_user!(ctx.writer, "Yea well, a numeric value would be nicer than '{}'…\n", value);
+    };
+
+    match ed {
+        Item::Weapon(w) => w.base_dmg = val,
+        Item::Primordial(p) => p.base_dmg = val.into(),
+        _ => unreachable!("Checked at beginning of do_dmg.")
+    }
+
+    #[cfg(test)]{log::debug!("Base damage of '{}' set at {}.", ed.id(), val);}
+    tell_user!(ctx.writer, "Base damage of '{}' set at {}.", ed.id(), val);
+}
+
 #[cfg(test)]
 mod cmd_iedit_set_tests {
-    use crate::{cmd::iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, weave::WeaveCommand}, ctx, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
+    use std::time::Duration;
+
+    use tokio::sync::oneshot;
+
+    use crate::{cmd::{iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, title::TitleCommand, weave::WeaveCommand}, shutdown::ShutdownCommand}, ctx, io::ClientState, thread::{janitor, librarian, life}, util::access::Access, world::world_tests::get_operational_mock_world};
     
     #[tokio::test]
     async fn iedit_set_something_on_primordial() {
@@ -346,5 +405,41 @@ mod cmd_iedit_set_tests {
         let state = ctx!(state, WeaveCommand, "",s, c.out, w, p,|out:&str| out.contains("created something"));
         let state = ctx!(state, IeditCommand, "apple", s,c.out,w,p,|out:&str| out.contains("what it's"));
         let _ = ctx!(state, IexCommand, "",s, c.out, w, p,|out:&str| out.contains("Consumable"));             // yay, an edible apple, sort of.
+    }
+
+    #[tokio::test]
+    async fn iedit_set_primordial_to_weapon() {
+        let mut b: Vec<u8> = Vec::new();
+        let mut s = std::io::Cursor::new(&mut b);
+        let (w, c, p) = get_operational_mock_world().await;
+        let b = c.out.clone();
+        let lt = tokio::spawn(life((b.clone(), c.recv.life), w.clone()));
+        let ht = tokio::spawn(librarian((b.clone(), c.recv.librarian)));
+        let (done_tx,done_rx) = oneshot::channel::<()>();
+        let jt = tokio::spawn(janitor((b.clone(), c.recv.janitor), w.clone(), None, done_tx));
+        tokio::time::sleep(Duration::from_secs(6)).await;
+        let state = ClientState::Playing { player: p.clone() };
+        let state = ctx!(state, IeditCommand, "knife", s,b,w,p,|out:&str| out.contains("Huh?"));
+        p.write().await.access = Access::Builder;
+        let state = ctx!(state, IeditCommand, "knife", s,b,w,p);
+        let state = ctx!(state, IexCommand, "", s,b,w,p);
+        let state = ctx!(state, SetCommand, "pot cons", s,b,w,p);
+        let state = ctx!(state, SetCommand, "dmg 2.0", s,b,w,p,|out:&str| out.contains("set pot wpn"));
+        let state = ctx!(state, SetCommand, "pot wpn", s,b,w,p);
+        let state = ctx!(state, SetCommand, "dmg 2.0", s,b,w,p,|out:&str| out.contains("Base damage"));
+        let state = ctx!(state, DescCommand, "=It's a knife. A <c red>big</c> knife…", s,b,w,p);
+        let state = ctx!(state, TitleCommand, "A <c red>BIG</c> knife!", s,b,w,p);
+        let state = ctx!(state, DescCommand, "v+3 …or not so big…", s,b,w,p);
+        let state = ctx!(state, SetCommand, "wpn a", s,b,w,p,|out:&str| out.contains("No such"));
+        let state = ctx!(state, SetCommand, "size wpn a", s,b,w,p,|out:&str| out.contains("Usage"));
+        let state = ctx!(state, SetCommand, "size wpn s", s,b,w,p,|out:&str| out.contains("small"));
+        let state = ctx!(state, IexCommand, "", s,b,w,p);
+        let state = ctx!(state, WeaveCommand, "persist", s,b,w,p);
+        p.write().await.access = Access::Admin;
+        let _ = ctx!(state, ShutdownCommand, "", s,b,w,p);
+        let _ = done_rx.await;
+        lt.await.ok();
+        ht.await.ok();
+        jt.await.ok();
     }
 }

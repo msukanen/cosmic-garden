@@ -6,10 +6,12 @@ use cosmic_garden_pm::{IdentityMut, ItemizedMut, OwnedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, StorageQueryError, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::{Reflector, Tickable}};
+use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::IdentityQuery, item::{Item, Itemized, StorageQueryError, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::{Reflector, Tickable}};
 
+/// "Unit" of space and/or weight…
 pub type StorageSpace = u16;
 
+/// Max space spec. definer for some common container types.
 pub enum MaxSpaceSpec {
     Pouch,
     Backpack,
@@ -17,16 +19,18 @@ pub enum MaxSpaceSpec {
 }
 
 impl From<MaxSpaceSpec> for StorageSpace {
+    /// Derive max [StorageSpace] from [MaxSpaceSpec].
     fn from(value: MaxSpaceSpec) -> Self {
         match value {
-            MaxSpaceSpec::Pouch => 10,
-            MaxSpaceSpec::Backpack => 30,
-            MaxSpaceSpec::Chest => 80,
+            MaxSpaceSpec::Pouch => TINY_ITEM * 5,
+            MaxSpaceSpec::Backpack => SMALL_ITEM * 10,
+            MaxSpaceSpec::Chest => HUGE_ITEM * 6,
         }
     }
 }
 
 impl From<StorageSpace> for MaxSpaceSpec {
+    /// Derive [MaxSpaceSpec] from an arbitrary [StorageSpace] value.
     fn from(value: StorageSpace) -> Self {
         match value {
             _ if value > StorageSpace::from(MaxSpaceSpec::Backpack) => MaxSpaceSpec::Chest,
@@ -42,7 +46,7 @@ lazy_static! {
         name: "backpack".into(),
         contents: HashMap::new(),
         max_space: StorageSpace::from(MaxSpaceSpec::Backpack),
-        size: 2,
+        size: 20,
         desc: "a backpack".into(),
         desc_can_be_modified: true,
         owner: Owner::no_one(),
@@ -53,7 +57,7 @@ lazy_static! {
         name: "pouch".into(),
         contents: HashMap::new(),
         max_space: StorageSpace::from(MaxSpaceSpec::Pouch),
-        size: 1,
+        size: 10,
         desc: "a pouch".into(),
         desc_can_be_modified: true,
         owner: Owner::no_one(),
@@ -63,7 +67,7 @@ lazy_static! {
         id: "player-inventory".with_uuid(),
         name: UNNAMED.into(),
         contents: HashMap::new(),
-        max_space: 50,
+        max_space: 500,
         size: 0,
         desc: "player-inventory".into(),
         desc_can_be_modified: false,
@@ -74,7 +78,7 @@ lazy_static! {
         id: "room-space".with_uuid(),
         name: UNNAMED.into(),
         contents: HashMap::new(),
-        max_space: 1_000,
+        max_space: 10_000,
         size: 0,
         desc: "room-space".into(),
         desc_can_be_modified: false,
@@ -93,6 +97,7 @@ lazy_static! {
     };
 }
 
+/// Container specs dwell here…
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, OwnedMut)]
 pub struct ContainerSpec {
     pub id: String,
@@ -122,6 +127,9 @@ impl DescribableMut for ContainerSpec {
 }
 
 impl From<&ContainerSpec> for ContainerSpec {
+    /// Make a reflection of self.
+    /// 
+    /// Reflection is basically (an empty) clone but with different ID.
     fn from(value: &ContainerSpec) -> Self {
         Self {
             id: value.id().re_uuid(),
@@ -151,6 +159,7 @@ impl Reflector for ContainerSpec {
 }
 
 impl ContainerSpec {
+    /// Calculate how much [StorageSpace] the contents, if any, take.
     fn contents_size(&self) -> StorageSpace {
         let mut sz = 0;
         for x in self.contents.values() {

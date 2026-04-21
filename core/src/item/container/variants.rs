@@ -1,9 +1,7 @@
-use std::i32;
-
 use cosmic_garden_pm::{IdentityMut, Storage, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{Item, Itemized, ItemizedMut, container::{StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}}, string::{Describable, DescribableMut}, traits::{Reflector, Tickable}};
+use crate::{r#const::SIZE_BALANCE, item::{Item, Itemized, ItemizedMut, container::{StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}}, string::{Describable, DescribableMut}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum ContainerVariantType {
@@ -15,13 +13,13 @@ pub enum ContainerVariantType {
 }
 
 impl ContainerVariantType {
-    pub fn rank(&self) -> i32 {
+    pub fn rank(&self) -> StorageSpace {
         match self {
-            Self::Pouch => 0,
-            Self::Backpack => 10,
-            Self::Chest => 50,
-            Self::PlayerInventory => 100,
-            Self::Room => i32::MAX,
+            Self::Pouch => SIZE_BALANCE * 2,
+            Self::Backpack => SIZE_BALANCE * 30,
+            Self::Chest => SIZE_BALANCE * 60,
+            Self::PlayerInventory => SIZE_BALANCE * 75,
+            Self::Room => StorageSpace::MAX,
         }
     }
 }
@@ -88,7 +86,7 @@ impl ContainerVariant {
         }
     }
 
-    pub fn rank(&self) -> i32 {
+    pub fn rank(&self) -> StorageSpace {
         self.variant_type().rank()
     }
 

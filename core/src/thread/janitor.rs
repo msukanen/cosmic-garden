@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels}}, world::World};
+use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::{BP_LIBRARY, HELP_LIBRARY}, signal::{SigReceiver, SignalSenderChannels}}, world::World};
 
 lazy_static! {
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
@@ -40,12 +40,7 @@ pub(crate) async fn janitor(
             // Auto-saving the meningfully active Players.
             _ = autosave_queue_interval.tick() => autosave_queue(world.clone()).await,
             // Save the world, especially the whales!
-            _ = world_save_interval.tick() => {
-                if save_the_whales(world.clone(), false).await {
-                    // save actually happened, for a reason or other.
-                    log::trace!("World save cycle complete.")
-                }
-            },
+            _ = world_save_interval.tick() => {save_the_whales(world.clone(), false).await;},
             // Save the modified [Room]s.
             _ = room_save_interval.tick() => room_save().await,
             // Handle lost and found items…
@@ -56,7 +51,8 @@ pub(crate) async fn janitor(
 
                 SystemSignal::SaveWorld => {save_the_whales(world.clone(), true).await;},
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
-                SystemSignal::ReindexLibrary => save_help_asap(&out.librarian).await,
+                SystemSignal::ReindexLibrary => save_help_asap(&out).await,
+                SystemSignal::NewBlueprintEntry => save_bp_asap(&out).await,
                 SystemSignal::PlayerNeedsSaving(lock, p_id) => { let p_id = p_id; save_player_now(lock, &p_id).await; }
                 _ => ()
             }
@@ -68,6 +64,8 @@ pub(crate) async fn janitor(
     save_the_whales(world.clone(), true).await;// save the whales!
     room_save().await;// …and the rooms
     autosave_queue(world.clone()).await;// well, and players.
+    save_help_asap(&out).await;
+    save_bp_asap(&out).await;
 
     // notify main thread that we've closed the shop.
     let _ = done_tx.send(());
@@ -178,11 +176,21 @@ async fn lost_and_found(world: Arc<RwLock<World>>) {
 }
 
 /// ASAP save of [HelpPage]s.
-async fn save_help_asap(librarian_tx: &mpsc::UnboundedSender<SystemSignal>) {
+async fn save_help_asap(out: &SignalSenderChannels) {
+    if let Err(e) = (*HELP_LIBRARY).write().await.save().await {
+        log::error!("Help anomaly! {e:?}");
+        return ;
+    }
+    // Nudge the librarian, but don't wait if he's asleep…
+    out.librarian.send(SystemSignal::ReindexLibrary).ok();
+}
+
+/// ASAP save of [HelpPage]s.
+async fn save_bp_asap(out: &SignalSenderChannels) {
     if let Err(e) = (*BP_LIBRARY).write().await.save().await {
         log::error!("Blueprint anomaly! {e:?}");
         return ;
     }
     // Nudge the librarian, but don't wait if he's asleep…
-    librarian_tx.send(SystemSignal::ReindexLibrary).ok();
+    out.librarian.send(SystemSignal::ReindexLibrary).ok();
 }

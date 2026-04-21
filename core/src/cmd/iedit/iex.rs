@@ -65,7 +65,6 @@ impl Command for IexCommand {
             _ => None
         };
         match nutri {
-            None => tell_userln!(ctx.writer, "{:>10}: {}", "Nutrition", IEX_UNSET),
             Some((a,b,c)) => tell_userln!(ctx.writer,
                 "{:>10}: (type: {}, uses: {}, ticks: {})", "Nutrition",
                     match a {
@@ -74,7 +73,7 @@ impl Command for IexCommand {
                     },
                     match b {None => "∞".into(), Some(v) => v.to_string()},
                     match c {None => "∞".into(), Some(v) => v.to_string()},
-            ),
+            ),_=>()
         }
         
         // .matter_state
@@ -84,8 +83,17 @@ impl Command for IexCommand {
             _ => None
         };
         match matter_state {
-            None => tell_userln!(ctx.writer, "{:>10}: {}", "Mat.State", IEX_UNSET),
-            Some(a) => tell_userln!(ctx.writer, "{:>10}: <c white>{}</c>", "Mat.State", a),
+            Some(a) => tell_userln!(ctx.writer, "{:>10}: <c white>{}</c>", "Mat.State", a),_=>()
+        }
+
+        // .base_dmg
+        let base_dmg = match item {
+            Item::Primordial(v) => v.base_dmg.clone(),
+            Item::Weapon(w) => w.base_dmg.into(),
+            _ => None
+        };
+        match base_dmg {
+            Some(a) => tell_userln!(ctx.writer, "{:>10}: <c white>{}</c>", "Base dmg", a),_=>()
         }
         
         // 

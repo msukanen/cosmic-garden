@@ -10,7 +10,7 @@ pub struct BlueprintLibrary {
     world_id: String,
     #[serde(with = "string_vec_to_bool_map")]
     id_stem: HashMap<String, bool>,
-    #[serde(default)]
+    #[serde(default, skip)]
     items: HashMap<String, Item>,
 }
 
@@ -113,6 +113,7 @@ impl BlueprintLibrary {
         let contents = serde_json::to_string_pretty(&self)?;
         fs::write(blueprint_lib_fp(), contents).await?;
         
+        let mut any_saved = false;
         for (id, dirty) in self.id_stem.iter_mut() {
             if !*dirty { continue; }
             
@@ -127,13 +128,16 @@ impl BlueprintLibrary {
                         log::error!("FAILURE: could not write '{id}' onto disk: {e}");
                     } else {
                         *dirty = false;
+                        any_saved = true;
                         log::trace!("Persisted specimen: '{id}'");
                     }
                 }
                 Err(e) => log::error!("FAIL: JSON serialization failed for '{id}': {e}")
             }
         }
-
+        if any_saved {
+            log::trace!("Blueprint library stored.");
+        }
         Ok(())
     }
 }

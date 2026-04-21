@@ -220,6 +220,7 @@ impl HelpLibrary {
 
         fs::write(help_lib_fp(), contents).await?;
         
+        let mut any_saved = false;
         for (id, dirty) in self.id_stem.iter_mut() {
             if !*dirty { continue; }
             
@@ -229,9 +230,13 @@ impl HelpLibrary {
             };
             if let Ok(_) = item.save().await {
                 *dirty = false;
+                any_saved = true;
             }
         }
 
+        if any_saved {
+            log::trace!("Library tucked onto disk.");
+        }
         Ok(())
     }
 

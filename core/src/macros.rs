@@ -72,7 +72,10 @@ macro_rules! err_iedit_buffer_inaccessible {
                 let out = String::from_utf8_lossy($mock_sock.get_ref());
                 assert!($assert(&out), "Ass fail! Out was '{}'", out.trim_end());
             }
-            log::debug!("\n{}", String::from_utf8_lossy($mock_sock.get_ref()));
+            let stri: String = String::from_utf8_lossy($mock_sock.get_ref()).to_string();
+            if !stri.is_empty() {
+                log::debug!("\n{stri}");
+            }
             state
         }};
     }

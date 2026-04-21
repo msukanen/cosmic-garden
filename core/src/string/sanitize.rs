@@ -7,7 +7,7 @@ pub trait Sanitizer {
 impl Sanitizer for &str {
     /// Sanitize away all "control" characters.
     fn sanitize(&self) -> String {
-        self.chars()
+        self.trim().chars()
             .filter(|c| !c.is_control())
             .collect::<String>()
     }
