@@ -57,7 +57,7 @@ mod hedit_usage_tests {
     async fn dummy_entry_usage_check() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,p) = get_operational_mock_world().await;
+        let (w,c,p,_) = get_operational_mock_world().await;
         let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(state, HeditCommand, "dummy",s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

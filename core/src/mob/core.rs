@@ -82,7 +82,7 @@ impl Damager for Entity {
 mod entity_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, identity::IdentityQuery, io::ClientState, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, io::ClientState, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;
@@ -122,9 +122,9 @@ mod entity_tests {
     async fn entity_save() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w, c,p) = get_operational_mock_world().await;
-        tokio::spawn(librarian((c.out.clone(), c.recv.librarian)));
-        tokio::spawn(life((c.out.clone(), c.recv.life), w.clone()));
+        let (w, c,p, _) = get_operational_mock_world().await;
+        get_operational_mock_librarian!(c,w);
+        get_operational_mock_life!(c,w);
         tokio::time::sleep(Duration::from_secs(3)).await;// let things stabilize in peace…
         let Ok(mob) = Entity::new("goblin").await else {
             panic!("Where'd the lil goblin go?!");

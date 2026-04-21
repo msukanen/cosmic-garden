@@ -117,7 +117,7 @@ mod cmd_tests {
     async fn synthetic_commandctx() {
         let mut buffer: Vec<u8> = Vec::new();
         let mut mock_sock = std::io::Cursor::new(&mut buffer);
-        let (world, sigs, plr) = get_operational_mock_world().await;
+        let (world, sigs, plr, _) = get_operational_mock_world().await;
         let mut ctx = CommandCtx {
             writer: &mut mock_sock,
             args: "",

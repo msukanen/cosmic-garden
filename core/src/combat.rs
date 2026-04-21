@@ -81,18 +81,18 @@ pub trait CombatantMut : Combatant {
 mod combatant_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::{attack::AttackCommand, look::LookCommand}, ctx, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, tell_user, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{attack::AttackCommand, look::LookCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, tell_user, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, world::world_tests::get_operational_mock_world};
 
     /// Simulate 100 players' "gank squad" vs 1 (tough) goblin.
     /// 
     /// Estimated runtime in debug mode exactly 14.03s (including all the sleeps).
     #[tokio::test]
     async fn simple_combat() {
-        let (w, mut c, p) = get_operational_mock_world().await;
+        let (w, mut c, p, _) = get_operational_mock_world().await;
+        // let's accommodate the 100+ "players"…
         (c.out.broadcast, _) = tokio::sync::broadcast::channel::<Broadcast>( 128 );
-
-        tokio::spawn(librarian((c.out.clone(), c.recv.librarian)));
-        tokio::spawn(life((c.out.clone(), c.recv.life), w.clone()));
+        get_operational_mock_librarian!(c,w);
+        get_operational_mock_life!(c,w);
 
         tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
 

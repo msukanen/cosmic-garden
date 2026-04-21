@@ -3,7 +3,7 @@
 use std::{sync::Arc, time::Duration};
 
 use lazy_static::lazy_static;
-use tokio::{sync::{RwLock, mpsc}, time};
+use tokio::{sync::RwLock, time};
 
 use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::{BP_LIBRARY, HELP_LIBRARY}, signal::{SigReceiver, SignalSenderChannels}}, world::World};
 
@@ -12,6 +12,14 @@ lazy_static! {
     pub static ref LOST_AND_FOUND: Arc<RwLock<Vec<Item>>> = Arc::new(RwLock::new(Vec::new()));
 }
 pub const SAVE_ASAP_THRESHOLD: usize = 100;
+
+#[cfg(test)]
+#[macro_export]
+macro_rules! get_operational_mock_janitor {
+    ($ch:ident, $w:ident, $done_tx:expr) => {
+        tokio::spawn( crate::thread::janitor(($ch.out.clone(), $ch.recv.janitor), $w.clone(), None, $done_tx))
+    };
+}
 
 /// Disk I/O thread thing.
 /// 

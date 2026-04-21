@@ -7,6 +7,14 @@ use tokio::{sync::RwLock, time};
 
 use crate::{combat::CombatantMut, identity::{IdentityMut, IdentityQuery}, io::Broadcast, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, world::World};
 
+#[cfg(test)]
+#[macro_export]
+macro_rules! get_operational_mock_life {
+    ($ch:ident, $w:ident) => {
+        tokio::spawn( crate::thread::life(($ch.out.clone(), $ch.recv.life), $w.clone()))
+    };
+}
+
 type Battler = Arc<RwLock<dyn CombatantMut + Send + Sync>>;
 /// Threshold above which we'll stop nagging the World and pre-fetch list(s) in one sweep…
 pub const PARALLEL_BATTLE_CONGESTION_THRESHOLD: usize = 50;
@@ -135,6 +143,9 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
             //
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::Shutdown => break,
+
+                // send item spawns to Librarian
+                SystemSignal::Spawn {what: SpawnType::Item {id}, room_id} => {out.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id }, room_id }).ok();},
                 SystemSignal::Spawn {what, room_id} => spawn_something(what, &room_id, world.clone()).await,
                 SystemSignal::Attack {who, victim_id} => {
                     // log::debug!("ATK!?");
@@ -247,7 +258,7 @@ pub enum Resolution {
 }
 
 /// Fite!
-async fn punt(atk: &mut Battler, vct: &mut Battler, room: &Arc<RwLock<Room>>) -> Resolution {
+async fn punt(atk: &mut Battler, vct: &mut Battler, _room: &Arc<RwLock<Room>>) -> Resolution {
     let mut a = atk.write().await;
     let mut v = vct.write().await;
 

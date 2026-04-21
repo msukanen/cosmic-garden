@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::sync::RwLock;
 
-use crate::{io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::BlueprintLibrary, mob::spawn_lib::EntityLibrary, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, util::HelpLibrary};
+use crate::{identity::IdentityQuery, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary, container::Storage}, mob::spawn_lib::EntityLibrary, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::HelpLibrary, world::World};
 
 lazy_static! {
     pub(crate) static ref BP_LIBRARY: Arc<RwLock<BlueprintLibrary>> = Arc::new(RwLock::new(BlueprintLibrary::default()));
@@ -14,12 +14,20 @@ lazy_static! {
     pub(crate) static ref ENT_BP_LIBRARY: Arc<RwLock<EntityLibrary>> = Arc::new(RwLock::new(EntityLibrary::default()));
 }
 
+#[cfg(test)]
+#[macro_export]
+macro_rules! get_operational_mock_librarian {
+    ($ch:ident, $w:ident) => {
+        tokio::spawn( crate::thread::librarian(($ch.out.clone(), $ch.recv.librarian), $w.clone()))
+    };
+}
+
 /// 
 /// Librarian wake up.
 /// 
 /// This thread keeps the world's documents nice and tidy.
 /// 
-pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver)) {
+pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver), world: Arc<RwLock<World>>) {
     // Bootstrap/load blueprints.
     log::info!("Library establishing… blueprints @ '{}'", blueprint_lib_fp().display());
     if let Err(e) = BlueprintLibrary::load_or_bootstrap().await {
@@ -95,6 +103,33 @@ pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver))
                 }
 
                 SystemSignal::Shutdown => { break; }
+
+                SystemSignal::Spawn { what: SpawnType::Item { id }, room_id } => {
+                    let lock = BP_LIBRARY.read().await;
+                    if let Some(found) = lock.get(&id) {
+                        let item = found.reflect();
+                        drop(lock);
+                        if let Some(dest) = world.read().await.rooms.get(&room_id) {
+                            let item_id = item.id().to_string();
+                            let mut lock = dest.write().await;
+                            if let Err(e) = lock.contents.try_insert(item) {
+                                drop(lock);
+                                log::warn!("Item spawn failure. '{item_id}' sent to LnF.");
+                                add_item_to_lnf(e.extract_item()).await;
+                                continue;
+                            }
+                            drop(lock);
+                            log::info!("Librarian spawned '{item_id}' to '{room_id}'")
+                        }
+                    } else {
+                        #[cfg(test)]{
+                            log::debug!("Item ID '{id}' not found.");
+                        }
+                    }
+                }
+
+                // relay all other spawns but Item to Life.
+                SystemSignal::Spawn { what, room_id } => {out.life.send(SystemSignal::Spawn { what, room_id }).ok();},
                 _ => ()
             }
         }

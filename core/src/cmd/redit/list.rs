@@ -41,7 +41,7 @@ mod cmd_iedit_list {
     async fn exits_listing() {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
-        let (w, c, p) = get_operational_mock_world().await;
+        let (w, c, p, _) = get_operational_mock_world().await;
         let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
@@ -54,7 +54,7 @@ mod cmd_iedit_list {
     async fn exits_listing_parallel() {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
-        let (w, c, p) = get_operational_mock_world().await;
+        let (w, c, p, _) = get_operational_mock_world().await;
         let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

@@ -21,8 +21,7 @@ impl Command for HardcoreCommand {
         }
 
         let mut p = plr.write().await;
-        if p.has_hardcore_pending() {
-            p.hardcore = Some(true);
+        if p.step_hardcore() {
             drop(p);
             tell_user!(ctx.writer, "<c brown>[<c red>HARDCORE MODE ENABLED!</c>]</c>\n <c blue>*</c> you're permanently PvP-enabled.\n <c blue>*</c> if you die, it's Game Over…\n\n<c yellow>Good luck, brave one!\n");
             return ;

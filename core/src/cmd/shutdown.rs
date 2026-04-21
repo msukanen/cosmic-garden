@@ -26,11 +26,10 @@ mod cmd_shutdown_tests {
     async fn autoshutdown() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,p) = get_operational_mock_world().await;
-        let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
-        let io_t = tokio::spawn(crate::thread::janitor((c.out.clone(), c.recv.janitor), w.clone(), None, done_tx));
+        let (w,c,p, mut d) = get_operational_mock_world().await;
+        let io_t = tokio::spawn(crate::thread::janitor((c.out.clone(), c.recv.janitor), w.clone(), None, d.0));
         let life_t = tokio::spawn(crate::thread::life((c.out.clone(), c.recv.life), w.clone()));
-        let lib_t = tokio::spawn(crate::thread::librarian((c.out.clone(), c.recv.librarian)));
+        let lib_t = tokio::spawn(crate::thread::librarian((c.out.clone(), c.recv.librarian), w.clone()));
         
         let mut autoshutdown = tokio::time::interval(Duration::from_secs(10));
         let mut autoshutdown_1st_tick = false;
@@ -47,7 +46,7 @@ mod cmd_shutdown_tests {
                     }
                 }
 
-                _ = &mut done_rx => {
+                _ = &mut d.1 => {
                     break;
                 }
             }

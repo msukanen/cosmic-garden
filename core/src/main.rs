@@ -79,7 +79,7 @@ async fn main() {
 
     let jan_t = tokio::spawn(thread::janitor((priv_chs.out.clone(), priv_chs.recv.janitor), world.clone(), args.clone().into(), done_tx));
     let life_t = tokio::spawn(thread::life((priv_chs.out.clone(), priv_chs.recv.life), world.clone()));
-    let lib_t = tokio::spawn(thread::librarian((priv_chs.out.clone(), priv_chs.recv.librarian)));
+    let lib_t = tokio::spawn(thread::librarian((priv_chs.out.clone(), priv_chs.recv.librarian), world.clone()));
 
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);

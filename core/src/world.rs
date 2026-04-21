@@ -310,7 +310,8 @@ pub(crate) mod world_tests {
         (
             std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
             crate::SignalChannels,
-            std::sync::Arc<tokio::sync::RwLock<crate::player::Player>>
+            std::sync::Arc<tokio::sync::RwLock<crate::player::Player>>,
+            (tokio::sync::oneshot::Sender<()>, tokio::sync::oneshot::Receiver<()>)
         )
     {
         use std::io::Write;
@@ -346,8 +347,13 @@ pub(crate) mod world_tests {
         let Some(r) = world.rooms.get("r-1") else { panic!("r-1 missing?!")};
         r.write().await.who.insert(plr_id.clone(), std::sync::Arc::downgrade(&plr));
         plr.write().await.location = std::sync::Arc::downgrade(&r);
+        let (dtx,drx) = tokio::sync::oneshot::channel::<()>();
 
-        (std::sync::Arc::new(tokio::sync::RwLock::new(world)), sigs, plr.clone())
+        (   std::sync::Arc::new(tokio::sync::RwLock::new(world)),
+            sigs,
+            plr.clone(),
+            (dtx, drx)
+        )
     }
 
 //     #[cfg(feature = "stresstest")]

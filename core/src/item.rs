@@ -72,6 +72,13 @@ pub enum Item {
     Primordial(PrimordialItem),
 }
 
+impl PartialEq<str> for Item {
+    fn eq(&self, other: &str) -> bool {
+        let what = other.to_lowercase();
+        self.id().starts_with(&what) || self.title().to_lowercase().starts_with(&what)
+    }
+}
+
 impl Item {
     pub fn devolve(&mut self) {
         match self {

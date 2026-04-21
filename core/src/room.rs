@@ -181,7 +181,7 @@ mod room_tests {
 
     #[tokio::test]
     async fn room_linking() {
-        let (w_arc,c,p) = get_operational_mock_world().await;
+        let (w_arc,c,p,_) = get_operational_mock_world().await;
         w_arc.write().await.link_rooms().await;
         let rooms = w_arc.read().await.rooms.clone();
         if let Some(r_arc) = rooms.get("room-1") {

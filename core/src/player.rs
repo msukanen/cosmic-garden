@@ -6,7 +6,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -206,27 +206,20 @@ impl Player {
         &mut self.reputation
     }
 
-    /// Set 'hardcore' mode on. This is an irreversible operation (sans admin intervention)…
+    /// Step toward 'hardcore' mode, or switch it on.
+    /// 
+    /// This is an irreversible operation (sans admin intervention)…
     /// 
     /// # Returns
     /// - `false`: pending
     /// - `true`: set
-    pub fn set_hardcore(&mut self) -> bool {
+    pub fn step_hardcore(&mut self) -> bool {
         let mut set = false;
         self.hardcore = match self.hardcore {
             None => Some(false),
             _ => { set = true; Some(true) }
         };
         set
-    }
-
-    pub fn has_hardcore_pending(&self) -> bool {
-        for af in self.affects.values() {
-            if af.hardcore_pending() {
-                return true;
-            }
-        }
-        false
     }
 }
 

@@ -59,7 +59,7 @@ mod cmd_redit_way {
     async fn way_creation_r1r2() {
         let mut buf: Vec<u8> = Vec::new();
         let mut s = Cursor::new(&mut buf);
-        let (w,c,p) = get_operational_mock_world().await;
+        let (w,c,p, _) = get_operational_mock_world().await;
         let lt = tokio::spawn(life((c.out.clone(), c.recv.life), w.clone()));
         tokio::time::sleep(Duration::from_secs(2)).await; // let life() stabilize
         let state = ClientState::Playing { player: p.clone() };
