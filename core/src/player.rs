@@ -6,7 +6,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::NutritionType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::{Mob, MobMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -41,10 +41,8 @@ pub struct Player {
     #[identity(title)]
     pub(super) name: String,
     
-    #[serde(default)]
-    pub config: Config,
-    #[serde(default)]
-    pub access: Access,
+    #[serde(default)] pub config: Config,
+    #[serde(default)] pub access: Access,
     
     #[serde(default, skip)]
     pub actions_taken: usize,
@@ -71,9 +69,11 @@ pub struct Player {
     #[serde(default = "player_inv_default")]
     pub inventory: ContainerVariant,
 
+    /// Current affects.
     #[serde(default)]
     pub affects: HashMap<String, Affect>,
 
+    /// Last place in the line of travels…
     #[serde(default, skip)]
     pub last_goto: Option<(Direction, Weak<RwLock<Room>>)>,
 
@@ -85,6 +85,10 @@ pub struct Player {
 
     #[serde(default = "player_rep_default")]
     pub reputation: Stat,
+
+    /// Is the character 'hardcore', eligible for perma-death?
+    #[serde(default)]
+    pub hardcore: Option<bool>,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -201,6 +205,29 @@ impl Player {
     pub fn rep_mut(&mut self) -> &mut Stat {
         &mut self.reputation
     }
+
+    /// Set 'hardcore' mode on. This is an irreversible operation (sans admin intervention)…
+    /// 
+    /// # Returns
+    /// - `false`: pending
+    /// - `true`: set
+    pub fn set_hardcore(&mut self) -> bool {
+        let mut set = false;
+        self.hardcore = match self.hardcore {
+            None => Some(false),
+            _ => { set = true; Some(true) }
+        };
+        set
+    }
+
+    pub fn has_hardcore_pending(&self) -> bool {
+        for af in self.affects.values() {
+            if af.hardcore_pending() {
+                return true;
+            }
+        }
+        false
+    }
 }
 
 impl Default for Player {
@@ -232,6 +259,7 @@ impl Default for Player {
             last_goto: None,
             faction: EntityFaction::Player { pvp: false },
             equipped_weapon: None,
+            hardcore: None,
         }
     }
 }
@@ -265,12 +293,18 @@ impl Tickable for Player {
         self.affects.retain(|_id, affect| {
             if affect.expired() { return false; }
             if let Affect::Effect { kind, .. } = affect {
-                if let NutritionType::Heal { stat, drain } = kind {
+                if let EffectType::Heal { stat, drain } = kind {
                     changes.push((*stat, *drain));
                 }
             }
 
+            let hc = matches!(affect, Affect::HardcorePending { .. });
             affect.tick();
+            if affect.expired() && hc {
+                if let Some(false) = self.hardcore {
+                    self.hardcore = None;
+                }
+            }
             !affect.expired()
         });
         for (stat, amount) in &changes {
@@ -298,6 +332,6 @@ impl FactionMut for Player {
 impl Damager for Player {
     fn dmg(&self) -> StatValue {
         // TODO dmg calculation based on held weapon, strength, etc.
-        20.0
+        2.0
     }
 }

@@ -4,6 +4,7 @@ pub mod activity;
 pub mod config;
 pub mod direction;
 pub mod ed;
+pub(crate) mod escape_hatch;
 pub mod help; pub use help::*;
 pub mod intentqueue; pub use intentqueue::*;
 pub mod translocate;

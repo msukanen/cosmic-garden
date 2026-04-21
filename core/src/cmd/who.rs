@@ -28,7 +28,7 @@ impl Command for WhoCommand {
             if is_staff {
                 output.push_str(&format!("<c cyan>{:<18}</c> | {:<21} | {:<14} | {}\n", id, title, loc_id, p.activity_type));
             } else {
-                output.push_str(&format!("* {}\n", title));
+                output.push_str(&format!(" <c blue>*</c> {}\n", title));
             }
         }
         

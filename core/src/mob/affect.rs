@@ -4,15 +4,22 @@ use std::collections::HashMap;
 
 use serde::{Deserialize, Serialize};
 
-use crate::{item::consumable::NutritionType, string::Uuid, traits::Tickable};
+use crate::{item::consumable::EffectType, string::Uuid, traits::Tickable};
 
 /// All sorts of affects from good to bad to something else…
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Affect {
-    Effect { kind: NutritionType, remaining: Option<usize> },
-    DelayedAction { kind: NutritionType, remaining: Option<usize>, delay: Option<usize> },
-    RushNCrash { kind: NutritionType, remaining: Option<usize>, crash_kind: NutritionType, delay: Option<usize>, crash_remain: Option<usize> },
+    Effect { kind: EffectType, remaining: Option<usize> },
+    DelayedEffect { kind: EffectType, remaining: Option<usize>, delay: Option<usize> },
+    RushNCrash { kind: EffectType, remaining: Option<usize>, crash_kind: EffectType, delay: Option<usize>, crash_remain: Option<usize> },
+    HardcorePending { remaining: Option<usize> },
     Expired,
+}
+
+impl Affect {
+    pub fn hardcore_pending(&self) -> bool {
+        matches!(self, Self::HardcorePending { .. })
+    }
 }
 
 impl Tickable for Affect {
@@ -22,22 +29,35 @@ impl Tickable for Affect {
             Self::Effect { remaining: Some(1),.. } => {
                 *self = Self::Expired;
                 true
-            },
-            Self::DelayedAction { delay: Some(1), kind, remaining } =>
-            {
-                *self = Self::Effect { kind: kind.clone(), remaining: remaining.clone() };
+            }
+            
+            Self::HardcorePending { remaining: Some(1)} => {
+                *self = Self::Expired;
+                false
+            }
+           
+            Self::DelayedEffect { delay: Some(1), kind, remaining } =>{
+                *self = Self::Effect {
+                            kind: kind.clone(),
+                            remaining: remaining.clone()
+                        };
                 true
             }
-            Self::RushNCrash { remaining: Some(1), crash_kind, delay, crash_remain, .. } =>
-            {
-                *self = Affect::DelayedAction { kind: crash_kind.clone(), remaining: crash_remain.clone(), delay: delay.clone() };
+            
+            Self::RushNCrash { remaining: Some(1), crash_kind, delay, crash_remain, .. } => {
+                *self = Self::DelayedEffect {
+                            kind: crash_kind.clone(),
+                            remaining: crash_remain.clone(),
+                            delay: delay.clone()
+                        };
                 true
             }
             
             // Tick-tock goes the clock…
-            Self::DelayedAction { delay: Some(x), ..}    |
-            Self::DelayedAction { remaining: Some(x),..} |
-            Self::Effect { remaining: Some(x),.. }    |
+            Self::DelayedEffect { delay: Some(x), ..}    |
+            Self::DelayedEffect { remaining: Some(x),..} |
+            Self::Effect { remaining: Some(x),.. }       |
+            Self::HardcorePending { remaining: Some(x) } |
             Self::RushNCrash { remaining: Some(x),.. }   => { *x = x.saturating_sub(1); true },
 
             // Placeholder(s)…
@@ -53,8 +73,9 @@ impl Affect {
         match self {
             Self::Effect { remaining: None,.. } => false,
             Self::Effect { remaining: Some(x),.. } => *x == 0,
-            Self::DelayedAction { .. } |        // Delayed decays into Nutri
-            Self::RushNCrash { .. }    => false,// RNC will decay into DelayedAction
+            Self::DelayedEffect { .. }   |        // Delayed decays into Effect
+            Self::HardcorePending { .. } |        // H.P. decays to Expired
+            Self::RushNCrash { .. }      => false,// RNC will decay into DelayedEffect
             
             Self::Expired => true,
         }
@@ -63,7 +84,7 @@ impl Affect {
     pub fn dormant(&self) -> bool {
         match self {
             Self::Effect { remaining: Some(x),.. } => *x == 0,
-            Self::DelayedAction { delay: Some(_),.. } |
+            Self::DelayedEffect { delay: Some(_),.. } |
             Self::Expired => true,
             _ => false
         }
@@ -104,12 +125,12 @@ pub fn stack_affect(item: &str, affect: &Affect, stash: &mut HashMap<String, Aff
 mod affect_tests {
     use std::collections::HashMap;
 
-    use crate::{item::consumable::NutritionType, mob::{StatType, affect::{Affect, stack_affect}}, traits::Tickable};
+    use crate::{item::consumable::EffectType, mob::{StatType, affect::{Affect, stack_affect}}, traits::Tickable};
 
     #[test]
     fn affect_stacking() {
-        let a = Affect::Effect { kind: NutritionType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
-        let b = Affect::Effect { kind: NutritionType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
+        let a = Affect::Effect { kind: EffectType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
+        let b = Affect::Effect { kind: EffectType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
         let mut stash = HashMap::new();
         stack_affect("item", &a, &mut stash);
         assert!(stash.contains_key("item"));
@@ -125,9 +146,9 @@ mod affect_tests {
     fn affect_decay() {
         let _ = env_logger::try_init();
         let mut r = Affect::RushNCrash {
-            kind: NutritionType::NotEdible,
+            kind: EffectType::NotEdible,
             remaining: Some(3),
-            crash_kind: NutritionType::NotEdible,
+            crash_kind: EffectType::NotEdible,
             delay: Some(3),
             crash_remain: Some(3)
         };// this should be 9 ticks lifetime before .expired()
@@ -145,7 +166,7 @@ mod affect_tests {
         log::debug!("r = {r:?}");
         assert!(r.dormant());
         assert!(!r.expired());
-        assert!(matches!(r, Affect::DelayedAction {..}));
+        assert!(matches!(r, Affect::DelayedEffect {..}));
         for _ in 0..2 {
             r.tick();
             log::debug!(">   {r:?}");

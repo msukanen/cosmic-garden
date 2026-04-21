@@ -4,7 +4,7 @@ use std::collections::HashMap;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::{IdentityMut, IdentityQuery}, item::{Item, ItemizedMut, consumable::NutritionType, container::{StorageMut, specs::StorageSpace}, primordial::PotentialItemType}, mob::StatType, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::{IdentityMut, IdentityQuery}, item::{Item, ItemizedMut, consumable::EffectType, container::{StorageMut, specs::StorageSpace}, primordial::PotentialItemType}, mob::StatType, tell_user, validate_access};
 
 pub struct SetCommand;
 
@@ -128,20 +128,20 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
     }
 
     // Actually set some `value` after exact `what` has been determined.
-    async fn go_really_nuts(ctx: &mut CommandCtx<'_>, nuts: &mut NutritionType, what: &str, value: &str) {
+    async fn go_really_nuts(ctx: &mut CommandCtx<'_>, nuts: &mut EffectType, what: &str, value: &str) {
         loop {
         match what {
             "heal" => match nuts {
-                NutritionType::NotEdible  => {*nuts = NutritionType::Heal { stat: StatType::HP, drain: 0.0 }; continue; },
-                NutritionType::Heal { stat, drain }=> {
-                    *nuts = NutritionType::MultiHeal { stat_n_drain: {
+                EffectType::NotEdible  => {*nuts = EffectType::Heal { stat: StatType::HP, drain: 0.0 }; continue; },
+                EffectType::Heal { stat, drain }=> {
+                    *nuts = EffectType::MultiHeal { stat_n_drain: {
                         let mut m = HashMap::new();
                         m.insert(stat.clone(), *drain);
                         m
                     } };
                     continue;
                 },
-                NutritionType::MultiHeal { stat_n_drain } =>
+                EffectType::MultiHeal { stat_n_drain } =>
                     // set nut multi <stat-type> <value>
                     {
                         let (maybe_rm, arg) = value.split_once(' ').unwrap_or((value, ""));
@@ -160,13 +160,13 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                                 };
                                 stat_n_drain.remove(&stat_type);
                                 if stat_n_drain.is_empty() {
-                                    *nuts = NutritionType::NotEdible;
+                                    *nuts = EffectType::NotEdible;
                                     tell_user!(ctx.writer, "It's not very edible anymore…\n");
                                     return ;
                                 } else if stat_n_drain.len() == 1 {
                                     // fall back to Heal
                                     let (s,d) = stat_n_drain.iter().next().unwrap();
-                                    *nuts = NutritionType::Heal { stat: s.clone(), drain: *d };
+                                    *nuts = EffectType::Heal { stat: s.clone(), drain: *d };
                                 }
                                 tell_user!(ctx.writer, "Item set as {}\n", *nuts);
                                 return ;
@@ -177,7 +177,7 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                         match parse_stat_n_val(value) {
                             Err(e) => tell_user!(ctx.writer, "{}\n", e),
                             Ok((None, None)) => {
-                                *nuts = NutritionType::NotEdible;
+                                *nuts = EffectType::NotEdible;
                                 tell_user!(ctx.writer, "That is *definitely* inedible…!\n");
                             },
                             Ok((Some(s), d)) => {
@@ -186,13 +186,13 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                                     // effectively zero - erase instead of zeroing.
                                     stat_n_drain.remove(&s);
                                     if stat_n_drain.is_empty() {
-                                        *nuts = NutritionType::NotEdible;
+                                        *nuts = EffectType::NotEdible;
                                         tell_user!(ctx.writer, "It's not very edible anymore…\n");
                                         return ;
                                     } else if stat_n_drain.len() == 1 {
                                         // fall back to Heal
                                         let (s,d) = stat_n_drain.iter().next().unwrap();
-                                        *nuts = NutritionType::Heal { stat: s.clone(), drain: *d };
+                                        *nuts = EffectType::Heal { stat: s.clone(), drain: *d };
                                     }
                                     tell_user!(ctx.writer, "Item set as {}\n", *nuts);
                                     return ;
@@ -201,7 +201,7 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                                 if stat_n_drain.len() == 1 {
                                     // fall back to Heal
                                     let (s,d) = stat_n_drain.iter().next().unwrap();
-                                    *nuts = NutritionType::Heal { stat: s.clone(), drain: *d };
+                                    *nuts = EffectType::Heal { stat: s.clone(), drain: *d };
                                 }
                                 tell_user!(ctx.writer, "Item set as: {}\n", *nuts);
                             },
@@ -224,7 +224,7 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
         "inedible"|"na"|"no"|"eww"|"nope"|"awful" => true,_=> false
     } {
         match ed {
-            Item::Consumable(v) => v.nutrition = NutritionType::NotEdible,
+            Item::Consumable(v) => v.nutrition = EffectType::NotEdible,
             Item::Primordial(v) => v.nutrition = None,
             _ => { tell_user!(ctx.writer, "It wasn't very nutritional anyway…\n"); return ; }
         }
@@ -243,7 +243,7 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
         Item::Primordial(v) => {
             let mut n = v.nutrition.clone().unwrap_or_default();
             go_really_nuts(ctx, &mut n, sub, value).await;
-            v.nutrition = if matches!(n, NutritionType::NotEdible) { None } else { Some(n) }
+            v.nutrition = if matches!(n, EffectType::NotEdible) { None } else { Some(n) }
         },
         _ => unreachable!("This should not happen…")
     }

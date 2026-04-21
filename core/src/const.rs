@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use tokio::sync::RwLock;
 
-use crate::io::reserved_names_fp;
+use crate::{io::reserved_names_fp, util::escape_hatch::VILLAIN_ID};
 
 // some const to deal with [World]-specific choices that aren't present for a reason or other…
 pub const GREETING: &'static str = "Welcome to Cosmic Garden!";
@@ -63,26 +63,30 @@ lazy_static! {
 
     /// Immutable [IdError::ReservedName] sources.
     pub static ref HARDCODED_RESERVED: HashSet<&'static str> = {
-        let mut s = HashSet::new();
-        // some OS-related things...
+        let mut reserved = HashSet::new();
+        
         for name in &[
             "con", "prn", "aux", "nul",
             "null", "dev", "root", "home",
             "usr", "etc", "var", "tmp",
-        ] { s.insert(*name);}
-        for i in 1..=9 {
-            s.insert(Box::leak(format!("com{i}").into_boxed_str()));
-            s.insert(Box::leak(format!("lpt{i}").into_boxed_str()));
-        }
-        // names, etc.
-        for name in &[
+            "bin", "www", "windows", "win32",
+            "win64", "dos", "user", "ftp",
+            "tcp", "http", "https", "udp",
             "admin", "sys", "system", "root",
             "world", "self", "me", "omfg",
             "room", "here", "all", "force",
             "builder", "anybuilder", "any_builder",
-            "any"
-        ] { s.insert(*name);}
-        s
+            "any", "new", "actual",
+        ] { reserved.insert(*name);}
+        for i in 1..=9 {
+            reserved.insert(Box::leak(format!("com{i}").into_boxed_str()));
+            reserved.insert(Box::leak(format!("lpt{i}").into_boxed_str()));
+        }
+        
+        // reserved "villain" words, e.g. Rust keywords et al.
+        for name in VILLAIN_ID { reserved.insert(name); }
+        
+        reserved
     };
 
     pub static ref CONFIG_RESERVED: Arc<RwLock<HashSet<String>>> = {

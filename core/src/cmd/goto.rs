@@ -1,10 +1,8 @@
 //! Goto somewhere, somehow
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, look::LookCommand}, identity::IdentityQuery, io::Broadcast, player::Player, tell_user, thread::SystemSignal, util::direction::Direction};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, tell_user, thread::SystemSignal, util::direction::Direction};
 
 pub struct GotoCommand;
 

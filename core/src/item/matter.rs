@@ -33,3 +33,7 @@ impl Display for MatterState {
         })
     }
 }
+
+pub trait Matter {
+    fn matter_state(&self) -> MatterState;
+}

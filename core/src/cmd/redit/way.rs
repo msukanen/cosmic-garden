@@ -8,6 +8,10 @@ use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, roomloc_or_bust
 
 pub struct WayCommand;
 
+// 'way <dir> <room-id>'
+// 'way uni <dir> <room-id>' -- 'way u <dir> <room-id>'
+// 'way rm <dir>'
+// 'way bi rm <dir>'         -- '<way b rm | way br> <dir>'
 #[async_trait]
 impl Command for WayCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {

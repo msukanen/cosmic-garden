@@ -2,6 +2,7 @@
 
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
+use lazy_static::lazy_static;
 use tokio::{sync::RwLock, time};
 
 use crate::{combat::CombatantMut, identity::{IdentityMut, IdentityQuery}, io::Broadcast, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, world::World};
@@ -30,14 +31,19 @@ impl IdentityQueryLite for Battler {
     }
 }
 
+lazy_static! {
+    /// How many "general" ticks there is in a second…
+    pub(crate) static ref TICKS_PER_SECOND: Arc<RwLock<u64>> = Arc::new(RwLock::new(100));
+}
+
 /// Life-thread. Lives hang on in balance here!
 /// 
 /// Life-thread is the game's "pulse" that ticks the clocks of everything.
 //TODO (It'll do) much more than that Soon™.
 /// 
 pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver), world: Arc<RwLock<World>>) {
-    let mut tick_interval = time::interval(Duration::from_millis(10));// 100Hz
-    let mut battle_interval = time::interval(Duration::from_millis(1000));// 1Hz
+    let mut tick_interval = time::interval(Duration::from_millis(1_000 / *(TICKS_PER_SECOND.read().await)));// 100Hz
+    let mut battle_interval = time::interval(Duration::from_millis(1_000));// 1Hz
     let mut tick = 0;
     log::info!("Life thread firing up…");
     let mut bs = BattleStage::default();
@@ -93,7 +99,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                         Resolution::VctVictory => format!("{atk_id} collapses due numerous, too numerous, wounds."),
                         Resolution::BothDead => format!("Unexpected… Both {atk_id} and {} fall over at the same time, either dead or exhausted.", vct.id().await),
                     };
-                    log::debug!("Round for {atk_id} vs {} resolved as … {message_actor}", vct.id().await);
+                    //log::debug!("Round for {atk_id} vs {} resolved as … {message_actor}", vct.id().await);
                     let p = if parallel_congestion {
                         active_players.get(atk_id.as_str()).cloned()
                     } else {
@@ -103,6 +109,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                     if p_exists {
                         let plr = p.unwrap();
                         who_online.get(atk_id.as_str()).and_then(|_| {
+                            log::debug!("Broadcasting round resolution…");
                             out.broadcast.send(Broadcast::SystemInRoom {
                                 room: room.clone(),
                                 actor: plr.clone(),
@@ -130,7 +137,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 SystemSignal::Shutdown => break,
                 SystemSignal::Spawn {what, room_id} => spawn_something(what, &room_id, world.clone()).await,
                 SystemSignal::Attack {who, victim_id} => {
-                    log::debug!("ATK!?");
+                    // log::debug!("ATK!?");
                     let Some(room) = who.read().await.location.upgrade() else { continue; };// skip those in the void.
                     let target_arc: Battler;
                     if let Some(ent) = room.read().await.entities.get(&victim_id) {

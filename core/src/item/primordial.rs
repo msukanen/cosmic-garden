@@ -2,10 +2,10 @@
 
 use std::{collections::HashMap, fmt::Display};
 
-use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut, Storage};
+use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, StorageError, StorageQueryError, consumable::{ConsumableMatter, NutritionType}, container::{Storage, StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::Owner}, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, StorageError, StorageQueryError, consumable::{ConsumableMatter, EffectType}, container::{Storage, StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, mob::StatValue, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -77,16 +77,25 @@ impl PotentialItemType {
 pub struct PrimordialItem {
     pub id: String,
     pub title: String,
-    pub owner: Owner,
-    pub size: StorageSpace,
     pub desc: String,
-    pub max_space: StorageSpace,
+
+    pub owner: Owner,
+
     pub potential: PotentialItemType,
+
+    pub size: StorageSpace,
+    pub max_space: StorageSpace,
+
     pub uses: Option<usize>,
-    pub nutrition: Option<NutritionType>,
+    
+    // Item::Consumable -specific:
+    pub nutrition: Option<EffectType>,
     pub affect_ticks: Option<usize>,
     pub rots_in_ticks: Option<usize>,
     pub matter_state: Option<MatterState>,
+    // Item::Weapon -specific:
+    pub weapon_size: Option<WeaponSize>,
+    pub base_dmg: Option<StatValue>,
 }
 
 impl Default for PrimordialItem {
@@ -103,7 +112,9 @@ impl Default for PrimordialItem {
             nutrition: None,
             affect_ticks: None,
             rots_in_ticks: None,
-            matter_state: None
+            matter_state: None,
+            weapon_size: None,
+            base_dmg: None,
         }
     }
 }
@@ -127,23 +138,59 @@ impl PrimordialItem {
     pub fn atomize(item: &Item) -> Item {
         match item {
             Item::Primordial(_) => item.clone(),
-            Item::Consumable(item) => Item::Primordial(PrimordialItem {
-                    id: item.id().to_string(),
-                    title: item.title().to_string(),
-                    size: item.size(),
-                    desc: item.desc().to_string(),
-                    max_space: 0,
-                    potential: PotentialItemType::Other_,
-                    uses: item.uses,
-                    nutrition: item.nutrition.clone().into(),
-                    affect_ticks: item.affect_ticks.clone(),
-                    rots_in_ticks: item.affect_ticks.clone(),
-                    matter_state: item.matter_state.into(),
-                    owner: item.owner.clone(),
-            }),
+            Item::Consumable(item) => Item::Primordial(PrimordialItem::from(item)),
+            Item::Weapon(item) => Item::Primordial(PrimordialItem::from(item)),
             _ => todo!("More atoms!")
         }
     }
+}
+
+impl From<&ConsumableMatter> for PrimordialItem {
+    /// Convert [ConsumableMatter] into [PrimordialItem].
+    fn from(matter: &ConsumableMatter) -> Self { Self {
+        id: matter.id().into(),
+        title: matter.title().into(),
+        size: matter.size(),
+        desc: matter.desc().into(),
+        max_space: 0,
+        potential: PotentialItemType::Other_,
+        uses: matter.uses,
+        nutrition: matter.nutrition.clone().into(),
+        affect_ticks: matter.affect_ticks.clone(),
+        rots_in_ticks: matter.rots_in_ticks.clone(),
+        matter_state: matter.matter_state.into(),
+        owner: matter.owner.clone(),
+        weapon_size: None,
+        base_dmg: None,
+    }}
+}
+impl From<ConsumableMatter> for PrimordialItem {
+    /// Convert [ConsumableMatter] into [PrimordialItem].
+    fn from(value: ConsumableMatter) -> Self { Self::from(&value) }
+}
+
+impl From<&WeaponSpec> for PrimordialItem {
+    /// Convert [WeaponSpec] into [PrimordialItem].
+    fn from(value: &WeaponSpec) -> Self { Self {
+        id: value.id().into(),
+        title: value.title().into(),
+        desc: value.desc().into(),
+        owner: value.owner.clone().into(),
+        potential: PotentialItemType::Other_,
+        size: value.size(),
+        max_space: 0,
+        uses: None,
+        nutrition: None,
+        affect_ticks: None,
+        rots_in_ticks: None,
+        matter_state: None,
+        weapon_size: value.weapon_size.into(),
+        base_dmg: value.base_dmg.into()
+    }}
+}
+impl From<WeaponSpec> for PrimordialItem {
+    /// Convert [WeaponSpec] into [PrimordialItem].
+    fn from(value: WeaponSpec) -> Self { Self::from(&value)}
 }
 
 impl Reflector for PrimordialItem {
@@ -195,7 +242,7 @@ impl Storage for PrimordialItem {
     fn take_by_name(&mut self, _: &str) -> Option<Item> { None }
     /// Always `Err(item)`; [PrimordialItem] is never a true container.
     #[inline]
-    fn try_insert(&mut self, item: Item) -> Result<(), super::StorageError> { Err(StorageError::NotContainer(item)) }
+    fn try_insert(&mut self, item: Item) -> Result<(), StorageError> { Err(StorageError::NotContainer(item)) }
 }
 
 pub trait Metamorphize {
@@ -225,13 +272,16 @@ impl Metamorphize for PrimordialItem {
             })
         } else {
             match self.potential {
+                // staying as-is?
+                PotentialItemType::Other_ => Item::Primordial(self),
                 PotentialItemType::Container => unimplemented!("Already determined by max_space"),
-                PotentialItemType::Consumable => {
+
+                PotentialItemType::Consumable =>
                     Item::Consumable(ConsumableMatter {
                         id: self.id.clone(),
                         title: self.title,
                         size: self.size,
-                        nutrition: self.nutrition.unwrap_or(NutritionType::NotEdible),
+                        nutrition: self.nutrition.unwrap_or(EffectType::NotEdible),
                         desc: self.desc,
                         uses: self.uses,
                         affect_ticks: self.affect_ticks,
@@ -241,13 +291,27 @@ impl Metamorphize for PrimordialItem {
                             MatterState::Solid
                         }),
                         owner: self.owner.clone(),
-                    })
-                }
-                // staying as-is?
-                PotentialItemType::Other_ => Item::Primordial(self),
-                PotentialItemType::Weapon |
+                    }),
+                
+                PotentialItemType::Weapon =>
+                    Item::Weapon(WeaponSpec {
+                        id: self.id.clone(),
+                        name: self.title,
+                        desc: self.desc,
+                        owner: Owner::no_one(),
+                        size: self.size,
+                        weapon_size: self.weapon_size.unwrap_or_else(|| {
+                            log::warn!("Builder: weapon '{}' lacks weapon_size. Going \"safe\" with 'medium' assumption.", self.id);
+                            WeaponSize::Medium
+                        }),
+                        base_dmg: self.base_dmg.unwrap_or_else(|| {
+                            log::warn!("Builder: weapon '{}' lacks base_dmg. Going \"safe\" with 0.0.", self.id);
+                            0.0
+                        }),
+                    }),
+                
                 PotentialItemType::Key |
-                PotentialItemType::Tool  => todo!("TODO: more item modes!")
+                PotentialItemType::Tool  => todo!("TODO: more item modes!"),
             }
         }
     }

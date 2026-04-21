@@ -2,7 +2,7 @@
 
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{identity::{IdError, MAX_ID_LEN}, string::Uuid};
+use crate::{r#const::HARDCODED_RESERVED, identity::{IdError, MAX_ID_LEN}, string::Uuid};
 
 /// A trait for all the slugs…
 pub trait Slugger {
@@ -86,10 +86,16 @@ pub fn as_id(input: &str) -> Result<String, IdError> {
         return Err(IdError::TooLong);
     }
 
+    if HARDCODED_RESERVED.contains(out.as_str()) {
+        return Err(IdError::ReservedName(out.clone()));
+    }
+
     Ok(out)
 }
 
 /// Check if string is valid as ID without actually creating an ID out of it.
+/// 
+/// Note: unlike [as_id], [is_id] doesn't check against hardcoded reserved words.
 pub fn is_id(input: &str) -> Result<(), IdError> {
     let mut out = 0;
     let mut last_was_junk = false;

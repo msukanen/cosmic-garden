@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, thread::add_item_to_lnf, item::{Item, container::Storage, matter::MatterState}, mob::affect::{Affector, stack_affect}, player_or_bust, roomloc_or_bust, tell_user};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::{Item, consumable::Consumable, container::Storage, matter::{Matter, MatterState}}, mob::affect::{Affector, stack_affect}, player_or_bust, roomloc_or_bust, tell_user, thread::add_item_to_lnf};
 
 pub struct EatCommand;
 
@@ -33,16 +33,16 @@ impl Command for EatCommand {
         };
 
         let mut used_up = false;
-        if let Some(ref mut uses) = m.uses {
+        if let Some(ref mut uses) = m.uses() {
             *uses -= 1;
             used_up = *uses == 0;
         }
         
         if let Some(affect) = m.as_affect() {
             tell_user!(ctx.writer, "You {} the '{}'. {}\n",
-                m.matter_state.delivery_method(),
+                m.matter_state().delivery_method(),
                 item_name,
-                match m.matter_state {
+                match m.matter_state() {
                     MatterState::Liquid => "*Glug-glug*",
                     MatterState::Solid => "Not bad…",
                     MatterState::Gaseous => "Which makes you hickup.",

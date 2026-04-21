@@ -436,3 +436,16 @@ contents = """
 even (some of the) inanimate objects.
 """
 usage = ["attack <target>"]
+[[help_pages]]
+id = "hardcore"
+title = "hardcore"
+alias = ["hardcore", "pvp"]
+contents = """
+'hardcore' is a PvP-enabled perma-death mode.
+
+WARNING: issuing this command has permanent repercussions!
+
+To truly activate the mode, repeat <c yellow>hardcore enable</c> twice in a
+row within a minute. Not doing so will remove the pending state soon enough.
+"""
+usage = ["hardcore enable"]
