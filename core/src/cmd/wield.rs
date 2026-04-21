@@ -59,7 +59,7 @@ impl Command for WieldCommand {
 mod cmd_wield_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::{get::GetCommand, look::LookCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{get::GetCommand, look::LookCommand, shutdown::ShutdownCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn wield_knife_ok() {
@@ -71,9 +71,15 @@ mod cmd_wield_tests {
         let gt = get_operational_mock_life!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
         tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
+        log::debug!("Sending…");
         c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room_id: "r-1".into() }).ok();
         let state = ClientState::Playing { player: p.clone() };
+        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
         let state = ctx!(state, LookCommand, "", s,c,w,p);
         let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));
+        log::debug!("Got the knife!");
+        p.write().await.access = Access::Admin;
+        let state = ctx!(state, ShutdownCommand, "", s,c,w,p);
+        _ = d.1.await;
     }
 }

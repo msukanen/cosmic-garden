@@ -22,21 +22,30 @@ impl Command for GetCommand {
             };
             thing
         };
+
         let Some(item) = p_loc.write().await.contents.take(&thing_id) else {
             tell_user!(ctx.writer, "It's stuck?\n");
             return;
         };
+
         let item_name = item.title().to_string();
         let act_w = item.required_space();
-        let Err(item_err) = plr.write().await.inventory.try_insert(item) else {
-            tell_user!(ctx.writer, "You nab '{}'!\n", item_name);
-            plr.write().await.act(plr.clone(),  &ctx.out, ActionWeight::ItemTransfer { count: act_w as usize }).await;
-            return;
-        };
-        // bugger, no space in inventory, lets put it back...
-        let Err(item_err) = p_loc.write().await.contents.try_insert(item_err.into()) else {
-            tell_user!(ctx.writer, "Way too big or heavy. You set it back before you break your back.\n");
-            return;
+        let item_err = {
+            let mut lock = plr.write().await;
+            let Err(item_err) = lock.inventory.try_insert(item) else {
+                tell_user!(ctx.writer, "You nab '{}'!\n", item_name);
+                lock.act(plr.clone(), &ctx.out, ActionWeight::ItemTransfer { count: act_w as usize }).await;
+                return;
+            };
+            drop(lock);
+
+            // bugger, no space in inventory, lets put it back...
+            let Err(item_err) = p_loc.write().await.contents.try_insert(item_err.into()) else {
+                tell_user!(ctx.writer, "Way too big or heavy. You set it back before you break your back.\n");
+                return;
+            };
+
+            item_err
         };
         add_item_to_lnf(item_err).await;
         tell_user!(ctx.writer, "… the world is being weird …\n");

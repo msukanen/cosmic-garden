@@ -61,7 +61,10 @@ pub(crate) async fn janitor(
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
                 SystemSignal::ReindexLibrary => save_help_asap(&out).await,
                 SystemSignal::NewBlueprintEntry => save_bp_asap(&out).await,
-                SystemSignal::PlayerNeedsSaving(lock, p_id) => { let p_id = p_id; save_player_now(lock, &p_id).await; }
+                SystemSignal::PlayerNeedsSaving(lock) => {
+                    let p_id = lock.read().await.id().to_string();
+                    save_player_now(lock, &p_id).await;
+                }
                 _ => ()
             }
         }

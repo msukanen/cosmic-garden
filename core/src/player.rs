@@ -167,10 +167,10 @@ impl Player {
 
     /// Accumulate action weight.
     pub async fn act(&mut self, player: Arc<RwLock<Player>>, system_ch: &SignalSenderChannels, act_wt: ActionWeight) -> usize {
-        self.actions_taken += act_wt;
+        self.actions_taken += act_wt.clone();
         if self.actions_taken >= SAVE_ASAP_THRESHOLD {
             // He'll pick up, sooner or later…
-            system_ch.janitor.send(SystemSignal::PlayerNeedsSaving(player.clone(), player.read().await.id().to_string())).ok();
+            system_ch.janitor.send(SystemSignal::PlayerNeedsSaving(player.clone())).ok();
         }
         self.actions_taken
     }

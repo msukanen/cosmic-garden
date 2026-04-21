@@ -17,7 +17,7 @@ pub enum SystemSignal {
 
     //--- Janitor ---
     /// Player logging out, queue or otherwise.
-    PlayerNeedsSaving (Arc<RwLock<Player>>, String),
+    PlayerNeedsSaving (Arc<RwLock<Player>>),
     /// Save the whales, now!
     SaveWorld,
     /// Item tucked into L'n'F.

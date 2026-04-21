@@ -52,7 +52,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                     tell_user!(&mut writer, "\n<c cyan>Goodbye {}! See you soon again!</c>\n", title);
                     log::trace!("Clean exit by '{id}'");
                 }
-                pcd.out.janitor.send(SystemSignal::PlayerNeedsSaving(p, id)).ok();
+                pcd.out.janitor.send(SystemSignal::PlayerNeedsSaving(p)).ok();
                 log::trace!("Player '{title}' added to logout queue.");
             }
             break;

@@ -145,7 +145,10 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 SystemSignal::Shutdown => break,
 
                 // send item spawns to Librarian
-                SystemSignal::Spawn {what: SpawnType::Item {id}, room_id} => {out.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id }, room_id }).ok();},
+                SystemSignal::Spawn {what: SpawnType::Item {id}, room_id} => {
+                    #[cfg(test)]{log::debug!("Routing SystemSignal::Spawn{{Item}} to Librarian.");}
+                    out.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id }, room_id }).ok();
+                },
                 SystemSignal::Spawn {what, room_id} => spawn_something(what, &room_id, world.clone()).await,
                 SystemSignal::Attack {who, victim_id} => {
                     // log::debug!("ATK!?");
