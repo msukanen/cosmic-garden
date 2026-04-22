@@ -24,23 +24,26 @@ impl Command for WieldCommand {
         // see if the player has the item somewhere…
         {   let mut p = plr.write().await;
             if let Some(w) = p.inventory.take_by_name(what) {
-                let Some(eq) = p.equipped_weapon.take() else {
-                    unreachable!("Already checked to exist.");
-                };
-                let eq_title = eq.title().to_string();
-                let mut fell = false; let mut vanished = false;
-                if let Err(e) = p.inventory.try_insert(eq) {
-                    tell_user!(ctx.writer, "You try to put '{}' among your belongings…\n  …alas, no space… and it falls on the ground while you're at it.\n", eq_title);
-                    if let Err(e) = loc.write().await.contents.try_insert(e.extract_item()) {
-                        tell_user!(ctx.writer, "  … but to your great surprise, someone or something nabbed it before it even touched the ground!\n");
-                        add_item_to_lnf(e.extract_item()).await;
-                        vanished = true;
+                let (vanished, fell, eq_title) =
+                if let Some(eq) = p.equipped_weapon.take() {
+                    let eq_title = eq.title().to_string();
+                    let mut fell = false; let mut vanished = false;
+                    if let Err(e) = p.inventory.try_insert(eq) {
+                        tell_user!(ctx.writer, "You try to put '{}' among your belongings…\n  …alas, no space… and it falls on the ground while you're at it.\n", eq_title);
+                        let mut lock = loc.write().await;
+                        if let Err(e) = lock.contents.try_insert(e.extract_item()) {
+                            drop(lock);
+                            tell_user!(ctx.writer, "  … but to your great surprise, someone or something nabbed it before it even touched the ground!\n");
+                            add_item_to_lnf(e).await;
+                            vanished = true;
+                        }
+                        fell = true;
                     }
-                    fell = true;
-                }
+                    (vanished, fell, eq_title)
+                } else {(false,false,"".into())};
                 let w_title = w.title().to_string();
                 p.equipped_weapon = Some(w);
-                tell_user!(ctx.writer, "You equip {}.{}\n", w_title,
+                tell_user!(ctx.writer, "You wield {}.{}\n", w_title,
                     if vanished {
                         format!(" Wonder where {eq_title} ended up at…?")
                     } else if fell {
@@ -59,7 +62,7 @@ impl Command for WieldCommand {
 mod cmd_wield_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::{get::GetCommand, look::LookCommand, shutdown::ShutdownCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{get::GetCommand, look::LookCommand, shutdown::ShutdownCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn wield_knife_ok() {
@@ -78,8 +81,9 @@ mod cmd_wield_tests {
         let state = ctx!(state, LookCommand, "", s,c,w,p);
         let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));
         log::debug!("Got the knife!");
+        let state = ctx!(state, WieldCommand, "knife", s,c,w,p,|out:&str| out.contains("wield"));
         p.write().await.access = Access::Admin;
-        let state = ctx!(state, ShutdownCommand, "", s,c,w,p);
+        let _ = ctx!(state, ShutdownCommand, "", s,c,w,p);
         _ = d.1.await;
     }
 }

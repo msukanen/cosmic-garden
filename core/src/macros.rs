@@ -67,15 +67,27 @@ macro_rules! err_iedit_buffer_inaccessible {
                 $cmd.exec(&mut ctx).await;
                 ctx.state.clone()
             };
+            log::debug!("ctx!({}) complete?", stringify!($cmd));
+            let out_raw = $mock_sock.get_ref();
+            // if out_raw.len() > 5 {
+            //     log::debug!(" ... processing ctx!(..) ahead, got more than 5 bytes…");
+            // } else {
+            //     log::debug!("Less than 5?!");
+            // }
             // some assertions to do… maybe.
-            {
-                let out = String::from_utf8_lossy($mock_sock.get_ref());
-                assert!($assert(&out), "Ass fail! Out was '{}'", out.trim_end());
+            let out = String::from_utf8_lossy(out_raw).to_string().trim_end().to_string();
+            let assert_result = tokio::task::block_in_place(|| {
+                $assert(&out)
+            });
+            log::debug!("    ...got assert_result...: {assert_result}");
+            if !out.is_empty() {
+                log::debug!("\n{}", out.to_string());
             }
-            let stri: String = String::from_utf8_lossy($mock_sock.get_ref()).to_string();
-            if !stri.is_empty() {
-                log::debug!("\n{stri}");
-            }
+                if !assert_result {
+                    log::error!("{}", stringify!($assert));
+                    log::error!("Ridonkylous! Read above...");
+                    std::process::abort();
+                }
             state
         }};
     }

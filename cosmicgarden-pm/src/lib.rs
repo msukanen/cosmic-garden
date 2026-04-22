@@ -210,16 +210,23 @@ fn generate_mob_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
 
-    if let Some(max_weapon_size) = maybe_field!(data, "max_weapon_size") {
+    let mwsz = maybe_field!(data, "max_weapon_size");
+    let entsz = maybe_field!(data, "size");
+    
+    if mwsz.is_some() && entsz.is_some() {
+        let max_weapon_size = mwsz.unwrap();
+        let ent_size = entsz.unwrap();
         quote! {
             impl crate::mob::traits::Mob for #name {
-                fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { &self.#max_weapon_size }
+                fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { self.#max_weapon_size }
+                fn size(&self) -> crate::mob::core::EntitySize { self.#ent_size }
             }
         }
     } else {
         quote! {
             impl crate::mob::traits::Mob for #name {
                 fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { crate::item::weapon::WeaponSize::Large }
+                fn size(&self) -> crate::mob::core::EntitySize { crate::mob::core::EntitySize::Medium }
             }
         }
     }
@@ -242,7 +249,7 @@ pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
 
-    let base_impl = generate_mob_impl(&input);
+//    let base_impl = generate_mob_impl(&input);
     let Data::Struct(_) = input.data else { panic!("Struct only!") };
     let mut_impl = quote! {
         impl crate::mob::traits::MobMut for #name {
@@ -250,7 +257,7 @@ pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
         }
     };
     TokenStream::from(quote! {
-        #base_impl
+//        #base_impl
         #mut_impl
     })
 }

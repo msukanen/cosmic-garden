@@ -2,11 +2,11 @@
 
 use std::{collections::HashMap, fmt::Display, sync::{Arc, Weak}};
 
-use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, MobMut};
+use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::Mob}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -32,7 +32,7 @@ impl Display for ActivityType {
 }
 
 /// A player's character contained here…
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, MobMut, CombatantMut, Factioned)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Mob, MobMut, CombatantMut, Factioned)]
 pub struct Player {
     /// ID of owner of this specific [Player] character.
     pub(super) owner_id: String,
@@ -324,7 +324,11 @@ impl FactionMut for Player {
 
 impl Damager for Player {
     fn dmg(&self) -> StatValue {
-        // TODO dmg calculation based on held weapon, strength, etc.
-        2.0
+        let Some(Item::Weapon(w)) = &self.equipped_weapon else {
+            return self.str() / 100.0;// Str(S)/100; S=100 by default (for human at least).
+        };
+        
+        // W × Str(S)/50; S=100 by default (for human at least).
+        w.base_dmg * str_based_dmg_mul(self.str().current(), false) * (self.size().rel_vs_weapon(&w.weapon_size))
     }
 }

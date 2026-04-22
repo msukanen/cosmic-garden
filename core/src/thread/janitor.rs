@@ -64,6 +64,7 @@ pub(crate) async fn janitor(
                 SystemSignal::PlayerNeedsSaving(lock) => {
                     let p_id = lock.read().await.id().to_string();
                     save_player_now(lock, &p_id).await;
+                    #[cfg(test)]{log::trace!("Janitor books '{p_id}' as \"processed\".");}
                 }
                 _ => ()
             }

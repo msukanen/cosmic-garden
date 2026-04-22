@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::RwLock, time};
 
-use crate::{combat::CombatantMut, identity::{IdentityMut, IdentityQuery}, io::Broadcast, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, world::World};
+use crate::{combat::CombatantMut, util::approx::ApproxI32, identity::{IdentityMut, IdentityQuery}, io::Broadcast, mob::StatValue, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -51,7 +51,7 @@ lazy_static! {
 /// 
 pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver), world: Arc<RwLock<World>>) {
     let mut tick_interval = time::interval(Duration::from_millis(1_000 / *(TICKS_PER_SECOND.read().await)));// 100Hz
-    let mut battle_interval = time::interval(Duration::from_millis(1_000));// 1Hz
+    let mut battle_interval = time::interval(Duration::from_millis(100 / *(TICKS_PER_SECOND.read().await)));// 10Hz
     let mut tick = 0;
     log::info!("Life thread firing up…");
     let mut bs = BattleStage::default();
@@ -92,20 +92,26 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 for (atk_id, (atk, vct, room)) in bs.vs.iter_mut() {
                     let resolution = punt(atk, vct, &room).await;
                     let message_actor = match resolution {
-                        Resolution::Inconclusive => format!("You hit {}.", vct.id().await),
-                        Resolution::AtkVictory => format!("You're victorious against {}!", vct.id().await),
+                        Resolution::Inconclusive{atk_dmg,vct_dmg} => format!("You hit {} for {} dmg #vct_dmg({}).",
+                            vct.read().await.title(),
+                            atk_dmg.approx_i32(),
+                            vct_dmg.approx_i32()
+                        ),
+                        Resolution::AtkVictory{atk_dmg} => format!("You're victorious against {} with last hit of {} dmg!", vct.read().await.title(), atk_dmg.approx_i32()),
                         Resolution::AtkRetreat => format!("Better run while you can…"),
-                        Resolution::VctRetreat => format!("Hey, {} is running away!", vct.id().await),
-                        Resolution::VctVictory => format!("Ouch… *you faint*"),
+                        Resolution::VctRetreat => format!("Hey, {} is running away!", vct.read().await.title()),
+                        Resolution::VctVictory{vct_dmg} => format!("Ouch… {} dmg in the face – *you faint*", vct_dmg.approx_i32()),
                         Resolution::BothDead => format!("You fall… flat on your face. R.I.P."),
                     };
                     let message_other = match resolution {
-                        Resolution::Inconclusive => format!("{atk_id} hits {}.", vct.id().await),
-                        Resolution::AtkVictory => format!("{atk_id} has slain {}!", vct.id().await),
+                        Resolution::Inconclusive{..} => format!("{atk_id} hits {}.", vct.read().await.title()),
+                        Resolution::AtkVictory{..} => format!("{atk_id} has slain {}!", vct.read().await.title()),
                         Resolution::AtkRetreat => format!("{atk_id} runs away for their dear life…"),
-                        Resolution::VctRetreat => format!("Huh, {} is running away…", vct.id().await),
-                        Resolution::VctVictory => format!("{atk_id} collapses due numerous, too numerous, wounds."),
-                        Resolution::BothDead => format!("Unexpected… Both {atk_id} and {} fall over at the same time, either dead or exhausted.", vct.id().await),
+                        Resolution::VctRetreat => format!("Huh, {} is running away…", vct.read().await.title()),
+                        Resolution::VctVictory{..} => format!("{atk_id} collapses due numerous, too numerous, wounds."),
+                        Resolution::BothDead => format!("Unexpected… Both {} and {} fall over at the same time, either dead or exhausted.",
+                            atk.read().await.title(),
+                            vct.read().await.title()),
                     };
                     //log::debug!("Round for {atk_id} vs {} resolved as … {message_actor}", vct.id().await);
                     let p = if parallel_congestion {
@@ -129,7 +135,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                         who_online.remove(atk_id.as_str());
                     }
                     
-                    if !matches!(resolution, Resolution::Inconclusive) || !p_exists {
+                    if !matches!(resolution, Resolution::Inconclusive{..}) || !p_exists {
                         deathrow.push(atk_id.clone())
                     }
                 }
@@ -151,7 +157,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 },
                 SystemSignal::Spawn {what, room_id} => spawn_something(what, &room_id, world.clone()).await,
                 SystemSignal::Attack {who, victim_id} => {
-                    // log::debug!("ATK!?");
+                    #[cfg(test)]{log::debug!("ATK vs '{victim_id}'");}
                     let Some(room) = who.read().await.location.upgrade() else { continue; };// skip those in the void.
                     let target_arc: Battler;
                     if let Some(ent) = room.read().await.entities.get(&victim_id) {
@@ -238,7 +244,9 @@ async fn spawn_something(what: SpawnType, r#where: &str, world: Arc<RwLock<World
             if let Some(mut mob) = (*ENT_BP_LIBRARY).read().await.get(&id) {
                 *(mob.id_mut()) = mob.id().re_uuid();
                 if let Some(r_arc) = world.read().await.rooms.get(r#where) {
-                    r_arc.write().await.entities.insert(mob.id().into(), Arc::new(RwLock::new(mob)));
+                    let mob_id = mob.id().to_string();
+                    r_arc.write().await.entities.insert(mob_id.clone(), Arc::new(RwLock::new(mob)));
+                    log::info!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
                 } else {
                     log::error!("Ayy! We don't have room '{}' to spawn '{}' at!", r#where, mob.id());
                 }
@@ -252,11 +260,11 @@ async fn spawn_something(what: SpawnType, r#where: &str, world: Arc<RwLock<World
 }
 
 pub enum Resolution {
-    Inconclusive,
+    Inconclusive { atk_dmg: StatValue, vct_dmg: StatValue },
     AtkRetreat,
     VctRetreat,
-    AtkVictory,
-    VctVictory,
+    AtkVictory { atk_dmg: StatValue },
+    VctVictory  { vct_dmg: StatValue },
     BothDead,
 }
 
@@ -265,13 +273,15 @@ async fn punt(atk: &mut Battler, vct: &mut Battler, _room: &Arc<RwLock<Room>>) -
     let mut a = atk.write().await;
     let mut v = vct.write().await;
 
-    let v_ded = v.take_dmg(a.dmg());
-    let a_ded = if v_ded {
+    let atk_dmg = a.dmg();
+    let v_ded = v.take_dmg(atk_dmg);
+    let (a_ded, vct_dmg) = if v_ded {
         // potential last-breath counter before falling over...
         //a.take_dmg(v.dmg());
-        false
+        (false, 0.0)
     } else {
-        a.take_dmg(v.dmg())
+        let vct_dmg = v.dmg();
+        (a.take_dmg(vct_dmg), vct_dmg)
     };
     let v_flee = if !v_ded {
         // check potential fleeing state
@@ -284,10 +294,10 @@ async fn punt(atk: &mut Battler, vct: &mut Battler, _room: &Arc<RwLock<Room>>) -
 
     match (a_ded, v_ded, a_flee, v_flee) {
         (true, true,..) => Resolution::BothDead,
-        (true, false,..) => Resolution::VctVictory,
-        (false, true,..) => Resolution::AtkVictory,
+        (true, false,..) => Resolution::VctVictory {vct_dmg},
+        (false, true,..) => Resolution::AtkVictory {atk_dmg},
         (_,_, true,..) => Resolution::AtkRetreat,
         (_,_,_,true) => Resolution::VctRetreat,
-        _ => Resolution::Inconclusive
+        _ => Resolution::Inconclusive {atk_dmg, vct_dmg}
     }
 }

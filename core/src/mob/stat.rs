@@ -1,11 +1,11 @@
 //! Mob stats.
 
-use std::{fmt::Display, ops::{AddAssign, Mul, SubAssign}};
+use std::{fmt::Display, ops::{AddAssign, Div, Mul, SubAssign}};
 
 use serde::{Deserialize, Serialize};
 use dicebag::InclusiveRandomRange;
 
-use crate::traits::Tickable;
+use crate::{r#const::SIZE_BALANCE, item::{container::specs::StorageSpace, weapon::WeaponSize}, traits::Tickable, util::approx::ApproxI32};
 
 pub const MAX_STAT_VALUE: StatValue = 1000.0;
 // TODO: convert raw TICKS_BETWEEN_DRAIN into some runtime calibrateable type.
@@ -34,6 +34,18 @@ impl Display for StatError {
 
 /// Stat value type.
 pub type StatValue = f32;
+
+impl ApproxI32 for StatValue {
+    fn approx_i32(&self) -> i32 {
+        let base = self.floor() as i32;
+        let fract = self.fract();
+        if rand::random::<f32>() < fract {
+            base + 1
+        } else {
+            base
+        }
+    }
+}
 
 /// Stat types for [Stat::new].
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Hash, PartialEq, Eq)]
@@ -166,6 +178,15 @@ impl SubAssign<i32> for Stat {
     fn sub_assign(&mut self, rhs: i32) {
         self.sub_assign(rhs as StatValue);
     }
+}
+
+impl Div<StatValue> for Stat {
+    type Output = StatValue;
+    fn div(self, rhs: StatValue) -> Self::Output { (&self) / rhs }
+}
+impl Div<StatValue> for &Stat {
+    type Output = StatValue;
+    fn div(self, rhs: StatValue) -> Self::Output { self.current() / rhs }
 }
 
 impl Stat {
@@ -431,6 +452,13 @@ impl Mul<&Stat> for f32 {
     type Output = Self;
     fn mul(self, rhs: &Stat) -> Self::Output {
         self * rhs.current()
+    }
+}
+
+impl Mul<&WeaponSize> for StatValue {
+    type Output = StatValue;
+    fn mul(self, rhs: &WeaponSize) -> Self::Output {
+        self / (rhs.required_space() / SIZE_BALANCE as StorageSpace) as StatValue
     }
 }
 

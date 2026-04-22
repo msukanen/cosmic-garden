@@ -1,6 +1,6 @@
 //! Weapons for everyone? Nah, but at least for players and (most of) the enemies…
 
-use std::fmt::Display;
+use std::{fmt::Display, ops::{Div, Mul}};
 
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
@@ -96,5 +96,39 @@ impl Reflector for WeaponSpec {
 
     fn deep_reflect(&self) -> Self {
         self.reflect()
+    }
+}
+
+impl Div<StatValue> for WeaponSize {
+    type Output = StatValue;
+    fn div(self, rhs: StatValue) -> Self::Output {
+        (self.required_space() / SIZE_BALANCE as StorageSpace) as StatValue / rhs
+    }
+}
+
+impl Mul<StatValue> for WeaponSize {
+    type Output = StatValue;
+    fn mul(self, rhs: StatValue) -> Self::Output {
+        (self.required_space() / SIZE_BALANCE as StorageSpace) as StatValue / rhs
+    }
+}
+
+impl From<&WeaponSize> for i8 {
+    fn from(value: &WeaponSize) -> Self {
+        match value {
+            WeaponSize::Tiny => -2,
+            WeaponSize::Small => -1,
+            WeaponSize::Medium => 0,
+            WeaponSize::Large => 1,
+            WeaponSize::Huge => 2,
+        }
+    }
+}
+
+pub const fn str_based_dmg_mul(strn: StatValue, npc: bool) -> f32 {
+    if npc {
+        strn / 75.0
+    } else {
+        strn / 50.0
     }
 }

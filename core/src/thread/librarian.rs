@@ -115,10 +115,9 @@ pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver),
                             if let Err(e) = lock.contents.try_insert(item) {
                                 drop(lock);
                                 log::warn!("Item spawn failure. '{item_id}' sent to LnF.");
-                                add_item_to_lnf(e.extract_item()).await;
+                                add_item_to_lnf(e).await;
                                 continue;
                             }
-                            drop(lock);
                             log::info!("Librarian spawned '{item_id}' to '{room_id}'")
                         }
                     } else {

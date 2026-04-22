@@ -3,10 +3,11 @@ id = "goblin"
 name = "A goblin"
 faction = "Neutral"
 max_weapon_size = "Medium"
+size = "Small"
 
 [mobs.hp.HP]
-curr = 100.0
-max = 100.0
+curr = 50.0
+max = 50.0
 
 [mobs.mp.MP]
 curr = 100.0

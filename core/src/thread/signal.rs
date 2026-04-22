@@ -93,8 +93,8 @@ pub enum SpawnType {
 
 impl SignalSenderChannels {
     pub async fn shutdown(&self) {
-        self.life.send(SystemSignal::Shutdown);
-        self.librarian.send(SystemSignal::Shutdown);
-        self.janitor.send(SystemSignal::Shutdown);
+        self.life.send(SystemSignal::Shutdown).ok();
+        self.librarian.send(SystemSignal::Shutdown).ok();
+        self.janitor.send(SystemSignal::Shutdown).ok();
     }
 }

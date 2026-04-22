@@ -1,13 +1,54 @@
 //! Mob core.
 
-use cosmic_garden_pm::{CombatantMut, FactionMut, IdentityMut};
+use cosmic_garden_pm::{CombatantMut, FactionMut, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{combat::{Damager, Combatant}, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, weapon::WeaponSize}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
+use crate::{combat::{Combatant, Damager}, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
 
-//#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Mob, CombatantMut, FactionMut)]
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, FactionMut, CombatantMut)]
+/// Generic [Entity] size categories
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+pub enum EntitySize {
+    VeryTiny,
+    Tiny,
+    Small,
+    Medium,// "human"
+    Large,
+    Huge,
+    Gargantuan,
+}
+
+impl EntitySize {
+    /// Relative size vs a [weapon][WeaponSize].
+    pub fn rel_vs_weapon(&self, weapon_size: &WeaponSize) -> f32 {
+        let a_idx = i8::from(self);
+        let w_idx = i8::from(weapon_size);
+        match (a_idx - w_idx).abs() {
+            0 => 1.0, // perfect match
+            1 => 0.9, // slightly off, human with 2h or a dagger
+            2 => 0.6, // awkward, human with a needle or huge polearm
+            3 => 0.3, // ridonkylous, tiny pixie with a huge polearm
+            4 => 0.1, // …near impossible
+            _ => 0.05 // …quite impossible
+        }
+    }
+}
+
+impl From<&EntitySize> for i8 {
+    fn from(value: &EntitySize) -> Self {
+        match value {
+            EntitySize::VeryTiny => -3,
+            EntitySize::Tiny => -2,
+            EntitySize::Small => -1,
+            EntitySize::Medium => 0,
+            EntitySize::Large => 1,
+            EntitySize::Huge => 2,
+            EntitySize::Gargantuan => 4,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Mob, MobMut, FactionMut, CombatantMut)]
 pub struct Entity {
     id: String,
     #[identity(title)]
@@ -21,6 +62,7 @@ pub struct Entity {
     strn: Stat,
     faction: EntityFaction,
     max_weapon_size: WeaponSize,
+    size: EntitySize,
     equipped_weapon: Option<Item>,
 }
 
@@ -39,6 +81,7 @@ impl Default for Entity {
             faction: EntityFaction::Neutral,
             max_weapon_size: WeaponSize::Large,
             equipped_weapon: None,
+            size: EntitySize::Medium,
         }
     }
 }
@@ -73,8 +116,7 @@ impl Entity {
 impl Damager for Entity {
     fn dmg(&self) -> StatValue {
         let Some(Item::Weapon(w)) = &self.equipped_weapon else { return 1.0 * self.str() / 100.0 };
-        let dmg = w.dmg();
-        dmg * self.str() / 100.0
+        w.base_dmg * str_based_dmg_mul(self.str().current(), true) * (self.size.rel_vs_weapon(&w.weapon_size))
     }
 }
 
