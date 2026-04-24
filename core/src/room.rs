@@ -41,6 +41,8 @@ pub struct Room {
     #[serde(default = "room_inventory")]
     pub contents: ContainerVariant,
 
+    /// NPC [entities][Entity] in the [Room].
+    // [Room] is the sole owner of an [Entity].
     #[serde(default, with = "arc_n_t_transform")]
     pub entities: HashMap<String, Arc<RwLock<Entity>>>,
 }
@@ -220,14 +222,20 @@ impl Room {
     pub async fn tick(&mut self) {
         for p_weak in self.who.values() {
             if let Some(p_arc) = p_weak.upgrade() {
-                //tokio::spawn(async move {
-                    let mut p = p_arc.write().await;
-                    p.tick();
-                //});
+                let mut p = p_arc.write().await;
+                // no reaction yet to "positive" tick(s)
+                let _= p.tick().await;
             }
         }
 
-        self.contents.tick();
+        for e in self.entities.values() {
+            let mut lock = e.write().await;
+            // no reaction yet to "positive" tick(s)
+            let _ = lock.tick().await;
+        }
+
+        // no reaction yet to "positive" tick(s)
+        let _ = self.contents.tick().await;
         #[cfg(all(debug_assertions,feature = "stresstest"))]{
             log::debug!("Room '{}' ticked.", self.id);
         }

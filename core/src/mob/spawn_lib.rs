@@ -33,6 +33,7 @@ impl EntityLibrary {
             }
             let wrapper: BasicMobs = toml::from_str(basic_mobs_toml)?;
             for mob in wrapper.mobs {
+                log::debug!(" EL-boot → '{}'", mob.id());
                 lock.id_stem.insert(mob.id().to_string(), true);
                 lock.bps.insert(mob.id().to_string(), mob);
             }
@@ -49,11 +50,17 @@ impl EntityLibrary {
         lib.world_id = WORLD_ID.as_str().into();
         for (id, dirty) in lib.id_stem.iter_mut() {
             let item_path = entity_entry_fp(id);
+            // log::info!("item_path = {}", item_path.display());
             match fs::read_to_string(&item_path).await {
                 Ok(content) => {
-                    if let Ok(ent) = toml::from_str(&content) {
-                        lib.bps.insert(id.clone(), ent);
-                        *dirty = false;
+                    match toml::from_str(&content) {
+                        Ok(ent) => {
+                            lib.bps.insert(id.clone(), ent);
+                            *dirty = false;
+                        },
+                        Err(e) => {
+                            log::error!("What's up with this '{}' {e:?}?!", id);
+                        }
                     }
                 }
 

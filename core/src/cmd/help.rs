@@ -122,24 +122,24 @@ mod cmd_help_tests {
         let mut s = Cursor::new(&mut b);
         let (w,c,p,_) = get_operational_mock_world().await;
         let state = ClientState::Playing { player: p.clone() };
-        let state = ctx!(state, HelpCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("nothing about"));
-        let state = ctx!(state, HeditCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, HelpCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("nothing about"));
+        let state = ctx!(state, HeditCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, HeditCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("hedit new"));
-        let state = ctx!(state, HeditCommand, "new iedit:set",s,c.out,w,p,|out:&str| out.contains("desc ="));
-        let state = ctx!(state, HelpCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("nothing about"));
+        let state = ctx!(state, HeditCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("hedit new"));
+        let state = ctx!(state, HeditCommand, "new iedit:sempai",s,c.out,w,p,|out:&str| out.contains("desc ="));
+        let state = ctx!(state, HelpCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("nothing about"));
         let state = ctx!(state, HelpCommand, "",s,c.out,w,p,|out:&str| out.contains("desc ="));
         get_operational_mock_librarian!(c,w);
         tokio::time::sleep(Duration::from_secs(2)).await;// let the lib stabilize...
         let state = ctx!(state, DescCommand, "= New stuff?",s,c.out,w,p);
         let state = ctx!(state, WeaveCommand, "",s,c.out,w,p);
         tokio::time::sleep(Duration::from_secs(2)).await;
-        let state = ctx!(state, HelpCommand, "iedit:set",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
-        let state = ctx!(state, HelpCommand, "iedit-set",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
+        let state = ctx!(state, HelpCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
+        let state = ctx!(state, HelpCommand, "iedit-sempai",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
         let state = ctx!(state, HeditCommand, "new dummy",s,c.out,w,p,|out:&str| out.contains("desc ="));
-        let state = ctx!(state, HelpCommand, "set",s,c.out,w,p,|out:&str| out.contains("nothing about"));
+        let state = ctx!(state, HelpCommand, "sempai",s,c.out,w,p,|out:&str| out.contains("nothing about"));
         let state = ctx!(state, AbortCommand, "",s,c.out,w,p);
         let state = ctx!(state, IeditCommand, "apple",s,c.out,w,p);
-        let _ = ctx!(state, HelpCommand, "set",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
+        let _ = ctx!(state, HelpCommand, "sempai",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
     }
 }

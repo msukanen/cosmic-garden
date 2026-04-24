@@ -2,10 +2,10 @@ use std::sync::Arc;
 
 use tokio::sync::RwLock;
 
-use crate::{player::Player, room::Room};
+use crate::{combat::Battler, player::Player, room::Room};
 
 /// Various broadcast types.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub enum Broadcast {
     /// 'say' something.
     Say {
@@ -49,17 +49,22 @@ pub enum Broadcast {
         message_who: String,
     },
 
-    SystemInRoom {
+    MessageInRoom2 {
         room: Arc<RwLock<Room>>,
         actor: Arc<RwLock<Player>>,
         message_actor: String,
         message_other: String,
     },
 
-    SystemInRoomAt {
+    MessageInRoom {
         room: Arc<RwLock<Room>>,
-        atk: Arc<RwLock<Player>>,
-        vct: Arc<RwLock<Player>>,
+        message: String,
+    },
+
+    BattleMessage3 {
+        room: Arc<RwLock<Room>>,
+        atk: Battler,
+        vct: Battler,
         message_atk: String,
         message_vct: String,
         message_other: String,

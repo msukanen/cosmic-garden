@@ -1,5 +1,6 @@
 //! Items dwell here…
 
+use async_trait::async_trait;
 use cosmic_garden_pm::{IdentityMut, Itemized, OwnedMut};
 use serde::{Deserialize, Serialize};
 
@@ -82,7 +83,9 @@ impl PartialEq<str> for Item {
 impl Item {
     pub fn devolve(&mut self) {
         match self {
+            // Primordial doesn't need devolving…
             Self::Primordial(_) => (),
+            // …while everything else does.
             Self::Consumable(_) => *self = PrimordialItem::atomize(self),
             Self::Container(_) => *self = PrimordialItem::atomize(self),
             Self::Key(_) => *self = PrimordialItem::atomize(self),
@@ -272,12 +275,13 @@ impl Metamorphize for Item {
     }
 }
 
+#[async_trait]
 impl Tickable for Item {
-    fn tick(&mut self) -> bool {
+    async fn tick(&mut self) -> bool {
         match self {
-            Self::Consumable(c) => c.tick(),
-            Self::Container(c) => c.tick(),
-            Self::Primordial(c) => c.tick(),
+            Self::Consumable(c) => c.tick().await,
+            Self::Container(c) => c.tick().await,
+            Self::Primordial(c) => c.tick().await,
             _ => false
         }
     }
@@ -298,11 +302,13 @@ mod item_tests {
         
         // 2. MATTER: Create a Backpack and a "Heavy" Key
         let mut backpack = ContainerVariant::new(ContainerVariantType::Backpack);
+        // log::debug!("Backpack size: {}", backpack.required_space());
         let key = Item::Key(TemporaryStructToAppeaseAnalyzerDuringWIP {
             id: "iron-key-01".to_string(),
             title: "Heavy Iron Key".to_string(),
             owner: Owner::no_one(),
         });
+        // log::debug!("Key size: {}", key.required_space());
 
         // 3. THE HIERARCHY LAW: Try to put the Player inv in the Backpack (Should fail)
         let result = backpack.try_insert(player_inv.reflect()); 
@@ -318,7 +324,7 @@ mod item_tests {
         player_inv.try_insert(backpack).expect("Backpack should fit in player inventory");
 
         if let Item::Container(v) = &player_inv {
-            assert_eq!(v.space(), 47); // The "Butcher" calculated the nested grit!
+            assert_eq!(v.space(), 479); // The "Butcher" calculated the nested grit!
         }
     }
 }

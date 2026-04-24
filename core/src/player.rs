@@ -2,6 +2,7 @@
 
 use std::{collections::HashMap, fmt::Display, sync::{Arc, Weak}};
 
+use async_trait::async_trait;
 use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
@@ -100,7 +101,7 @@ fn player_brn_default() -> Stat { Stat::new(StatType::Brn) }
 fn player_nim_default() -> Stat { Stat::new(StatType::Nim) }
 fn player_str_default() -> Stat { Stat::new(StatType::Str) }
 fn player_default_atype() -> ActivityType { ActivityType::default() }
-fn player_inv_default() -> ContainerVariant {
+pub(crate) fn player_inv_default() -> ContainerVariant {
     ContainerVariant::raw(ContainerVariantType::PlayerInventory)
 }
 fn player_faction_default() -> EntityFaction { EntityFaction::Player { pvp: false }}
@@ -275,36 +276,61 @@ impl Accessor for Player {
     }
 }
 
+#[async_trait]
 impl Tickable for Player {
-    fn tick(&mut self) -> bool {
-        let hp_t = self.hp_mut().tick();
-        let mp_t = self.mp_mut().tick();
-        let sn_t = self.sn_mut().tick();
-        let san_t = self.san_mut().tick();
-        // now Affects, if any …
+    async fn tick(&mut self) -> bool {
+        let hp_t = self.hp_mut().tick().await;
+        let mp_t = self.mp_mut().tick().await;
+        let sn_t = self.sn_mut().tick().await;
+        let san_t = self.san_mut().tick().await;
+        let old_affects = std::mem::take(&mut self.affects);
+        let mut survivors = HashMap::new();
         let mut changes: Vec<_> = Vec::new();
-        self.affects.retain(|_id, affect| {
-            if affect.expired() { return false; }
-            if let Affect::Effect { kind, .. } = affect {
-                if let EffectType::Heal { stat, drain } = kind {
-                    changes.push((*stat, *drain));
+        for (id, mut affect) in old_affects {
+            if affect.expired() { continue; }
+            {
+                if let Affect::Effect { ref kind, .. } = affect {
+                    if let EffectType::Heal { stat, drain } = kind {
+                        changes.push((*stat, *drain));
+                    }
                 }
             }
-
             let hc = matches!(affect, Affect::HardcorePending { .. });
-            affect.tick();
+            affect.tick().await;
             if affect.expired() && hc {
                 if let Some(false) = self.hardcore {
                     self.hardcore = None;
                 }
             }
-            !affect.expired()
-        });
+            if !affect.expired() {
+                survivors.insert(id, affect);
+            }
+        }
+        self.affects = survivors;
+        // now Affects, if any …
+        // let mut changes: Vec<_> = Vec::new();
+        // self.affects.retain(|_id, affect| {
+        //     if affect.expired() { return false; }
+        //     if let Affect::Effect { kind, .. } = affect {
+        //         if let EffectType::Heal { stat, drain } = kind {
+        //             changes.push((*stat, *drain));
+        //         }
+        //     }
+
+        //     let hc = matches!(affect, Affect::HardcorePending { .. });
+        //     affect.tick().await;
+        //     if affect.expired() && hc {
+        //         if let Some(false) = self.hardcore {
+        //             self.hardcore = None;
+        //         }
+        //     }
+        //     !affect.expired()
+        // });
         for (stat, amount) in &changes {
             self.apply_stat_change(*stat, *amount);
         }
         let ch_t = !changes.is_empty();
-        let inv_t = self.inventory.tick();
+        let inv_t = self.inventory.tick().await;
 
         let meaningful = hp_t || mp_t || sn_t || san_t || ch_t || inv_t;
         #[cfg(debug_assertions)]{

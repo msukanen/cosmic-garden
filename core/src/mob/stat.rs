@@ -2,6 +2,7 @@
 
 use std::{fmt::Display, ops::{AddAssign, Div, Mul, SubAssign}};
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use dicebag::InclusiveRandomRange;
 
@@ -393,8 +394,9 @@ impl Display for Stat {
     }
 }
 
+#[async_trait]
 impl Tickable for Stat {
-    fn tick(&mut self) -> bool {
+    async fn tick(&mut self) -> bool {
         let Ok(drain) = self.drain() else {
             // no drain, nothing to tick
             return false;

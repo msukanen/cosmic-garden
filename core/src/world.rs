@@ -171,8 +171,8 @@ impl World {
         {// map the soul…
             let mut w = world.write().await;
             w.players_by_sockaddr.insert(addr.clone(), arc.clone());
-            if w.players_by_id.contains_key(id) {
-                w.channels.as_ref().and_then(|out|out.janitor.send(SystemSignal::PlayerLogout { id: id.to_string() }).ok());
+            if let Some(old_arc) = w.players_by_id.get(id) {
+                w.channels.as_ref().and_then(|out|out.janitor.send(SystemSignal::PlayerLogout { player: old_arc.clone() }).ok());
             }
             w.players_by_id.insert(id.into(), arc.clone());
         }

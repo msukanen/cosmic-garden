@@ -1,10 +1,12 @@
 //! Mob core.
 
+use std::sync::Weak;
+
 use cosmic_garden_pm::{CombatantMut, FactionMut, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
-use tokio::fs;
+use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, Damager}, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
+use crate::{combat::{Combatant, Damager}, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
 
 /// Generic [Entity] size categories
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -64,6 +66,10 @@ pub struct Entity {
     max_weapon_size: WeaponSize,
     size: EntitySize,
     equipped_weapon: Option<Item>,
+    #[serde(default, skip)]
+    location: Weak<RwLock<Room>>,
+    #[serde(default = "entity_inv_default")]
+    inventory: ContainerVariant,
 }
 
 impl Default for Entity {
@@ -82,8 +88,14 @@ impl Default for Entity {
             max_weapon_size: WeaponSize::Large,
             equipped_weapon: None,
             size: EntitySize::Medium,
+            location: Weak::new(),
+            inventory: entity_inv_default(),
         }
     }
+}
+
+fn entity_inv_default() -> ContainerVariant {
+    ContainerVariant::raw(ContainerVariantType::Corpse)
 }
 
 impl Entity {
@@ -131,8 +143,8 @@ mod entity_tests {
     #[cfg(not(feature = "stresstest"))]
     const LOOPS: u32 = 1_000;
 
-    #[test]
-    fn entity_default() {
+    #[tokio::test]
+    async fn entity_default() {
         let _ = env_logger::try_init();
         let now = std::time::Instant::now();
         let mut e = Entity::default();
@@ -140,8 +152,8 @@ mod entity_tests {
         assert!(e.id().starts_with("entity-"));
         assert_eq!(UNNAMED, e.title());
         e.mp_mut().set_drain(-1.0);
+        log::debug!("re-UUID is heavy (Uuid::new_v4()), and it'd never be used in a loop like this in reality, but… hold the press until {LOOPS} x 100 ticks is done.:");
         for _ in 0..LOOPS {
-            // re-UUID is heavy, and it'd never be used in a loop like this in reality, but...:
             let old_id = e.id().to_string();
             e.re_uuid();
             assert_ne!(old_id.as_str(), e.id());
@@ -149,7 +161,7 @@ mod entity_tests {
             e.mp_mut().set_curr(next_val);
             while next_val > 0.0 {
                 next_val -= 1.0;
-                if !e.tick() {
+                if !e.tick().await {
                     panic!("No tick?!");
                 }
                 assert_eq!(next_val, e.mp());

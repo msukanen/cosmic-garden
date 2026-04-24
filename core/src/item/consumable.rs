@@ -1,6 +1,7 @@
 //! Consumable matter. Usually food, but not always.
 use std::{collections::HashMap, fmt::Display};
 
+use async_trait::async_trait;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
@@ -114,8 +115,9 @@ impl Affector for ConsumableMatter {
     }
 }
 
+#[async_trait]
 impl Tickable for ConsumableMatter {
-    fn tick(&mut self) -> bool {
+    async fn tick(&mut self) -> bool {
         if let Some(t) = &mut self.rots_in_ticks {
             *t = t.saturating_sub(1);
             #[cfg(debug_assertions)]{

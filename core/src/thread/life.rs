@@ -1,11 +1,11 @@
 //! Life-thread keeps the world ticking.
 
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{collections::HashMap, sync::{Arc, Weak}, time::Duration};
 
-use lazy_static::lazy_static;
-use tokio::{sync::RwLock, time};
+use nohash_hasher::BuildNoHashHasher;
+use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{combat::CombatantMut, util::approx::ApproxI32, identity::{IdentityMut, IdentityQuery}, io::Broadcast, mob::StatValue, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, world::World};
+use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, mob::StatValue, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::approx::ApproxI32, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -15,17 +15,73 @@ macro_rules! get_operational_mock_life {
     };
 }
 
-type Battler = Arc<RwLock<dyn CombatantMut + Send + Sync>>;
 /// Threshold above which we'll stop nagging the World and pre-fetch list(s) in one sweep…
 pub const PARALLEL_BATTLE_CONGESTION_THRESHOLD: usize = 50;
 
+pub(crate) type BattlerKey = usize;
+#[derive(Clone)]
+struct BattlerRec {
+    combatant: Battler,
+    title: Arc<str>,
+}
+
+type BattleMap = HashMap<BattlerKey, (BattlerRec, Arc<RwLock<Room>>), BuildNoHashHasher<BattlerKey>>;
+type AggroMap = HashMap<BattlerKey, Vec<BattlerKey>, BuildNoHashHasher<BattlerKey>>;
+
+/// Battle stage — the place for all battles.
 struct BattleStage {
-    vs: HashMap<String, (Battler, Battler, Arc<RwLock<Room>>)>,
+    active: BattleMap,
+    atk: AggroMap,
+    vct: AggroMap,
 }
 
 impl Default for BattleStage {
     fn default() -> Self {
-        Self { vs: HashMap::new() }
+        Self {
+            active: BattleMap::default(),
+            atk: AggroMap::default(),
+            vct: AggroMap::default(),
+        }
+    }
+}
+
+impl BattleStage {
+    fn remove(&mut self, battle_key: BattlerKey) {
+        // first the vct …
+        if let Some(atks) = self.vct.remove(&battle_key) {
+            for a_key in atks {
+                // remove the ded from aggro list
+                if let Some(tgt) = self.atk.get_mut(&a_key) {
+                    if let Some(pos) = tgt.iter().position(|&x| x == battle_key) {
+                        tgt.swap_remove(pos);
+                    }
+                    // anybody out there?
+                    if tgt.is_empty() {
+                        self.atk.remove(&a_key);
+                        self.active.remove(&a_key);
+                    }
+                }
+            }
+        }
+
+        // …and then who was beating the vct …
+        if let Some(tgts) = self.atk.remove(&battle_key) {
+            for t_key in tgts {
+                if let Some(atks) = self.vct.get_mut(&t_key) {
+                    if let Some(pos) = atks.iter().position(|&x| x == battle_key) {
+                        atks.swap_remove(pos);
+                    }
+                }
+            }
+        }
+
+        // …and final purge.
+        self.active.remove(&battle_key);
+    }
+
+    fn remove_b(&mut self, battler: &Battler) {
+        let key = Weak::as_ptr(&Arc::downgrade(&battler)) as *const() as BattlerKey;
+        self.remove(key);
     }
 }
 
@@ -39,9 +95,33 @@ impl IdentityQueryLite for Battler {
     }
 }
 
-lazy_static! {
-    /// How many "general" ticks there is in a second…
-    pub(crate) static ref TICKS_PER_SECOND: Arc<RwLock<u64>> = Arc::new(RwLock::new(100));
+/// Combat resolutions.
+#[derive(Debug, Clone)]
+pub enum Resolution {
+    Inconclusive { atk_dmg: StatValue, vct_dmg: StatValue },
+    AtkRetreat,
+    VctRetreat,
+    AtkVictory { atk_dmg: StatValue },
+    VctVictory  { vct_dmg: StatValue },
+    BothDead,
+}
+
+/// Query seconds-as-ticks.
+pub async fn sec_as_ticks(sec: u32, out: &SignalSenderChannels) -> usize {
+    let (otx,orx) = tokio::sync::oneshot::channel::<u32>();
+    out.life.send(SystemSignal::SecToTicks { sec, out: otx }).ok();
+    if let Ok(sat) = orx.await {
+        sat as usize
+    } else {
+        log::warn!("Life thread too busy to tell us current tick rate… Assuming default of 100Hz.");
+        (sec * 100) as usize
+    }
+}
+
+enum LifeWorkerSignal {
+    BattleOk { atk: BattlerRec, vct: BattlerRec, room: Arc<RwLock<Room>> },
+    BattleFail { atk: Battler, vct: Battler },
+    BattleMsg { atk: BattlerRec, vct: BattlerRec, resolution: Resolution },
 }
 
 /// Life-thread. Lives hang on in balance here!
@@ -50,12 +130,91 @@ lazy_static! {
 //TODO (It'll do) much more than that Soon™.
 /// 
 pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver), world: Arc<RwLock<World>>) {
-    let mut tick_interval = time::interval(Duration::from_millis(1_000 / *(TICKS_PER_SECOND.read().await)));// 100Hz
-    let mut battle_interval = time::interval(Duration::from_millis(100 / *(TICKS_PER_SECOND.read().await)));// 10Hz
+    log::info!("Intervals, intervals…");
+    let mut tick_interval_hz: u64 = 100;
+    let mut battle_interval_hz: u64 = 10;
+
+    let mut tick_interval = time::interval(Duration::from_millis(1000/ tick_interval_hz));
+    let mut battle_interval = time::interval(Duration::from_millis(1000 / battle_interval_hz));
     let mut tick = 0;
-    log::info!("Life thread firing up…");
     let mut bs = BattleStage::default();
     let mut who_online: HashMap<String, String> = HashMap::new();// id, title
+    let (worker_out, mut worker_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
+    let (reporter_out, mut reporter_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
+    let battle_reporter = tokio::spawn({
+        let out = out.broadcast.clone();
+        async move {
+            while let Some(impact) = reporter_rx.recv().await {
+                match impact {
+                    LifeWorkerSignal::BattleMsg { atk, vct, resolution } => {
+                        let Some(room_arc) = atk.combatant.read().await.location().upgrade() else {
+                            log::warn!("Reporter noted that attacker '{}' isn't tethered to reality…", atk.combatant.read().await.id());
+                            continue;
+                        };
+                        // craft message(s) for participant(s)…
+                        // TODO: fine-grain lethality coeff for dmg vs max_hp.
+                        //       C_lethal = dmg / HP_max
+                        //       ...and figure out some verbal noise to represent it...
+                        //          C < 0.01 : "scratches", "grazes", "pokes"?
+                        //          0.01 < C < 0.1 : "hits", "strikes", "lashes"?
+                        //          0.1 < C < 0.3 : "smashes", "rends", "tears"?
+                        //          0.3 < C < 0.6 : "shatters", "crushes", "mutilates"?
+                        //          C > 0.6 : "obliterates", "erases", "annihilates"?
+                        //       ...something like that, depending on dmg deliver type...
+                        let message_atk = match resolution {
+                            Resolution::Inconclusive{atk_dmg, vct_dmg} => format!("You hit {} for {} dmg #vct_dmg({}).",
+                                vct.title,
+                                atk_dmg.approx_i32(),
+                                vct_dmg.approx_i32()
+                            ),
+                            Resolution::AtkVictory{atk_dmg} => format!("You're victorious against {} with last hit of {} dmg!", vct.title, atk_dmg.approx_i32()),
+                            Resolution::AtkRetreat => format!("Better run while you can…"),
+                            Resolution::VctRetreat => format!("Hey, {} is running away!", vct.title),
+                            Resolution::VctVictory{vct_dmg} => format!("Ouch… {} dmg in the face – *you faint*", vct_dmg.approx_i32()),
+                            Resolution::BothDead => format!("You fall… flat on your face. R.I.P."),
+                        };
+                        let message_other = match resolution {
+                            Resolution::Inconclusive{..} => format!("{} hits {}.", atk.title, vct.title),
+                            Resolution::AtkVictory{..} => format!("{} has slain {}!", atk.title, vct.title),
+                            Resolution::AtkRetreat => format!("{} runs away for their dear life…", atk.title),
+                            Resolution::VctRetreat => format!("Huh, {} is running away…", vct.title),
+                            Resolution::VctVictory{..} => format!("{} collapses due numerous, too numerous, wounds.", atk.title),
+                            Resolution::BothDead => format!("Unexpected… Both {} and {} fall over at the same time, either dead or exhausted.", atk.title, vct.title),
+                        };
+                        let message_vct = match resolution {
+                            Resolution::Inconclusive{atk_dmg, vct_dmg} => format!("{} hits you for {} dmg #vct_dmg({}).",
+                                atk.title,
+                                atk_dmg.approx_i32(),
+                                vct_dmg.approx_i32()
+                            ),
+                            Resolution::AtkVictory{atk_dmg} => format!("Ouch… {} dmg in the face – *you faint*", atk_dmg.approx_i32()),
+                            Resolution::AtkRetreat => format!("Hey, {} is running away! Yay?", atk.title),
+                            Resolution::VctRetreat => format!("Better run while you can…"),
+                            Resolution::BothDead => format!("You fall… flat on your face. R.I.P."),
+                            Resolution::VctVictory{vct_dmg} => format!("You're victorious against {} with last hit of {} dmg!", atk.title, vct_dmg.approx_i32()),
+                        };
+                        //-----------------
+                        out.send(Broadcast::BattleMessage3 {
+                            room: room_arc.clone(),
+                            atk: atk.combatant.clone(),
+                            vct: vct.combatant.clone(),
+                            message_atk,
+                            message_other,
+                            message_vct,
+                        }).ok();
+                    }
+
+                    _ => ()
+                }
+            }
+        }
+    });
+
+    log::info!("Life thread firing up…");
+    #[cfg(all(test, feature = "stresstest"))]
+    let mut spawn_count: usize = usize::MAX;
+    #[cfg(all(test, feature = "stresstest"))]
+    let mut spawn_out: Option<tokio::sync::oneshot::Sender<()>> = None;
 
     loop {
         tokio::select! {
@@ -68,9 +227,8 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                     w.tick().await;
                 }
                 tick += 1;
-
-                #[cfg(all(debug_assertions,feature = "stresstest"))]{
-                    log::trace!("tick {tick} done");
+                if tick % 1000 == 0 {
+                    log::debug!("{tick} ticks…");
                 }
             }
 
@@ -78,69 +236,50 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
             // Battle handler tick.
             //
             _ = battle_interval.tick() => {
-                if bs.vs.is_empty() { continue; }
-                let mut deathrow = vec![];
+                if bs.active.is_empty() { continue; }
+                let mut deathrow: Vec<usize> = vec![];
 
-                let mut active_players: HashMap<String, Arc<RwLock<Player>>> = HashMap::new();
-                let mut parallel_congestion = false;
-                if bs.vs.len() > PARALLEL_BATTLE_CONGESTION_THRESHOLD {
-                    active_players = world.read().await.players_by_id.iter().map(|(id,p)| (id.clone(), p.clone())).collect::<HashMap<String, Arc<RwLock<Player>>>>();
-                    parallel_congestion = true;
+                // navigate the aggro swamp…
+                for (a_key, vcts) in &bs.atk {
+                    if let Some((atk, room_arc)) = bs.active.get(&a_key) {
+                        if let Some(v_key) = vcts.get(0) {
+                            if let Some((vct, _)) = bs.active.get(&v_key) {
+                                let resolution = punt(atk.combatant.clone(), vct.combatant.clone(), &room_arc).await;
+                                reporter_out.send(LifeWorkerSignal::BattleMsg {
+                                    atk: atk.clone(),
+                                    vct: vct.clone(),
+                                    resolution: resolution.clone()
+                                }).ok();
+                                log::debug!("resolution = {resolution:?}");
+                                // TODO deal with possible loot drops if not Resolution::Inconclusive or XyzRetreat:
+                                match resolution {
+                                    Resolution::AtkRetreat => { deathrow.push(*a_key);},
+                                    Resolution::AtkVictory {..} |
+                                    Resolution::VctRetreat => { deathrow.push(*v_key);},
+                                    Resolution::VctVictory {..} => { deathrow.push(*a_key);},
+                                    Resolution::BothDead => {
+                                        deathrow.push(*a_key);
+                                        deathrow.push(*v_key);
+                                    },
+                                    Resolution::Inconclusive {..}=> ()
+                                }
+                            } else {
+                                // no v_key in battle stage? … weird.
+                                deathrow.push(*v_key);
+                            }
+                        } else {
+                            // was no opponents, kthxbye.
+                            deathrow.push(*a_key);
+                        }
+                    } else {
+                        // not in active list? WTF?
+                        deathrow.push(*a_key);
+                    }
+
                 }
 
-                // Resolve the ongoing combats for this tick…
-                for (atk_id, (atk, vct, room)) in bs.vs.iter_mut() {
-                    let resolution = punt(atk, vct, &room).await;
-                    let message_actor = match resolution {
-                        Resolution::Inconclusive{atk_dmg,vct_dmg} => format!("You hit {} for {} dmg #vct_dmg({}).",
-                            vct.read().await.title(),
-                            atk_dmg.approx_i32(),
-                            vct_dmg.approx_i32()
-                        ),
-                        Resolution::AtkVictory{atk_dmg} => format!("You're victorious against {} with last hit of {} dmg!", vct.read().await.title(), atk_dmg.approx_i32()),
-                        Resolution::AtkRetreat => format!("Better run while you can…"),
-                        Resolution::VctRetreat => format!("Hey, {} is running away!", vct.read().await.title()),
-                        Resolution::VctVictory{vct_dmg} => format!("Ouch… {} dmg in the face – *you faint*", vct_dmg.approx_i32()),
-                        Resolution::BothDead => format!("You fall… flat on your face. R.I.P."),
-                    };
-                    let message_other = match resolution {
-                        Resolution::Inconclusive{..} => format!("{atk_id} hits {}.", vct.read().await.title()),
-                        Resolution::AtkVictory{..} => format!("{atk_id} has slain {}!", vct.read().await.title()),
-                        Resolution::AtkRetreat => format!("{atk_id} runs away for their dear life…"),
-                        Resolution::VctRetreat => format!("Huh, {} is running away…", vct.read().await.title()),
-                        Resolution::VctVictory{..} => format!("{atk_id} collapses due numerous, too numerous, wounds."),
-                        Resolution::BothDead => format!("Unexpected… Both {} and {} fall over at the same time, either dead or exhausted.",
-                            atk.read().await.title(),
-                            vct.read().await.title()),
-                    };
-                    //log::debug!("Round for {atk_id} vs {} resolved as … {message_actor}", vct.id().await);
-                    let p = if parallel_congestion {
-                        active_players.get(atk_id.as_str()).cloned()
-                    } else {
-                        world.read().await.players_by_id.get(atk_id.as_str()).cloned()
-                    };
-                    let p_exists = p.is_some();
-                    if p_exists {
-                        let plr = p.unwrap();
-                        who_online.get(atk_id.as_str()).and_then(|_| {
-                            log::debug!("Broadcasting round resolution…");
-                            out.broadcast.send(Broadcast::SystemInRoom {
-                                room: room.clone(),
-                                actor: plr.clone(),
-                                message_actor,
-                                message_other
-                            }).ok()
-                        });
-                    } else {
-                        who_online.remove(atk_id.as_str());
-                    }
-                    
-                    if !matches!(resolution, Resolution::Inconclusive{..}) || !p_exists {
-                        deathrow.push(atk_id.clone())
-                    }
-                }
-                for id in deathrow {
-                    bs.vs.remove(&id);
+                for d in deathrow {
+                    bs.remove(d);
                 }
             }
 
@@ -152,60 +291,70 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
 
                 // send item spawns to Librarian
                 SystemSignal::Spawn {what: SpawnType::Item {id}, room_id} => {
-                    #[cfg(test)]{log::debug!("Routing SystemSignal::Spawn{{Item}} to Librarian.");}
+                    log::warn!("Routing SystemSignal::Spawn{{Item}} to Librarian. FIX the source, should go straight to Librarian and not via Life.");
                     out.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id }, room_id }).ok();
-                },
-                SystemSignal::Spawn {what, room_id} => spawn_something(what, &room_id, world.clone()).await,
-                SystemSignal::Attack {who, victim_id} => {
-                    #[cfg(test)]{log::debug!("ATK vs '{victim_id}'");}
-                    let Some(room) = who.read().await.location.upgrade() else { continue; };// skip those in the void.
-                    let target_arc: Battler;
-                    if let Some(ent) = room.read().await.entities.get(&victim_id) {
-                        target_arc = ent.clone() as Battler;
-                    } else if let Some(pvp) = room.read().await.who.get(&victim_id) {
-                        let atk_id = who.read().await.id().to_string();
-                        let Some(pvp) = pvp.upgrade() else {
-                            // they're gone...? (or never were there to begin with)
-                            who_online.get(&atk_id).and_then(|_|
-                                out.broadcast.send(Broadcast::Message { to: who.clone(), message: "They're not here…".into() }).ok()
-                            );
-                            continue;
-                        };
-                        let vct_name = pvp.read().await.title().to_string();
-                        target_arc = pvp.clone() as Battler;
-                        who_online.get(&atk_id).and_then(|atk_name|
-                            out.broadcast.send(Broadcast::SystemInRoomAt {
-                                room: room.clone(),
-                                atk: who.clone(),
-                                vct: pvp.clone(),
-                                message_atk: format!("You attack {vct_name}!"),
-                                message_vct: format!("{atk_name} attacks you!"),
-                                message_other: format!("{atk_name} attacks {vct_name}!")
-                            }).ok()
-                        );
-                    } else {
-                        // TODO - Broadcast to player that their target ran off...
-                        log::debug!("Where'd '{victim_id}' go?");
-                        continue;
-                    }
-                    bs.vs.insert(who.read().await.id().into(), (who.clone() as Battler, target_arc, room.clone()));
                 }
-                SystemSignal::PlayerLogin { id, title } => {who_online.insert(id, title);},
-                SystemSignal::PlayerLogout { id } => {
-                    bs.vs.remove(&id);
-                    who_online.remove(&id);
-                },
+
+                // Spawn some [Entity].
+                SystemSignal::Spawn {what, room_id} => {
+                    #[cfg(all(test, feature = "stresstest"))]
+                    {
+                        spawn_count = spawn_count.saturating_sub(1);
+                        if spawn_count == 0 {
+                            if let Some(out) = spawn_out {
+                                out.send(()).ok();
+                            }
+                            spawn_out = None;
+                        }
+                        if spawn_count % 10_000 == 0 {
+                            log::info!("Spawns to go: {spawn_count}");
+                        }
+                    }
+                    spawn_something(what, &room_id, world.clone()).await
+                }
+
+                // Attack!
+                SystemSignal::Attack {atk_arc, vct_arc} => {
+                    // We might be busy, let a worker handle the initial hurdle.
+                    tokio::spawn({
+                        let sig = worker_out.clone();
+                        //let sys = out.clone();
+                        async move {
+                            let (a_loc, a_title) = {
+                                let a = atk_arc.read().await;
+                                (a.location().upgrade(), a.title().to_string())
+                            };
+                            let v_title = vct_arc.read().await.title().to_string();
+                            if let Some(room) = a_loc {
+                                #[cfg(test)]{log::trace!("Battle-check: OK \"{a_title}\"|{} vs \"{v_title}\"|{}", atk_arc.read().await.id(), vct_arc.read().await.id());}
+                                
+                                let atk = BattlerRec {
+                                    combatant: atk_arc,
+                                    title: Arc::from(a_title),
+                                };
+                                let vct = BattlerRec {
+                                    combatant: vct_arc,
+                                    title: Arc::from(v_title),
+                                };
+                                sig.send(LifeWorkerSignal::BattleOk { atk, vct, room: room.clone() }).ok();
+                            } else {
+                                log::error!("Cannot initiate fight in the void!");
+                                sig.send(LifeWorkerSignal::BattleFail { atk: atk_arc, vct: vct_arc }).ok();
+                            }
+                        }
+                    });
+                }
+
+                SystemSignal::PlayerLogout { player } => bs.remove_b(&(player as Battler)),
 
                 //
                 // Public transportation (or denial of such thereof).
                 //
                 SystemSignal::WantTransportFromTo { who, from, to, via } => {
+                    let who_key = Weak::as_ptr(&Arc::downgrade(&who)) as *const() as BattlerKey;
                     let who_id = who.read().await.id().to_string();
-                    if bs.vs.contains_key(&who_id) {
-                        // in combat, transit denied
-                        who_online.get(&who_id).and_then(|_| {
-                            out.broadcast.send(Broadcast::Message { to: who.clone(), message: "You're in middle of combat! Try <c yellow>flee</c> first…".into() }).ok()
-                        });
+                    if bs.active.contains_key(&who_key) {
+                        out.broadcast.send(Broadcast::Message { to: who.clone(), message: "You're in middle of combat! Try <c yellow>flee</c> first…".into() }).ok();
                         continue;
                     }
 
@@ -219,13 +368,64 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                     drop(plr);
 
                     if let Err(e) = out.broadcast.send(Broadcast::Force { silent: true, command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
-                        log::error!("Communications blackout?! {e:?}");
+                        log::error!("Communications blackout?!");
                     };
-                },
-                SystemSignal::AbortBattleNow { who } => {
-                    bs.vs.remove(&who);
                 }
+
+                // Abort battle for `who`.
+                SystemSignal::AbortBattleNow { who } => { bs.remove_b(&who); }
+                
+                // Count how many ticks `sec` is currently.
+                SystemSignal::SecToTicks { sec, out } => { out.send(sec * tick_interval_hz as u32).ok(); }
+                
+                #[cfg(all(test, feature = "stresstest"))]
+                SystemSignal::CountSpawns { num, out } => {
+                    spawn_count = num;
+                    spawn_out = Some(out);
+                    log::warn!("Preparing to count spawns down from {num}…");
+                }
+
                 _ => {}
+            },
+
+            //
+            // Listen to potential workers.
+            //
+            Some(sig) = worker_rx.recv() => match sig {
+                LifeWorkerSignal::BattleOk { atk, vct, room } => {
+                    let a_key = Weak::as_ptr(&Arc::downgrade(&atk.combatant)) as *const() as BattlerKey;
+                    let v_key = Weak::as_ptr(&Arc::downgrade(&vct.combatant)) as *const() as BattlerKey;
+                    bs.active.insert(a_key, (atk, room.clone()));
+                    bs.active.insert(v_key, (vct, room.clone()));
+                    if let Some(a) = bs.atk.get_mut(&a_key) {
+                        if !a.contains(&v_key) {
+                            a.push(v_key);
+                        }
+                    } else {
+                        log::trace!("New attacker: {a_key}");
+                        bs.atk.insert(a_key, vec![v_key]);
+                    }
+                    if let Some(v) = bs.vct.get_mut(&v_key) {
+                        if !v.contains(&a_key) {
+                            v.push(a_key);
+                        }
+                    } else {
+                        log::trace!("New victim: {v_key}");
+                        bs.vct.insert(v_key, vec![a_key]);
+                    }
+                    log::debug!("LifeworkerSignal::BattleOk!");
+                }
+
+                LifeWorkerSignal::BattleFail { atk, vct } => {
+                    log::debug!("LifeworkerSignal::BattleFail");
+                    // attempt purge, just in case.
+                    let a_key = Weak::as_ptr(&Arc::downgrade(&atk)) as *const() as BattlerKey;
+                    let v_key = Weak::as_ptr(&Arc::downgrade(&vct)) as *const() as BattlerKey;
+                    bs.remove(a_key);
+                    bs.remove(v_key);
+                }
+
+                _ => ()
             }
         }
     }
@@ -246,7 +446,7 @@ async fn spawn_something(what: SpawnType, r#where: &str, world: Arc<RwLock<World
                 if let Some(r_arc) = world.read().await.rooms.get(r#where) {
                     let mob_id = mob.id().to_string();
                     r_arc.write().await.entities.insert(mob_id.clone(), Arc::new(RwLock::new(mob)));
-                    log::info!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
+                    log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
                 } else {
                     log::error!("Ayy! We don't have room '{}' to spawn '{}' at!", r#where, mob.id());
                 }
@@ -259,17 +459,8 @@ async fn spawn_something(what: SpawnType, r#where: &str, world: Arc<RwLock<World
     }
 }
 
-pub enum Resolution {
-    Inconclusive { atk_dmg: StatValue, vct_dmg: StatValue },
-    AtkRetreat,
-    VctRetreat,
-    AtkVictory { atk_dmg: StatValue },
-    VctVictory  { vct_dmg: StatValue },
-    BothDead,
-}
-
 /// Fite!
-async fn punt(atk: &mut Battler, vct: &mut Battler, _room: &Arc<RwLock<Room>>) -> Resolution {
+async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resolution {
     let mut a = atk.write().await;
     let mut v = vct.write().await;
 
@@ -300,4 +491,30 @@ async fn punt(atk: &mut Battler, vct: &mut Battler, _room: &Arc<RwLock<Room>>) -
         (_,_,_,true) => Resolution::VctRetreat,
         _ => Resolution::Inconclusive {atk_dmg, vct_dmg}
     }
+}
+
+#[cfg(test)]
+mod life_tests {
+    #[cfg(feature = "stresstest")]
+    #[tokio::test]
+    async fn goblin_ocean() {
+        use std::time::Duration;
+        use crate::{get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+
+         let (w,c,p,d) = get_operational_mock_world().await;
+        let jt = get_operational_mock_janitor!(c,w,d.0);
+        let gt = get_operational_mock_life!(c,w);
+        let lt = get_operational_mock_librarian!(c,w);
+        let c = c.out;// we don't need the c.recv part anymore here…
+        tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
+        c.life.send(SystemSignal::PlayerLogin { id: p.read().await.id().into(), title: p.read().await.title().into() }).ok();
+        let (otx,orx) = tokio::sync::oneshot::channel::<()>();
+        c.life.send(SystemSignal::CountSpawns { num: 1_000_000, out: otx }).ok();
+        for index in 1..=100_000 {
+            c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
+        }
+        let _ = orx.await;
+        log::debug!("Done!");
+        // let the dust settle…
+   }
 }

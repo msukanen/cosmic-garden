@@ -599,6 +599,7 @@ fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let brn_field = req_field!(data, "brn");
     let str_field = req_field!(data, "strn");
     let nim_field = req_field!(data, "nim");
+    let loc_field = req_field!(data, "location");
 
     quote! {
         impl crate::combat::Combatant for #name {
@@ -609,6 +610,7 @@ fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
             fn nim(&self) -> &crate::mob::stat::Stat { &self.#nim_field }
             fn brn(&self) -> &crate::mob::stat::Stat { &self.#brn_field }
             fn str(&self) -> &crate::mob::stat::Stat { &self.#str_field }
+            fn location(&self) -> std::sync::Weak<tokio::sync::RwLock<crate::room::Room>> { self.#loc_field.clone() }
         }
     }
 }

@@ -37,9 +37,7 @@ impl Display for PromptType {
 #[macro_export]
 macro_rules! tell_user {
     ($w:expr, $t:expr) => {{
-        // log::debug!("tell_user!({})", $t.chars().take(20).collect::<String>());
         let _ = tokio::io::AsyncWriteExt::write_all($w, crate::string::styling::format_color($t).as_bytes()).await;
-        // log::debug!("tell_user! - complete.");
     }};
 
     ($w:expr, $fmt:literal, $($arg:tt)*) => {{

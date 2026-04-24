@@ -1,10 +1,10 @@
 //! Per-client threading.
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::{Arc, Weak}};
 
 use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpStream, sync::{RwLock, broadcast}};
 
-use crate::{cmd::{self, CommandCtx}, r#const::{GREETING, PROMPT_LOGIN}, identity::IdentityQuery, io::{Broadcast, ClientState, ForceTarget}, reprompt_playing_user, string::{prompt::PromptType, sanitize::Sanitizer}, tell_user, thread::{SystemSignal, signal::SignalSenderChannels}, world::World};
+use crate::{cmd::{self, CommandCtx}, r#const::{GREETING, PROMPT_LOGIN}, identity::IdentityQuery, io::{Broadcast, ClientState, ForceTarget}, reprompt_playing_user, string::{prompt::PromptType, sanitize::Sanitizer}, tell_user, thread::{SystemSignal, life::BattlerKey, signal::SignalSenderChannels}, world::World};
 pub(crate) struct PerClientData {
     pub socket: TcpStream,
     pub addr: SocketAddr,
@@ -46,7 +46,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                     let lock = p.read().await;
                     (lock.id().to_string(), lock.title().to_string())
                 };
-                pcd.out.life.send(SystemSignal::PlayerLogout { id: id.clone() }).ok();
+                pcd.out.life.send(SystemSignal::PlayerLogout { player: p.clone() }).ok();
                 w.players_by_id.remove(&id);
                 if !abrupt_dc {
                     tell_user!(&mut writer, "\n<c cyan>Goodbye {}! See you soon again!</c>\n", title);
@@ -95,7 +95,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                     reprompt_playing_user!(writer, state);
                                 }
                             }
-                        }
+                        },
 
                         Broadcast::Movement { to, from, who } => {
                             // no need to tell yourself that you just switched rooms…
@@ -113,7 +113,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 continue;
                             }
                             reprompt_playing_user!(writer, state);
-                        }
+                        },
 
                         Broadcast::Logout { from, who } => {
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
@@ -121,7 +121,7 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 tell_user!(&mut writer, "\n<c cyan>{}</c> vanishes into the mists…\n", who);
                                 reprompt_playing_user!(writer, state);
                             }
-                        }
+                        },
 
                         Broadcast::System { rooms, message, from } => {
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
@@ -136,7 +136,14 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                     break;
                                 }
                             }
-                        }
+                        },
+
+                        Broadcast::MessageInRoom { room, message } => {
+                            let Some(ploc) = player.read().await.location.upgrade() else {continue;};
+                            if !Arc::ptr_eq(&room, &ploc) {continue;}
+                            tell_user!(&mut writer, "\n{}\n", message);
+                            reprompt_playing_user!(writer, state);
+                        },
 
                         Broadcast::BiSignal { to, from, who, message_to, message_from, message_who } => {
                             // am I the 'who'?
@@ -155,9 +162,9 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 tell_user!(&mut writer, "\n{}\n", msg);
                                 reprompt_playing_user!(writer, state);
                             }
-                        }
+                        },
 
-                        Broadcast::SystemInRoom { room, actor, message_actor, message_other } => {
+                        Broadcast::MessageInRoom2 { room, actor, message_actor, message_other } => {
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
                             if !Arc::ptr_eq(&room, &ploc) { continue; }// not there
                             if Arc::ptr_eq(&player, &actor) {
@@ -166,21 +173,24 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                 tell_user!(&mut writer, "\n{}\n", message_other);
                             }
                             reprompt_playing_user!(writer, state);
-                        }
+                        },
 
-                        Broadcast::SystemInRoomAt { room, atk, vct, message_atk, message_other, message_vct } => {
+                        Broadcast::BattleMessage3 { room, atk, vct, message_atk, message_other, message_vct } => {
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
                             if !Arc::ptr_eq(&room, &ploc) { continue; }// not there
+                            let ptr = Weak::as_ptr(&Arc::downgrade(&player)) as *const() as BattlerKey;
+                            let a_ptr = Weak::as_ptr(&Arc::downgrade(&atk)) as *const() as BattlerKey;
+                            let v_ptr = Weak::as_ptr(&Arc::downgrade(&vct)) as *const() as BattlerKey;
                             tell_user!(&mut writer, "\n{}\n",
-                                if Arc::ptr_eq(&player, &atk) {
+                                if ptr == a_ptr {
                                     message_atk
-                                } else if Arc::ptr_eq(&player, &vct) {
+                                } else if ptr == v_ptr {
                                     message_vct
                                 } else {
                                     message_other
                                 });
                             reprompt_playing_user!(writer, state);
-                        }
+                        },
 
                         Broadcast::Force { command, who, by, silent, delivery } => {
                             static UNK_FORCE: &'static str = "<c red>Unseen forces commanded your mind for a moment…!";
@@ -226,12 +236,12 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                                     tell_user!(&mut writer, "\n{}\n{}", delivery, prompt);
                                 }
                             }
-                        }
+                        },
 
                         Broadcast::Shutdown => {
                             tell_user!(&mut writer, "\n<c red>---[ SERVER SHUTTING DOWN ]---</c>\n");
                             state = ClientState::Logout
-                        }
+                        },
 
                         Broadcast::Message { to, message } => {
                             if !Arc::ptr_eq(&player, &to) { continue; }// not for us

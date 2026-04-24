@@ -2,6 +2,7 @@
 
 use std::{collections::HashMap, fmt::Display};
 
+use async_trait::async_trait;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
@@ -317,8 +318,9 @@ impl Metamorphize for PrimordialItem {
     }
 }
 
+#[async_trait]
 impl Tickable for PrimordialItem {
-    fn tick(&mut self) -> bool {
+    async fn tick(&mut self) -> bool {
         #[cfg(all(debug_assertions, feature = "stresstest"))]{
             log::debug!("Primordial '{}' ticked.", self.id);
             return true;

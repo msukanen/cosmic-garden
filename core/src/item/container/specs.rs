@@ -2,11 +2,12 @@
 
 use std::{cmp::Ordering, collections::HashMap};
 
+use async_trait::async_trait;
 use cosmic_garden_pm::{IdentityMut, ItemizedMut, OwnedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::IdentityQuery, item::{Item, Itemized, StorageQueryError, container::{Storage, StorageError, StorageMut, variants::ContainerVariant}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::{Reflector, Tickable}};
+use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::IdentityQuery, item::{Item, Itemized, StorageQueryError, container::{Storage, StorageError, StorageMut, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED, Uuid}, traits::{Reflector, Tickable}};
 
 /// "Unit" of space and/or weight…
 pub type StorageSpace = u16;
@@ -183,7 +184,8 @@ impl PartialEq<Item> for ContainerSpec {
                 ContainerVariant::PlayerInventory(v) |
                 ContainerVariant::Pouch(v) |
                 ContainerVariant::Chest(v) |
-                ContainerVariant::Room(v)  => v.eq(self)
+                ContainerVariant::Room(v)  => v.eq(self),
+                ContainerVariant::Corpse(CorpseSpec { spec, ..}) => spec.eq(self),
             },
             _ => false
         }
@@ -199,6 +201,7 @@ impl PartialOrd<Item> for ContainerSpec {
                 ContainerVariant::Pouch(v) |
                 ContainerVariant::Chest(v) |
                 ContainerVariant::Room(v) => self.partial_cmp(v),
+                ContainerVariant::Corpse(CorpseSpec { spec, ..}) => self.partial_cmp(spec),
             },
             _ => Some(Ordering::Greater)
         }
@@ -332,11 +335,12 @@ impl<'a> IntoIterator for &'a ContainerSpec {
     }
 }
 
+#[async_trait]
 impl Tickable for ContainerSpec {
-    fn tick(&mut self) -> bool {
+    async fn tick(&mut self) -> bool {
         let mut ticked = false;
         for i in self.contents.values_mut() {
-            let t = i.tick();
+            let t = i.tick().await;
             if t { ticked = true; }
         }
         #[cfg(debug_assertions)]{

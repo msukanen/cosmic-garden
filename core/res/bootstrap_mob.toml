@@ -35,3 +35,16 @@ max = 100.0
 [mobs.strn.Str]
 curr = 100.0
 max = 100.0
+
+[inventory.Corpse.spec]
+id = "corpse-inventory-a92f991e-8338-481d-879e-500a68ce037a"
+name = "corpse-inventory"
+max_space = 500
+size = 0
+desc = "corpse-inventory"
+desc_can_be_modified = false
+
+[inventory.Corpse.spec.owner]
+source = "System"
+
+[inventory.Corpse.spec.contents]

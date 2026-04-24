@@ -1,3 +1,4 @@
+//! Hauling things.
 /// Translocate player to another place.
 /// 
 /// # Args
@@ -9,6 +10,7 @@
 /// If `translocate!(a,b,c)` deadlocks, get ID earlier and use `translocate!(a,b,c,d)`.
 #[macro_export]
 macro_rules! translocate {
+    // Translocate [$plr][Player] from [$origin][Room] to [$target][Room]
     ($plr:expr, $origin:expr, $target:expr) => {
         {
             use crate::identity::IdentityQuery;
@@ -19,11 +21,21 @@ macro_rules! translocate {
         }
     };
 
+    // Translocate [$plr][Player] (ID $p_id) from [$origin][Room] to [$target][Room]
     ($plr:expr, $p_id:ident, $origin:expr, $target:expr) => {
         {
             $origin.write().await.who.remove(&$p_id);
             $target.write().await.who.insert($p_id.clone(), std::sync::Arc::downgrade(&$plr));
             $plr.write().await.location = std::sync::Arc::downgrade(&$target);
+        }
+    };
+
+    // Translocate [$ent][Entity] (ID $id) from [$origin][Room] to [$target][Room]
+    (ent $ent:expr, $id:ident, $origin:expr, $target:expr) => {
+        {
+            $origin.write().await.entities.remove(&$id);
+            $target.write().await.entities.insert($id.clone(), $ent.clone());
+            $ent.write().await.location = std::sync::Arc::downgrade(&$target);
         }
     };
 }

@@ -151,7 +151,6 @@ impl ClientState {
                         
                         // Insert player to world:
                         World::insert_player(world.clone(), addr, &id, p.clone()).await;
-                        system_ch.life.send(SystemSignal::PlayerLogin { id, title }).ok();
                     }
                     return state;
                 }
@@ -179,7 +178,6 @@ impl ClientState {
                         };
 
                         World::insert_player(world.clone(), addr, &id, player.clone()).await;
-                        system_ch.life.send(SystemSignal::PlayerLogin { id, title }).ok();
 
                         return state;
                     } else {
@@ -210,7 +208,6 @@ impl ClientState {
                             };
 
                             World::insert_player(world.clone(), addr, &id, player.clone()).await;
-                            system_ch.life.send(SystemSignal::PlayerLogin { id, title }).ok();
                             
                             state
                         }
@@ -237,7 +234,6 @@ impl ClientState {
                 let state = Self::Playing { player: p.clone() };
                 {
                     World::insert_player(world.clone(), addr, &id, p.clone()).await;
-                    system_ch.life.send(SystemSignal::PlayerLogin { id: id.clone(), title: title.clone() }).ok();
                     
                     info.players.push((id.clone(), title));
                     if let Err(e) = info.save().await {

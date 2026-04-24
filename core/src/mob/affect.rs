@@ -2,6 +2,7 @@
 
 use std::collections::HashMap;
 
+use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
 use crate::{item::consumable::EffectType, string::Uuid, traits::Tickable};
@@ -22,8 +23,9 @@ impl Affect {
     }
 }
 
+#[async_trait]
 impl Tickable for Affect {
-    fn tick(&mut self) -> bool {
+    async fn tick(&mut self) -> bool {
         match self {
             // Decays:
             Self::Effect { remaining: Some(1),.. } => {
@@ -142,8 +144,8 @@ mod affect_tests {
         assert_eq!(Some(6), *remaining);
     }
 
-    #[test]
-    fn affect_decay() {
+    #[tokio::test]
+    async fn affect_decay() {
         let _ = env_logger::try_init();
         let mut r = Affect::RushNCrash {
             kind: EffectType::NotEdible,
@@ -157,34 +159,34 @@ mod affect_tests {
         assert!(!r.dormant());
         assert!(!r.expired());
         for _ in 0..2 {
-            r.tick();
+            r.tick().await;
             log::debug!(">   {r:?}");
             assert!(!r.dormant());
             assert!(!r.expired());
         }
-        r.tick();
+        r.tick().await;
         log::debug!("r = {r:?}");
         assert!(r.dormant());
         assert!(!r.expired());
         assert!(matches!(r, Affect::DelayedEffect {..}));
         for _ in 0..2 {
-            r.tick();
+            r.tick().await;
             log::debug!(">   {r:?}");
             assert_eq!(true, r.dormant());
             assert_eq!(false, r.expired());
         }
-        r.tick();
+        r.tick().await;
         log::debug!("r = {r:?}");
         assert!(!r.dormant());
         assert!(!r.expired());
         assert!(matches!(r, Affect::Effect {..}));
         for _ in 0..2 {
-            r.tick();
+            r.tick().await;
             log::debug!(">   {r:?}");
             assert_eq!(false, r.dormant());
             assert_eq!(false, r.expired());
         }
-        r.tick();
+        r.tick().await;
         assert!(matches!(r, Affect::Expired));
         assert_eq!(true, r.dormant());
         assert_eq!(true, r.expired());

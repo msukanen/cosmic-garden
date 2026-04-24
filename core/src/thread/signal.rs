@@ -4,13 +4,12 @@ use std::sync::Arc;
 
 use tokio::sync::{RwLock, broadcast, mpsc};
 
-use crate::{io::Broadcast, player::Player, room::Room, util::direction::Direction};
+use crate::{combat::Battler, io::Broadcast, player::Player, room::Room, util::direction::Direction};
 
 pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
 pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
 
 /// Various system signals between threads.
-#[derive(Debug, Clone)]
 pub enum SystemSignal {
     /// Generic "we're shutting down, brace for impact".
     Shutdown,
@@ -35,11 +34,14 @@ pub enum SystemSignal {
     ///--- Life Thread
     /// Notion to spawn something…
     Spawn { what: SpawnType, room_id: String },
-    Attack { who: Arc<RwLock<Player>>, victim_id: String },
-    PlayerLogout { id: String },
-    PlayerLogin { id: String, title: String },
+    Attack { atk_arc: Battler, vct_arc: Battler },
+    PlayerLogout { player: Arc<RwLock<Player>> },
     WantTransportFromTo { who: Arc<RwLock<Player>>, from: Arc<RwLock<Room>>, to: Arc<RwLock<Room>>, via: Direction },
-    AbortBattleNow { who: String },
+    AbortBattleNow { who: Battler },
+    /// Query life-thread how many ticks is `sec`.
+    SecToTicks { sec: u32, out: tokio::sync::oneshot::Sender<u32> },
+    #[cfg(test)]
+    CountSpawns { num: usize, out: tokio::sync::oneshot::Sender<()> },
 }
 
 #[derive(Debug, Clone)]
