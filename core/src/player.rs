@@ -307,25 +307,6 @@ impl Tickable for Player {
             }
         }
         self.affects = survivors;
-        // now Affects, if any …
-        // let mut changes: Vec<_> = Vec::new();
-        // self.affects.retain(|_id, affect| {
-        //     if affect.expired() { return false; }
-        //     if let Affect::Effect { kind, .. } = affect {
-        //         if let EffectType::Heal { stat, drain } = kind {
-        //             changes.push((*stat, *drain));
-        //         }
-        //     }
-
-        //     let hc = matches!(affect, Affect::HardcorePending { .. });
-        //     affect.tick().await;
-        //     if affect.expired() && hc {
-        //         if let Some(false) = self.hardcore {
-        //             self.hardcore = None;
-        //         }
-        //     }
-        //     !affect.expired()
-        // });
         for (stat, amount) in &changes {
             self.apply_stat_change(*stat, *amount);
         }

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, mob::affect::Affect, player_or_bust, show_help, show_help_if_needed, tell_user, thread::life::sec_as_ticks};
+use crate::{cmd::{Command, CommandCtx}, mob::affect::Affect, player_or_bust, show_help, show_help_if_needed, tell_user, thread::life::{TickType, sec_as_ticks}};
 
 pub struct HardcoreCommand;
 
@@ -28,7 +28,7 @@ impl Command for HardcoreCommand {
         }
         p.hardcore = Some(false);
         // query life-thread about the state…
-        p.affects.insert("HARDCORE".into(), Affect::HardcorePending { remaining: Some(sec_as_ticks(60, &ctx.out).await) });
+        p.affects.insert("HARDCORE".into(), Affect::HardcorePending { remaining: Some(sec_as_ticks(60, TickType::Core, &ctx.out).await) });
         drop(p);
         tell_user!(ctx.writer, "<c brown>[<c yellow>HARDCORE MODE PENDING…</c>] - to enable, retype <c yellow>hardcore enable</c> within 60 seconds.\n");
     }
