@@ -103,6 +103,6 @@ macro_rules! lock2key {
     };
 
     (weak $weak:expr) => {
-        std::sync::Weak::as_ptr(&$weak) as *const() as usize
+        std::sync::Weak::as_ptr($weak) as *const() as usize
     }
 }

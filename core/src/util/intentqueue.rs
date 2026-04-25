@@ -1,4 +1,4 @@
-//! Fixed-ish, VecDeque'ish buffer thingy'ish.
+//! Fixed-ish, VecDeque'ish buffer thingy'ish maybe'ish of use'ish somewhere… or then not.
 
 use std::collections::VecDeque;
 
