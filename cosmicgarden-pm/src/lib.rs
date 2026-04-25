@@ -642,6 +642,13 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
     let str_field = req_field!(data, "strn");
     let loc_field = req_field!(data, "location");
     let inv_field = req_field!(data, "inventory");
+    let freeza_field = maybe_field!(data, "brain_freeze");
+    let brain_Freeze_logic = if let Some(field) = freeza_field {
+        quote! { self.#field = freeze; }
+    } else {
+        quote! {}
+    };
+    
     let mut_impl = quote! {
         impl crate::combat::CombatantMut for #name {
             fn hp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#hp_field }
@@ -666,6 +673,10 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
 
             fn set_location(&mut self, arc: &std::sync::Arc<tokio::sync::RwLock<crate::room::Room>>) {
                 self.#loc_field = std::sync::Arc::downgrade(arc);
+            }
+
+            fn alter_brain_freeze(&mut self, freeze: bool) {
+                #brain_Freeze_logic
             }
         }
     };
