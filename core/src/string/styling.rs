@@ -151,7 +151,24 @@ pub fn format_color<S: Display>(input: S) -> String {
     output
 }
 
+///
+/// Maybe 's', based on `num`.
+/// 
 pub const fn maybe_plural(num: i32) -> &'static str { if num == 1 {""} else {"s"}}
+
+pub trait Truthy {
+    fn true_false(&self) -> bool;
+}
+
+impl Truthy for str {
+    fn true_false(&self) -> bool {
+        if self.is_empty() { false }
+        else { match self.chars().nth(0).unwrap() {
+            'f'|'F'|'n'|'N'|'0' => false,
+            _ => true
+        }}
+    }
+}
 
 #[cfg(test)]
 mod ansi_tests {
