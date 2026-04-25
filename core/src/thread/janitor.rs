@@ -23,7 +23,7 @@ macro_rules! get_operational_mock_janitor {
 
 /// Disk I/O thread thing.
 /// 
-/// `io_thread` handles all sorts of "janitorial" tasks from
+/// `janitor` handles all sorts of "janitorial" tasks from
 /// autosaves and logouts to keeping the live world and disk
 /// in (relative) sync.
 /// 

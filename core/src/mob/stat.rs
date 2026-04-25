@@ -12,7 +12,7 @@ pub const MAX_STAT_VALUE: StatValue = 1000.0;
 // TODO: convert raw TICKS_BETWEEN_DRAIN into some runtime calibrateable type.
 pub const TICKS_BETWEEN_DRAIN: StatValue = 10 as StatValue;
 const UNC_THRESHOLD: StatValue = 1.0;//    HP 1
-const DED_THRESHOLD: StatValue = -10.0;//  HP -10
+pub const DED_THRESHOLD: StatValue = -10.0;//  HP -10
 const SMR_THRESHOLD: StatValue = -100.0;// HP -100
 
 /// Various [Stat] related error states.

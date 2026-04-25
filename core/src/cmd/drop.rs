@@ -30,7 +30,7 @@ impl Command for DropCommand {
         };
         let mut r = p_loc.write().await;
         let item_name = item.title().to_string();
-        if let Err(storage_error) = r.contents.try_insert(item) {
+        if let Err(storage_error) = r.try_insert(item) {
             drop(r);
             let mut p = plr.write().await;
             // if the try_insert fails - something's really wrong...

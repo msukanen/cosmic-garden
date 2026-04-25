@@ -30,7 +30,7 @@ impl Command for LookCommand {
                 lock.desc().to_string(),
                 lock.who.clone(),
                 lock.exits.clone(),
-                lock.contents.into_iter().map(|(id,item)| 
+                lock.into_iter().map(|(id,item)|
                     (id.clone(), item.title().to_string())
                 ).collect::<Vec<_>>(),
                 {

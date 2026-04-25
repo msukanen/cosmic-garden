@@ -1,12 +1,12 @@
 //! Roomies.
 
-use std::{collections::HashMap, fmt::Display, fs as sync_fs, sync::{Arc, Weak}};
+use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, fs as sync_fs, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::IdentityQuery, io::room_fp, item::container::variants::{ContainerVariant, ContainerVariantType}, mob::core::Entity, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::IdentityQuery, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -39,7 +39,7 @@ pub struct Room {
     pub raw_exits: HashMap<Direction, String>,
 
     #[serde(default = "room_inventory")]
-    pub contents: ContainerVariant,
+    contents: ContainerVariant,
 
     /// NPC [entities][Entity] in the [Room].
     // [Room] is the sole owner of an [Entity].
@@ -175,6 +175,63 @@ impl Room {
         self.exits = source.exits;
         self.raw_exits = source.raw_exits;
     }
+
+    /// Convenience function to try insert `item` directly into the [Room]'s contents.
+    pub fn try_insert(&mut self, item: Item) -> Result<(), StorageError> {
+        self.contents.try_insert(item)
+    }
+
+    /// List adjacent [rooms][Room], if any.
+    pub fn list_adjacent(&self) -> Vec<Weak<RwLock<Room>>> {
+        self.exits.iter().map(|(_,r)| r.clone()).collect::<Vec<Weak<RwLock<Room>>>>()
+    }
+
+    /// List adjacent [rooms][Room], if any, using BFS.
+    /// Although this is very swift, it's not the most awesome of ideas to use too high `depth` value.
+    pub fn list_adjacent_bfs(start: &Arc<RwLock<Room>>, depth: u8) -> Vec<Weak<RwLock<Room>>> {
+        let mut visited = HashSet::new();
+        let mut queue = VecDeque::new();
+        let mut nearby: HashMap<usize, Weak<RwLock<Room>>> = HashMap::new();
+
+        let start_w = lock2key!(arc start);
+        queue.push_back((start_w, Arc::downgrade(start), 0));
+        visited.insert(start_w);
+        while let Some((r_hash, r_arc, dist)) = queue.pop_front() {
+            if dist > depth {
+                continue;
+            }
+            nearby.insert(lock2key!(weak r_arc), r_arc.clone());
+        }
+
+        nearby.values().into_iter().map(|w| w.clone()).collect::<Vec<Weak<RwLock<Room>>>>()
+    }
+}
+
+impl<'a> IntoIterator for &'a Room {
+    type Item = (&'a String, &'a Item);
+    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.contents.into_iter()
+    }
+}
+
+impl Storage for Room {
+    fn can_hold(&self, item: &Item) -> Result<(), StorageQueryError> { self.contents.can_hold(item) }
+    fn contains(&self, id: &str) -> bool { self.contents.contains(id) }
+    fn eject_all(&mut self) -> Option<Vec<Item>> { None }
+    fn find_id_by_name(&self, name: &str) -> Option<String> { self.contents.find_id_by_name(name) }
+    fn max_space(&self) -> StorageSpace { self.contents.max_space() }
+    fn peek_at(&self, id: &str) -> Option<&Item> { self.contents.peek_at(id) }
+    fn required_space(&self) -> StorageSpace { StorageSpace::MAX }
+    fn space(&self) -> StorageSpace { self.contents.space() }
+    fn take(&mut self, id: &str) -> Option<Item> { self.contents.take(id) }
+    fn take_by_name(&mut self, id: &str) -> Option<Item> { self.contents.take_by_name(id) }
+    fn try_insert(&mut self, item: Item) -> Result<(), StorageError> { self.contents.try_insert(item) }
+}
+
+impl StorageMut for Room {
+    fn set_max_space(&mut self, sz: StorageSpace) -> bool { self.contents.set_max_space(sz) }
 }
 
 #[cfg(test)]

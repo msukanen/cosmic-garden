@@ -16,14 +16,14 @@ impl Command for GetCommand {
         let what = ctx.args;
         let thing_id = {
             let r = p_loc.read().await;
-            let Some(thing) = r.contents.find_id_by_name(what) else {
+            let Some(thing) = r.find_id_by_name(what) else {
                 tell_user!(ctx.writer, "No such thing here…\n");
                 return;
             };
             thing
         };
 
-        let Some(item) = p_loc.write().await.contents.take(&thing_id) else {
+        let Some(item) = p_loc.write().await.take(&thing_id) else {
             tell_user!(ctx.writer, "It's stuck?\n");
             return;
         };
@@ -40,7 +40,7 @@ impl Command for GetCommand {
             drop(lock);
 
             // bugger, no space in inventory, lets put it back...
-            let Err(item_err) = p_loc.write().await.contents.try_insert(item_err.into()) else {
+            let Err(item_err) = p_loc.write().await.try_insert(item_err.into()) else {
                 tell_user!(ctx.writer, "Way too big or heavy. You set it back before you break your back.\n");
                 return;
             };

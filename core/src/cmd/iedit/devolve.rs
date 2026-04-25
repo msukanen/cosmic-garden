@@ -36,7 +36,7 @@ impl Command for DevolveCommand {
                 let mut count_lost: usize = 0;
                 for item in items {
                     // we try trust the poor Room to hold on to all of this junk...
-                    if let Err(e) = r.contents.try_insert(item) {
+                    if let Err(e) = r.try_insert(item) {
                         count_lost += 1;
                         add_item_to_lnf(e.extract_item()).await;
                     }

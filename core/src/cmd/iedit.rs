@@ -31,7 +31,7 @@ impl Command for IeditCommand {
             // was in inventory already or not?
             if found.is_none() {
                 // room maybe?
-                if let Some(item) = p_loc.write().await.contents.take_by_name(id) {
+                if let Some(item) = p_loc.write().await.take_by_name(id) {
                     Some(item)
                 } else {
                     // blueprint library at least…?

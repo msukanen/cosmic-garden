@@ -57,7 +57,7 @@ impl Command for WeaveCommand {
         
         let item = storage_error.extract_item();
         // too big for player inv. Room?
-        let Err(storage_error) = p_loc.write().await.contents.try_insert(item) else {
+        let Err(storage_error) = p_loc.write().await.try_insert(item) else {
             tell_user!(ctx.writer,
                 "Well, too large for your inventory. So, you set it down on the ground…{}\n",
                 if persist {" <c yellow>(BP shelved)</c>"} else {""});

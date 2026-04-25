@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 
 use tokio::sync::RwLock;
 
-use crate::{identity::IdentityQuery, mob::{Stat, StatError, StatValue}, room::Room};
+use crate::{identity::IdentityQuery, item::container::variants::ContainerVariant, mob::{Stat, StatError, StatValue}, room::Room};
 
 /// Generic "battler" type.
 pub type Battler = Arc<RwLock<dyn CombatantMut + Send + Sync>>;
@@ -85,6 +85,8 @@ pub trait CombatantMut : Combatant {
     fn brn_mut<'a>(&'a mut self) -> &'a mut Stat;
     /// Get mutable Nim.
     fn nim_mut<'a>(&'a mut self) -> &'a mut Stat;
+    fn set_location(&mut self, arc: &Arc<RwLock<Room>>);
+    fn inventory(&mut self) -> &mut ContainerVariant;
 }
 
 #[cfg(test)]

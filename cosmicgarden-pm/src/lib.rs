@@ -640,6 +640,8 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
     let brn_field = req_field!(data, "brn");
     let nim_field = req_field!(data, "nim");
     let str_field = req_field!(data, "strn");
+    let loc_field = req_field!(data, "location");
+    let inv_field = req_field!(data, "inventory");
     let mut_impl = quote! {
         impl crate::combat::CombatantMut for #name {
             fn hp_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#hp_field }
@@ -656,6 +658,14 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
 
             fn heal(&mut self, dmg: crate::mob::StatValue) {
                 *(self.hp_mut()) += dmg.abs();// no "dmg" with healing…
+            }
+
+            fn inventory(&mut self) -> &mut crate::item::container::variants::ContainerVariant {
+                &mut self.#inv_field
+            }
+
+            fn set_location(&mut self, arc: &std::sync::Arc<tokio::sync::RwLock<crate::room::Room>>) {
+                self.#loc_field = std::sync::Arc::downgrade(arc);
             }
         }
     };

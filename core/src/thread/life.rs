@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::{Arc, Weak}, time::Duration};
 use nohash_hasher::BuildNoHashHasher;
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, mob::StatValue, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::approx::ApproxI32, world::World};
+use crate::{combat::{Battler, Combatant, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::container::Storage, mob::StatValue, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::approx::ApproxI32, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -23,6 +23,26 @@ pub(crate) type BattlerKey = usize;
 struct BattlerRec {
     combatant: Battler,
     title: Arc<str>,
+}
+
+impl BattlerRec {
+    async fn loot_pinata(&self) {
+        let mut lock = self.combatant.write().await;
+        if let Some(room) = lock.location().upgrade() {
+            if let Some(items) = lock.inventory().eject_all() {
+                drop(lock);
+                let mut lock = room.write().await;
+                for x in items {
+                    if let Err(e) = lock.try_insert(x) {
+                        // well shucks, room full…
+                        add_item_to_lnf(e).await;
+                    }
+                }
+            }// else no items in inventory.
+        } else {
+            log::warn!("No piñataing '{}' in the void…", self.title);
+        }
+    }
 }
 
 type BattleMap = HashMap<BattlerKey, (BattlerRec, Arc<RwLock<Room>>), BuildNoHashHasher<BattlerKey>>;
@@ -85,16 +105,6 @@ impl BattleStage {
     }
 }
 
-trait IdentityQueryLite {
-    async fn id(&self) -> String;
-}
-
-impl IdentityQueryLite for Battler {
-    async fn id(&self) -> String {
-        self.read().await.id().into()
-    }
-}
-
 /// Combat resolutions.
 #[derive(Debug, Clone)]
 pub enum Resolution {
@@ -122,6 +132,7 @@ enum LifeWorkerSignal {
     BattleOk { atk: BattlerRec, vct: BattlerRec, room: Arc<RwLock<Room>> },
     BattleFail { atk: Battler, vct: Battler },
     BattleMsg { atk: BattlerRec, vct: BattlerRec, resolution: Resolution },
+    Shutdown,
 }
 
 /// Life-thread. Lives hang on in balance here!
@@ -138,7 +149,6 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
     let mut battle_interval = time::interval(Duration::from_millis(1000 / battle_interval_hz));
     let mut tick = 0;
     let mut bs = BattleStage::default();
-    let mut who_online: HashMap<String, String> = HashMap::new();// id, title
     let (worker_out, mut worker_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
     let (reporter_out, mut reporter_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
     let battle_reporter = tokio::spawn({
@@ -204,6 +214,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                         }).ok();
                     }
 
+                    LifeWorkerSignal::Shutdown => break,
                     _ => ()
                 }
             }
@@ -254,14 +265,22 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                                 // TODO deal with possible loot drops if not Resolution::Inconclusive or XyzRetreat:
                                 match resolution {
                                     Resolution::AtkRetreat => { deathrow.push(*a_key);},
-                                    Resolution::AtkVictory {..} |
+                                    Resolution::AtkVictory {..} => {
+                                        deathrow.push(*v_key);
+                                        vct.loot_pinata().await;
+                                    }
                                     Resolution::VctRetreat => { deathrow.push(*v_key);},
-                                    Resolution::VctVictory {..} => { deathrow.push(*a_key);},
+                                    Resolution::VctVictory {..} => {
+                                        deathrow.push(*a_key);
+                                        atk.loot_pinata().await;
+                                    },
                                     Resolution::BothDead => {
                                         deathrow.push(*a_key);
                                         deathrow.push(*v_key);
+                                        vct.loot_pinata().await;
+                                        atk.loot_pinata().await;
                                     },
-                                    Resolution::Inconclusive {..}=> ()
+                                    Resolution::Inconclusive {..} => ()
                                 }
                             } else {
                                 // no v_key in battle stage? … weird.
@@ -287,9 +306,13 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
             // System signals.
             //
             Some(sig) = incoming.recv() => match sig {
-                SystemSignal::Shutdown => break,
+                // System is going down, now.
+                SystemSignal::Shutdown => {
+                    reporter_out.send(LifeWorkerSignal::Shutdown).ok();
+                    break
+                },
 
-                // send item spawns to Librarian
+                // Re-send item spawns to Librarian.
                 SystemSignal::Spawn {what: SpawnType::Item {id}, room_id} => {
                     log::warn!("Routing SystemSignal::Spawn{{Item}} to Librarian. FIX the source, should go straight to Librarian and not via Life.");
                     out.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id }, room_id }).ok();
@@ -313,7 +336,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                     spawn_something(what, &room_id, world.clone()).await
                 }
 
-                // Attack!
+                // Attack! From e.g. AttackCommand from player to start a fight.
                 SystemSignal::Attack {atk_arc, vct_arc} => {
                     // We might be busy, let a worker handle the initial hurdle.
                     tokio::spawn({
@@ -345,6 +368,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                     });
                 }
 
+                // Player loggeed out.
                 SystemSignal::PlayerLogout { player } => bs.remove_b(&(player as Battler)),
 
                 //
@@ -367,7 +391,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                     log::debug!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
                     drop(plr);
 
-                    if let Err(e) = out.broadcast.send(Broadcast::Force { silent: true, command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
+                    if let Err(_) = out.broadcast.send(Broadcast::Force {silent: true, command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
                         log::error!("Communications blackout?!");
                     };
                 }
@@ -430,6 +454,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
         }
     }
 
+    battle_reporter.await.ok();
     log::info!("Lifeline checking out after {tick} tick{}. Bye now!", maybe_plural(tick));
 }
 
@@ -445,6 +470,7 @@ async fn spawn_something(what: SpawnType, r#where: &str, world: Arc<RwLock<World
                 *(mob.id_mut()) = mob.id().re_uuid();
                 if let Some(r_arc) = world.read().await.rooms.get(r#where) {
                     let mob_id = mob.id().to_string();
+                    mob.set_location(&r_arc);
                     r_arc.write().await.entities.insert(mob_id.clone(), Arc::new(RwLock::new(mob)));
                     log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
                 } else {
@@ -495,26 +521,98 @@ async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resoluti
 
 #[cfg(test)]
 mod life_tests {
-    #[cfg(feature = "stresstest")]
+    use std::{io::Cursor, sync::Arc, time::Duration};
+
+    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, io::ClientState, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+
     #[tokio::test]
     async fn goblin_ocean() {
-        use std::time::Duration;
-        use crate::{get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+        #[cfg(feature = "stresstest")]
+        const MILLION_GOBBOS: usize = 1_000_000;
+        #[cfg(not(feature = "stresstest"))]
+        const MILLION_GOBBOS: usize = 1_000;// just 1,000 if not stresstesting...
 
-         let (w,c,p,d) = get_operational_mock_world().await;
-        let jt = get_operational_mock_janitor!(c,w,d.0);
-        let gt = get_operational_mock_life!(c,w);
-        let lt = get_operational_mock_librarian!(c,w);
+        let (w,c,_,d) = get_operational_mock_world().await;
+        get_operational_mock_janitor!(c,w,d.0);
+        get_operational_mock_life!(c,w);
+        get_operational_mock_librarian!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
         tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
-        c.life.send(SystemSignal::PlayerLogin { id: p.read().await.id().into(), title: p.read().await.title().into() }).ok();
         let (otx,orx) = tokio::sync::oneshot::channel::<()>();
-        c.life.send(SystemSignal::CountSpawns { num: 1_000_000, out: otx }).ok();
-        for index in 1..=100_000 {
+        c.life.send(SystemSignal::CountSpawns { num: MILLION_GOBBOS, out: otx }).ok();
+        for _ in 1..=MILLION_GOBBOS {
             c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
         }
         let _ = orx.await;
         log::debug!("Done!");
         // let the dust settle…
-   }
+    }
+
+    #[tokio::test]
+    async fn loot_pinata() {
+        let mut b: Vec<u8> = vec![];
+        let mut s = Cursor::new(&mut b);
+        let (w,c,p,d) = get_operational_mock_world().await;
+        let jt = get_operational_mock_janitor!(c,w,d.0);
+        let gt = get_operational_mock_life!(c,w);
+        let lt = get_operational_mock_librarian!(c,w);
+        let c = c.out;
+        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into()}, room_id: "r-1".into()}).ok();
+        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        log::debug!("Stabilized…");
+        let lock = w.read().await;
+        let mut state = ClientState::Playing { player: p.clone() };
+        if let Some(r1) = lock.rooms.get("r-1") {
+            let r1 = r1.clone();
+            drop(lock);
+            log::debug!("Dropped world lock…");
+            let lock = r1.read().await;
+            let mut e_id = String::new();
+            for k in lock.entities.keys() {
+                if k.starts_with("goblin") {
+                    e_id = k.clone();
+                    break;
+                }
+            }
+            if e_id.is_empty() {
+                panic!("Oi! No lil gobbo found!");
+            }
+            log::debug!("Found lil gobbo…");
+            if let Some(e) = lock.entities.get(&e_id) {
+                let e = e.clone();
+                drop(lock);
+                log::debug!("Dropped room lock…");
+                let spec = WeaponSpec {
+                    id: "stabber".into(),
+                    name: "Gobbo Stabber".into(),
+                    desc: "A stabber for gobbos!".into(),
+                    owner: Owner::no_one(),
+                    size: SMALL_ITEM,
+                    weapon_size: WeaponSize::Small,
+                    base_dmg: 1.9,
+                };
+                let mut lock = e.write().await;
+                lock.inventory().try_insert(Item::Weapon(spec)).ok();
+                log::debug!("Gobbo has a stabber nao!");
+                let erec = BattlerRec {
+                    combatant: e.clone() as Battler,
+                    title: Arc::from(lock.title().to_string())
+                };
+                drop(lock);
+                state = ctx!(state, LookCommand, "", s,c,w,p);
+                log::debug!("Lootage…?");
+                erec.loot_pinata().await;
+                log::debug!("Got loots…!");
+            } else {
+                panic!("Where did the gobbo go?! It was right here!");
+            }
+        } else {
+            panic!("Ok, where did the room vanish?");
+        }
+        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        p.write().await.access = Access::Builder;
+        p.write().await.config.show_id = true;
+        let _ = ctx!(state, LookCommand, "", s,c,w,p);
+    }
 }

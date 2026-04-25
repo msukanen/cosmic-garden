@@ -94,3 +94,15 @@ macro_rules! err_iedit_buffer_inaccessible {
             state
         }};
     }
+
+/// Convert given [std::sync::Arc][Arc]|[std::sync::Weak][Weak] into `usize`.
+#[macro_export]
+macro_rules! lock2key {
+    (arc $arc:expr) => {
+        crate::lock2key!(weak &std::sync::Arc::downgrade(&$arc))
+    };
+
+    (weak $weak:expr) => {
+        std::sync::Weak::as_ptr(&$weak) as *const() as usize
+    }
+}

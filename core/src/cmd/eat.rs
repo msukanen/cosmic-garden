@@ -23,7 +23,7 @@ impl Command for EatCommand {
                 tell_user!(ctx.writer, "Ick! You can't possibly even think about consuming '{}'!\n", item_name);
                 return;
             };
-            let Err(e) = p_loc.write().await.contents.try_insert(e.into()) else {
+            let Err(e) = p_loc.write().await.try_insert(e.into()) else {
                 tell_user!(ctx.writer, "Whoops, greasy fingers, you dropped '{}'…!\n", item_name);
                 return ;
             };
@@ -60,7 +60,7 @@ impl Command for EatCommand {
         }
         
         let Err(e) = plr.write().await.receive_item(item) else { return; };
-        let Err(e) = p_loc.write().await.contents.try_insert(e.into()) else {
+        let Err(e) = p_loc.write().await.try_insert(e.into()) else {
             tell_user!(ctx.writer, "Woops, … and you dropped it. Bah, double bah!\n");
             return;
         };

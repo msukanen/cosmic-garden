@@ -31,7 +31,7 @@ impl Command for WieldCommand {
                     if let Err(e) = p.inventory.try_insert(eq) {
                         tell_user!(ctx.writer, "You try to put '{}' among your belongings…\n  …alas, no space… and it falls on the ground while you're at it.\n", eq_title);
                         let mut lock = loc.write().await;
-                        if let Err(e) = lock.contents.try_insert(e.extract_item()) {
+                        if let Err(e) = lock.try_insert(e.extract_item()) {
                             drop(lock);
                             tell_user!(ctx.writer, "  … but to your great surprise, someone or something nabbed it before it even touched the ground!\n");
                             add_item_to_lnf(e).await;
