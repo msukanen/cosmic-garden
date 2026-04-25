@@ -1,10 +1,10 @@
 //! System signals.
 
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use tokio::sync::{RwLock, broadcast, mpsc};
 
-use crate::{combat::Battler, io::Broadcast, player::Player, room::Room, util::direction::Direction};
+use crate::{combat::Battler, io::Broadcast, player::Player, room::Room, thread::life::TickType, util::direction::Direction};
 
 pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
 pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
@@ -39,13 +39,14 @@ pub enum SystemSignal {
     WantTransportFromTo { who: Arc<RwLock<Player>>, from: Arc<RwLock<Room>>, to: Arc<RwLock<Room>>, via: Direction },
     AbortBattleNow { who: Battler },
     /// Query life-thread how many ticks is `sec`.
-    SecToTicks { sec: u32, out: tokio::sync::oneshot::Sender<u32> },
+    SecToTicks { sec: u32, tick_type: TickType, out: tokio::sync::oneshot::Sender<u32> },
     #[cfg(test)]
     CountSpawns { num: usize, out: tokio::sync::oneshot::Sender<()> },
+    AlterTickRate { tick_type: TickType, duration: Duration },
 }
 
 #[derive(Debug, Clone)]
-pub(crate) struct SignalSenderChannels {
+pub struct SignalSenderChannels {
     pub broadcast: broadcast::Sender<Broadcast>,
     pub janitor: SigSender,
     pub librarian: SigSender,
