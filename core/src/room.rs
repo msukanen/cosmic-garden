@@ -244,47 +244,6 @@ impl StorageMut for Room {
     fn set_max_space(&mut self, sz: StorageSpace) -> bool { self.contents.set_max_space(sz) }
 }
 
-#[cfg(test)]
-mod room_tests {
-    use crate::{util::direction::Direction, world::world_tests::get_operational_mock_world};
-
-    #[tokio::test]
-    async fn room_linking() {
-        let (w_arc,c,p,_) = get_operational_mock_world().await;
-        w_arc.write().await.link_rooms().await;
-        let rooms = w_arc.read().await.rooms.clone();
-        if let Some(r_arc) = rooms.get("room-1") {
-            let mut r = r_arc.write().await;
-            if let Err(e) = r.link_exit(w_arc.clone(), Direction::North, "room-2_".into()).await {
-                panic!("Bummer… {e:?}");
-            }
-        }
-        for r in &rooms {
-            log::debug!("Room {r:?}")
-        }
-        // this should fail symmetry check:
-        if let Some(r_arc) = rooms.get("room-1") {
-            let mut r = r_arc.write().await;
-            if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "room-2_".into()).await {
-                panic!("Bummer… {e:?}");
-            }
-        }
-        for r in &rooms {
-            log::debug!("Room {r:?}")
-        }
-        // this should create a "mirage" and override an old entry:
-        if let Some(r_arc) = rooms.get("room-1") {
-            let mut r = r_arc.write().await;
-            if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "room-3".into()).await {
-                log::error!("Bummer… {e:?}");
-            }
-        }
-        for r in &rooms {
-            log::debug!("Room {r:?}")
-        }
-    }
-}
-
 impl Room {
     pub async fn tick(&mut self) {
         for p_weak in self.who.values() {
@@ -305,6 +264,47 @@ impl Room {
         let _ = self.contents.tick().await;
         #[cfg(all(debug_assertions,feature = "stresstest"))]{
             log::debug!("Room '{}' ticked.", self.id);
+        }
+    }
+}
+
+#[cfg(test)]
+mod room_tests {
+    use crate::{util::direction::Direction, world::world_tests::get_operational_mock_world};
+
+    #[tokio::test]
+    async fn room_linking() {
+        let (w_arc,_,_,_) = get_operational_mock_world().await;
+        w_arc.write().await.link_rooms().await;
+        let rooms = w_arc.read().await.rooms.clone();
+        if let Some(r_arc) = rooms.get("r-1") {
+            let mut r = r_arc.write().await;
+            if let Err(e) = r.link_exit(w_arc.clone(), Direction::North, "r-2".into()).await {
+                panic!("Bummer… {e:?}");
+            }
+        }
+        for r in &rooms {
+            log::debug!("Room {r:?}")
+        }
+        // this should fail symmetry check:
+        if let Some(r_arc) = rooms.get("r-1") {
+            let mut r = r_arc.write().await;
+            if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "r-2".into()).await {
+                panic!("Bummer… {e:?}");
+            }
+        }
+        for r in &rooms {
+            log::debug!("Room {r:?}")
+        }
+        // this should create a "mirage" and override an old entry:
+        if let Some(r_arc) = rooms.get("r-1") {
+            let mut r = r_arc.write().await;
+            if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "r-3".into()).await {
+                log::error!("Bummer… {e:?}");
+            }
+        }
+        for r in &rooms {
+            log::debug!("Room {r:?}")
         }
     }
 }
