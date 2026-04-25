@@ -66,7 +66,7 @@ impl Default for BattleStage {
 }
 
 impl BattleStage {
-    fn remove(&mut self, battle_key: BattlerKey) {
+    async fn remove(&mut self, battle_key: BattlerKey) {
         // first the vct …
         if let Some(atks) = self.vct.remove(&battle_key) {
             for a_key in atks {
@@ -78,6 +78,9 @@ impl BattleStage {
                     // anybody out there?
                     if tgt.is_empty() {
                         self.atk.remove(&a_key);
+                        if let Some((rec, _)) = self.active.get_mut(&a_key) {
+                            rec.combatant.write().await.alter_brain_freeze(false);
+                        }
                         self.active.remove(&a_key);
                     }
                 }
@@ -96,11 +99,14 @@ impl BattleStage {
         }
 
         // …and final purge.
+        if let Some((rec, _)) = self.active.get_mut(&battle_key) {
+            rec.combatant.write().await.alter_brain_freeze(false);
+        }
         self.active.remove(&battle_key);
     }
 
     fn remove_b(&mut self, battler: &Battler) {
-        let key = Weak::as_ptr(&Arc::downgrade(&battler)) as *const() as BattlerKey;
+        let key = lock2key!(arc &battler);
         self.remove(key);
     }
 }
@@ -117,9 +123,9 @@ pub enum Resolution {
 }
 
 /// Query seconds-as-ticks.
-pub async fn sec_as_ticks(sec: u32, out: &SignalSenderChannels) -> usize {
+pub async fn sec_as_ticks(sec: u32, tick_type: TickType, out: &SignalSenderChannels) -> usize {
     let (otx,orx) = tokio::sync::oneshot::channel::<u32>();
-    out.life.send(SystemSignal::SecToTicks { sec, out: otx }).ok();
+    out.life.send(SystemSignal::SecToTicks { sec, tick_type, out: otx }).ok();
     if let Ok(sat) = orx.await {
         sat as usize
     } else {
@@ -135,6 +141,11 @@ enum LifeWorkerSignal {
     Shutdown,
 }
 
+pub enum TickType {
+    Core,
+    Battle,
+}
+
 /// Life-thread. Lives hang on in balance here!
 /// 
 /// Life-thread is the game's "pulse" that ticks the clocks of everything.
@@ -143,7 +154,7 @@ enum LifeWorkerSignal {
 pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver), world: Arc<RwLock<World>>) {
     log::info!("Intervals, intervals…");
     let mut tick_interval_hz: u64 = 100;
-    let mut battle_interval_hz: u64 = 10;
+    let mut battle_interval_hz: u64 = 50;
 
     let mut tick_interval = time::interval(Duration::from_millis(1000/ tick_interval_hz));
     let mut battle_interval = time::interval(Duration::from_millis(1000 / battle_interval_hz));
@@ -298,7 +309,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 }
 
                 for d in deathrow {
-                    bs.remove(d);
+                    bs.remove(d).await;
                 }
             }
 
@@ -382,13 +393,13 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                         continue;
                     }
 
-                    log::debug!("Transport request from {who_id} from {} to {}", from.read().await.id(), to.read().await.id());
+                    log::trace!("Transport request from {who_id} from {} to {}", from.read().await.id(), to.read().await.id());
                     translocate!(who, from, to);
 
                     let mut plr = who.write().await;
                     let origin_id = from.read().await.id().to_string();
                     plr.last_goto = Some((via.into(), Arc::downgrade(&from)));
-                    log::debug!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
+                    log::trace!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
                     drop(plr);
 
                     if let Err(_) = out.broadcast.send(Broadcast::Force {silent: true, command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
@@ -400,7 +411,29 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 SystemSignal::AbortBattleNow { who } => { bs.remove_b(&who); }
                 
                 // Count how many ticks `sec` is currently.
-                SystemSignal::SecToTicks { sec, out } => { out.send(sec * tick_interval_hz as u32).ok(); }
+                SystemSignal::SecToTicks { sec, tick_type, out } => {
+                    out.send(sec * match tick_type {
+                        TickType::Core => tick_interval_hz,
+                        TickType::Battle => battle_interval_hz,
+                    } as u32).ok();
+                }
+
+                // Alter tick timers.
+                SystemSignal::AlterTickRate { tick_type, duration} => {
+                    match tick_type {
+                        TickType::Core => {
+                            tick_interval_hz = (1.0 / duration.as_secs_f32()) as u64;
+                            tick_interval = tokio::time::interval(duration);
+                            tick_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+                        }
+
+                        TickType::Battle => {
+                            battle_interval_hz = (1.0 / duration.as_secs_f32()) as u64;
+                            battle_interval = tokio::time::interval(duration);
+                            battle_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+                        }
+                    }
+                }
                 
                 #[cfg(all(test, feature = "stresstest"))]
                 SystemSignal::CountSpawns { num, out } => {
@@ -417,8 +450,10 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
             //
             Some(sig) = worker_rx.recv() => match sig {
                 LifeWorkerSignal::BattleOk { atk, vct, room } => {
-                    let a_key = Weak::as_ptr(&Arc::downgrade(&atk.combatant)) as *const() as BattlerKey;
-                    let v_key = Weak::as_ptr(&Arc::downgrade(&vct.combatant)) as *const() as BattlerKey;
+                    let a_key = lock2key!(arc &atk.combatant);
+                    let v_key = lock2key!(arc &vct.combatant);
+                    atk.combatant.write().await.alter_brain_freeze(true);
+                    vct.combatant.write().await.alter_brain_freeze(true);
                     bs.active.insert(a_key, (atk, room.clone()));
                     bs.active.insert(v_key, (vct, room.clone()));
                     if let Some(a) = bs.atk.get_mut(&a_key) {
@@ -445,8 +480,8 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                     // attempt purge, just in case.
                     let a_key = Weak::as_ptr(&Arc::downgrade(&atk)) as *const() as BattlerKey;
                     let v_key = Weak::as_ptr(&Arc::downgrade(&vct)) as *const() as BattlerKey;
-                    bs.remove(a_key);
-                    bs.remove(v_key);
+                    bs.remove(a_key).await;
+                    bs.remove(v_key).await;
                 }
 
                 _ => ()
@@ -463,19 +498,34 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
 /// # Args
 /// - `what` to spawn.
 /// - `where` to spawn ([Room] ID).
-async fn spawn_something(what: SpawnType, r#where: &str, world: Arc<RwLock<World>>) {
+async fn spawn_something(what: SpawnType, r_id: &str, world: Arc<RwLock<World>>) {
+    match &what {
+        SpawnType::Mob { id } => {
+            if let Some(r_arc) = world.read().await.rooms.get(r_id) {
+                direct_spawn_something(what, r_arc).await
+            } else {
+                log::error!("Ayy! We don't have room '{}' to spawn '{id}' at!", r_id);
+            }
+        }
+
+        _ => ()
+    }
+}
+
+/// Spawn a [Mob] or [Item] at given [Room].
+/// 
+/// # Args
+/// - `what` to spawn.
+/// - `where` to spawn ([Room] ID).
+async fn direct_spawn_something(what: SpawnType, r#where: &Arc<RwLock<Room>>) {
     match what {
         SpawnType::Mob { id } => {
             if let Some(mut mob) = (*ENT_BP_LIBRARY).read().await.get(&id) {
                 *(mob.id_mut()) = mob.id().re_uuid();
-                if let Some(r_arc) = world.read().await.rooms.get(r#where) {
-                    let mob_id = mob.id().to_string();
-                    mob.set_location(&r_arc);
-                    r_arc.write().await.entities.insert(mob_id.clone(), Arc::new(RwLock::new(mob)));
-                    log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
-                } else {
-                    log::error!("Ayy! We don't have room '{}' to spawn '{}' at!", r#where, mob.id());
-                }
+                let mob_id = mob.id().to_string();
+                mob.set_location(&r#where);
+                r#where.write().await.entities.insert(mob_id.clone(), Arc::new(RwLock::new(mob)));
+                log::trace!("Life has spawned '{mob_id}' at '{}'", r#where.read().await.id());
             } else {
                 log::warn!("There's no record of '{id}' in the entity catalogue…");
             }
@@ -543,9 +593,9 @@ mod life_tests {
         for _ in 1..=MILLION_GOBBOS {
             c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
         }
-        let _ = orx.await;
-        log::debug!("Done!");
         // let the dust settle…
+        let _ = orx.await;
+        log::debug!("--terminated--");
     }
 
     #[tokio::test]
@@ -553,9 +603,9 @@ mod life_tests {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,c,p,d) = get_operational_mock_world().await;
-        let jt = get_operational_mock_janitor!(c,w,d.0);
-        let gt = get_operational_mock_life!(c,w);
-        let lt = get_operational_mock_librarian!(c,w);
+        let _ = get_operational_mock_janitor!(c,w,d.0);
+        let _ = get_operational_mock_life!(c,w);
+        let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
         tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into()}, room_id: "r-1".into()}).ok();
@@ -614,5 +664,6 @@ mod life_tests {
         p.write().await.access = Access::Builder;
         p.write().await.config.show_id = true;
         let _ = ctx!(state, LookCommand, "", s,c,w,p);
+        log::debug!("--terminated--");
     }
 }

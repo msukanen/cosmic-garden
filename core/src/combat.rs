@@ -87,6 +87,7 @@ pub trait CombatantMut : Combatant {
     fn nim_mut<'a>(&'a mut self) -> &'a mut Stat;
     fn set_location(&mut self, arc: &Arc<RwLock<Room>>);
     fn inventory(&mut self) -> &mut ContainerVariant;
+    fn alter_brain_freeze(&mut self, freeze: bool);
 }
 
 #[cfg(test)]

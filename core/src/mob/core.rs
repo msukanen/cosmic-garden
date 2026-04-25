@@ -70,6 +70,8 @@ pub struct Entity {
     location: Weak<RwLock<Room>>,
     #[serde(default = "entity_inv_default")]
     inventory: ContainerVariant,
+    #[serde(default, skip)]
+    brain_freeze: bool,
 }
 
 impl Default for Entity {
@@ -90,6 +92,7 @@ impl Default for Entity {
             size: EntitySize::Medium,
             location: Weak::new(),
             inventory: entity_inv_default(),
+            brain_freeze: false,
         }
     }
 }
