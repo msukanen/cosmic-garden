@@ -188,19 +188,29 @@ impl Room {
 
     /// List adjacent [rooms][Room], if any, using BFS.
     /// Although this is very swift, it's not the most awesome of ideas to use too high `depth` value.
-    pub fn list_adjacent_bfs(start: &Arc<RwLock<Room>>, depth: u8) -> Vec<Weak<RwLock<Room>>> {
+    pub async fn list_adjacent_bfs(start: &Arc<RwLock<Room>>, depth: u8) -> Vec<Weak<RwLock<Room>>> {
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
         let mut nearby: HashMap<usize, Weak<RwLock<Room>>> = HashMap::new();
 
         let start_w = lock2key!(arc start);
-        queue.push_back((start_w, Arc::downgrade(start), 0));
+        queue.push_back((Arc::downgrade(start), 0));
         visited.insert(start_w);
-        while let Some((r_hash, r_arc, dist)) = queue.pop_front() {
-            if dist > depth {
-                continue;
+        while let Some((r_weak, dist)) = queue.pop_front() {
+            if dist > depth { continue; }
+            nearby.insert(lock2key!(weak &r_weak), r_weak.clone());
+            if dist >= depth { continue; }// we skip current depth, we were the "end of line in" in this piece of queue.
+            
+            if let Some(r) = r_weak.upgrade() {
+                let lock = r.read().await;
+                for (_, x_weak) in &lock.exits {
+                    let key = lock2key!(weak x_weak);
+                    if !visited.contains(&key) {
+                        visited.insert(key);
+                        queue.push_back((x_weak.clone(), dist + 1));
+                    }
+                }
             }
-            nearby.insert(lock2key!(weak r_arc), r_arc.clone());
         }
 
         nearby.values().into_iter().map(|w| w.clone()).collect::<Vec<Weak<RwLock<Room>>>>()
