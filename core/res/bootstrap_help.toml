@@ -89,7 +89,7 @@ create a new one with 'hedit new <topic>'.
 
 To persist your edits, use 'weave' command.
 """
-see_also = ["abort","desc","set","title","usage","weave"]
+see_also = ["abort","desc","hedit-set","title","usage","weave"]
 usage = [
     "hedit <topic-id>",
     "hedit new <topic-id>"
@@ -132,7 +132,7 @@ not persistable (as blueprints), only "true matter" is.
 usage = [
     "iedit <item-id>"
 ]
-see_also = ["abort","desc","devolve","iex","set","title","weave","iedit-weave"]
+see_also = ["abort","desc","devolve","iex","iedit-set","title","weave","iedit-weave"]
 [[help_pages]]
 id = "inventory"
 title = "inventory"
@@ -449,3 +449,19 @@ To truly activate the mode, repeat <c yellow>hardcore enable</c> twice in a
 row within a minute. Not doing so will remove the pending state soon enough.
 """
 usage = ["hardcore enable"]
+[[help_pages]]
+id = "set"
+access = "builder"
+title = "set"
+alias = ["set"]
+contents = """
+'set' value of some runtime <var>.
+
+Note: some of the <var> are admin-only by nature...
+
+# FIELDS
+ * core_tick <msec>
+ * battle_tick <msec>
+ * config <var> <val>     ;; <c cyan>set config</c> for a list.
+"""
+usage = ["set <var> <val>"]
