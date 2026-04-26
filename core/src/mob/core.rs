@@ -2,7 +2,7 @@
 
 use std::sync::Weak;
 
-use cosmic_garden_pm::{CombatantMut, FactionMut, IdentityMut, Mob, MobMut};
+use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
@@ -50,11 +50,12 @@ impl From<&EntitySize> for i8 {
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Mob, MobMut, FactionMut, CombatantMut)]
+#[derive(Debug, Clone, DescribableMut, Deserialize, Serialize, IdentityMut, Mob, MobMut, FactionMut, CombatantMut)]
 pub struct Entity {
     id: String,
     #[identity(title)]
     name: String,
+    desc: String,
     hp: Stat,
     mp: Stat,
     san: Stat,
@@ -93,6 +94,7 @@ impl Default for Entity {
             location: Weak::new(),
             inventory: entity_inv_default(),
             brain_freeze: false,
+            desc: "Some sort of an entity. Use <c yellow>desc =</c> to describe it…".into()
         }
     }
 }
@@ -125,6 +127,34 @@ impl Entity {
         let contents = toml::to_string_pretty(self)?;
         fs::write(entity_entry_fp(self.id().show_uuid(false)), contents).await?;
         Ok(())
+    }
+
+    /// Create a shallow clone of self (for builders, mainly).
+    pub fn shallow_clone(&self) -> Self {
+        Self {
+            inventory: entity_inv_default(),
+            desc: self.desc.clone(),
+            location: Weak::new(),
+            brain_freeze: false,
+            equipped_weapon: None,
+            ..self.clone()
+        }
+    }
+
+    /// Copyback from another `ent`. Generally from builder's editor buffer…
+    pub fn copyback(&mut self, ent: Entity) {
+        self.name = ent.name;
+        self.hp = ent.hp;
+        self.mp = ent.mp;
+        self.san = ent.san;
+        self.sn = ent.sn;
+        self.brn = ent.brn;
+        self.nim = ent.nim;
+        self.strn = ent.strn;
+        self.faction = ent.faction;
+        self.max_weapon_size = ent.max_weapon_size;
+        self.size = ent.size;
+        self.desc = ent.desc;
     }
 }
 

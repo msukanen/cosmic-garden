@@ -83,7 +83,7 @@ title = "hedit"
 alias = ["hedit", "edit-help", "help editor"]
 access = "any_builder"
 contents = """
-Invokes HEdit (help editor) to edit a help entry. If an entry exists in
+Invokes <c cyan>HEdit</c> (help editor) to edit a help entry. If an entry exists in
 library, you get a copy to tinker with. If there is no existing document,
 create a new one with 'hedit new <topic>'.
 
@@ -118,7 +118,7 @@ title = "iedit"
 access = "builder"
 alias = ["iedit"]
 contents = """
-Invokes IEdit (item editor) to focus on a specific item, a blueprint, or
+Invokes <c cyan>IEdit</c> (item editor) to focus on a specific item, a blueprint, or
 something brand new, depending on where the sought <item-id> sits at, if
 anywhere yet.
 
@@ -203,7 +203,7 @@ id = "redit"
 title = "redit"
 alias = ["redit"]
 contents = """
-Invokes REdit (room editor) mode to work on the very room you're in or some
+Invokes <c cyan>REdit</c> (room editor) mode to work on the very room you're in or some
 other place. REdit does *not* create new rooms, for that you have to use
 'dig' command.
 
@@ -465,3 +465,25 @@ Note: some of the <var> are admin-only by nature...
  * config <var> <val>     ;; <c cyan>set config</c> for a list.
 """
 usage = ["set <var> <val>"]
+[[help_pages]]
+id = "medit"
+access = "builder"
+title = "medit"
+alias = ["medit", "entity editor", "mob-edit", "mob editor"]
+contents = """
+Invokes <c cyan>MEdit</c> (mob editor) to edit either live Entity directly or edit/create
+an entity blueprint.
+"""
+usage = ["medit <id|blueprint>"]
+[[help_pages]]
+id = "medit-rename"
+access = "builder"
+title = "rename"
+alias = ["medit-rename", "rename mob"]
+contents = """
+'rename' an Entity (or change its ID, too, if admin).
+"""
+usage = [
+    "rename <name>",
+    "rename id <stem>"
+]
