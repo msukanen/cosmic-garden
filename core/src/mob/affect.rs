@@ -138,7 +138,7 @@ mod affect_tests {
         assert!(stash.contains_key("item"));
         stack_affect("item", &b, &mut stash);
         assert!(stash.contains_key("item"));
-        let Some(Affect::Effect { kind, remaining }) = stash.get("item") else {
+        let Some(Affect::Effect { remaining, .. }) = stash.get("item") else {
             panic!("Where'd it go?");
         };
         assert_eq!(Some(6), *remaining);

@@ -69,9 +69,9 @@ mod cmd_wield_tests {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,c,p,d) = get_operational_mock_world().await;
-        let jt = get_operational_mock_janitor!(c,w,d.0);
-        let lt = get_operational_mock_librarian!(c,w);
-        let gt = get_operational_mock_life!(c,w);
+        let _ = get_operational_mock_janitor!(c,w,d.0);
+        let _ = get_operational_mock_librarian!(c,w);
+        let _ = get_operational_mock_life!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
         tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
         log::debug!("Sending…");

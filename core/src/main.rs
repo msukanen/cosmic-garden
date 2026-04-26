@@ -37,7 +37,7 @@ mod world;
     about = "Cosmic Garden MUD Engine.",
 //    after_help = ""
 )]
-pub(crate) struct Cli {
+pub struct Cli {
     #[arg(long, default_value = "0.0.0.0")] host_listen_addr: String,
     #[arg(long, default_value = "8080")] host_listen_port: u16,
     #[arg(long, default_value = "cosmic-garden")] world: String,

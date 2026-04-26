@@ -261,7 +261,7 @@ macro_rules! access_ed_entry {
 mod ed_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, desc::DescCommand}}, io::ClientState, string::{Describable, DescribableMut, newline::LineEndingExt, styling::MAX_DESCRIPTION_LINES}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, desc::DescCommand}}, io::ClientState, string::{DescribableMut, newline::LineEndingExt, styling::MAX_DESCRIPTION_LINES}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[test]
     fn remove_nth_line() {
@@ -279,7 +279,7 @@ mod ed_tests {
     async fn ed_79_21_plus() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,p,d) = get_operational_mock_world().await;
+        let (w,c,p,_) = get_operational_mock_world().await;
         let c = c.out;
         let l79: &'static str = "0123456789012345678901234567890123456789012345678901234567890123456789012345678\n";
         let mut l21 = String::new();

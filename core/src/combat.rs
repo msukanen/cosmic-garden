@@ -94,7 +94,7 @@ pub trait CombatantMut : Combatant {
 mod combatant_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, tell_user, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
 
     /// Simulate 100 players' "gank squad" vs 1 (tough) goblin.
     /// 
@@ -176,7 +176,7 @@ mod combatant_tests {
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
         tokio::time::sleep(Duration::from_secs(1)).await;// let the spawns stabilize…, Just in Case™
         let mut rx = c.broadcast.subscribe();
-        let bcast = tokio::spawn(async move {
+        tokio::spawn(async move {
             loop {
                 tokio::select! {
                     Ok(b) = rx.recv() => match b {
@@ -230,7 +230,7 @@ mod combatant_tests {
         tokio::time::sleep(Duration::from_secs(1)).await;// let the spawns stabilize…, Just in Case™
         //tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
         let mut rx = c.broadcast.subscribe();
-        let bcast = tokio::spawn(async move {
+        tokio::spawn(async move {
             loop {
                 tokio::select! {
                     Ok(b) = rx.recv() => match b {

@@ -4,7 +4,7 @@ use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
 
-use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::{SystemSignal, signal::SignalSenderChannels}, user::UserInfo, world::World};
+use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery}, player::Player, string::{Slugger, prompt::PromptType}, tell_user, thread::signal::SignalSenderChannels, user::UserInfo, world::World};
 
 pub mod broadcast; pub use broadcast::*;
 pub mod file; pub use file::*;
@@ -171,10 +171,10 @@ impl ClientState {
                     if let Ok(player) = Player::load(&info.id, &p_id).await {
                         let state = Self::Playing { player: player.clone() };
                         
-                        let (id, title) = {
+                        let id = {
                             let lock = player.read().await;
                             tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
-                            (lock.id().to_string(), lock.title().to_string())
+                            lock.id().to_string()
                         };
 
                         World::insert_player(world.clone(), addr, &id, player.clone()).await;
@@ -201,10 +201,10 @@ impl ClientState {
                         }
                         Ok(player) => {
                             let state = Self::Playing { player: player.clone() };
-                            let (id, title) = {
+                            let id = {
                                 let lock = player.read().await;
                                 tell_user!(&mut writer, "{}", lock.prompt(&state).unwrap_or_default());
-                                (lock.id().to_string(), lock.title().to_string())
+                                lock.id().to_string()
                             };
 
                             World::insert_player(world.clone(), addr, &id, player.clone()).await;

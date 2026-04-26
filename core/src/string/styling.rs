@@ -6,7 +6,7 @@ pub const EDITOR_DIRTY: &str = "<c red>^*</c>";
 pub const MAX_DESCRIPTION_LINES: usize = 21; // a modest number, sort of fits on a tiny 80x24 terminal thingydoodah. Takes header, title, etc. into account.
 
 /// Return dirty-marker str based on `dirty` flag.
-pub fn dirty_mark(dirty: bool) -> &'static str {if dirty {EDITOR_DIRTY} else {""}}
+pub const fn dirty_mark(dirty: bool) -> &'static str {if dirty {EDITOR_DIRTY} else {""}}
 
 pub const RULER_LINE: &str = "|___\
 <c cyan>5</c>___\

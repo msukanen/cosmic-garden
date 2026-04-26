@@ -139,7 +139,7 @@ impl Damager for Entity {
 mod entity_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, io::ClientState, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, librarian::librarian, life::life, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, io::ClientState, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;
