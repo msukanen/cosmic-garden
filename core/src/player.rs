@@ -7,7 +7,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Stat, StatType, StatValue, affect::Affect, faction::{EntityFaction, FactionMut}, traits::Mob}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{Storage, StorageError, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Stat, StatType, StatValue, affect::Affect, core::Entity, faction::{EntityFaction, FactionMut}, traits::Mob}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{HelpPage, access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -63,6 +63,7 @@ pub struct Player {
     #[serde(default)] pub redit_buffer: Option<Room>,
     #[serde(default)] pub iedit_buffer: Option<Item>,
     #[serde(default)] pub hedit_buffer: Option<HelpPage>,
+    #[serde(default)] pub medit_buffer: Option<Entity>,
     
     #[serde(default = "player_default_atype", skip)]
     pub activity_type: ActivityType,
@@ -200,6 +201,7 @@ impl Player {
         self.hedit_buffer = None;
         self.iedit_buffer = None;
         self.redit_buffer = None;
+        self.medit_buffer = None;
     }
 
     /// Get mutable [reputation][Stat].
@@ -247,6 +249,7 @@ impl Default for Player {
             redit_buffer: None,
             iedit_buffer: None,
             hedit_buffer: None,
+            medit_buffer: None,
             activity_type: ActivityType::Other,
             inventory: player_inv_default(),
             affects: HashMap::new(),
