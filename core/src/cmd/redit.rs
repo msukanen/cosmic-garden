@@ -6,7 +6,7 @@ use async_trait::async_trait;
 
 include!(concat!(env!("OUT_DIR"), "/redit_registry.rs"));
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, player::ActivityType, show_help_if_needed, string::Slugger, tell_user, translocate, util::access::Accessor, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, player::ActivityType, show_help_if_needed, string::Slugger, tell_user, err_tell_user, translocate, util::access::Accessor, validate_access};
 
 pub struct ReditCommand;
 
@@ -15,8 +15,7 @@ impl Command for ReditCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
         if ctx.state.is_editing() {
-            tell_user!(ctx.writer, "You're already in one or other editor. Finish work there first.\n");
-            return;
+            err_tell_user!(ctx.writer, "You're already in one or other editor. Finish work there first.\n");
         }
         let (access, p_id, ploc) = {
             let p = plr.read().await;
