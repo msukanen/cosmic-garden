@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::{Arc, Weak}, time::Duration};
 use nohash_hasher::BuildNoHashHasher;
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::container::Storage, mob::StatValue, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::approx::ApproxI32, world::World};
+use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::{Item, container::{Storage, variants::ContainerVariant}}, mob::StatValue, room::Room, string::{DescribableMut, Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, translocate, util::approx::ApproxI32, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -26,19 +26,23 @@ struct BattlerRec {
 }
 
 impl BattlerRec {
-    async fn loot_pinata(&self) {
+    async fn loot_pinata(&self, world: &Arc<RwLock<World>>) {
         let mut lock = self.combatant.write().await;
         if let Some(room) = lock.location().upgrade() {
-            if let Some(items) = lock.inventory().eject_all() {
-                drop(lock);
+            let mut c_inv = Item::Corpse(lock.inventory().deep_reflect());
+            let c_id = lock.id().to_string();
+            let c_title = lock.title().to_string();
+            drop(lock);
+            c_inv.set_desc(&format!("Corpse of '{}'", c_title));
+            {
                 let mut lock = room.write().await;
-                for x in items {
-                    if let Err(e) = lock.try_insert(x) {
-                        // well shucks, room full…
-                        add_item_to_lnf(e).await;
-                    }
+                lock.entities.remove(&c_id);
+                if let Err(e) = lock.try_insert(c_inv) {
+                    // well shucks, room full…
+                    add_item_to_lnf(e).await;
                 }
-            }// else no items in inventory.
+            }
+            world.write().await.entities.remove(&c_id);
         } else {
             log::warn!("No piñataing '{}' in the void…", self.title);
         }
@@ -278,18 +282,18 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                                     Resolution::AtkRetreat => { deathrow.push(*a_key);},
                                     Resolution::AtkVictory {..} => {
                                         deathrow.push(*v_key);
-                                        vct.loot_pinata().await;
+                                        vct.loot_pinata(&world).await;
                                     }
                                     Resolution::VctRetreat => { deathrow.push(*v_key);},
                                     Resolution::VctVictory {..} => {
                                         deathrow.push(*a_key);
-                                        atk.loot_pinata().await;
+                                        atk.loot_pinata(&world).await;
                                     },
                                     Resolution::BothDead => {
                                         deathrow.push(*a_key);
                                         deathrow.push(*v_key);
-                                        vct.loot_pinata().await;
-                                        atk.loot_pinata().await;
+                                        vct.loot_pinata(&world).await;
+                                        atk.loot_pinata(&world).await;
                                     },
                                     Resolution::Inconclusive {..} => ()
                                 }
@@ -344,7 +348,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                             log::info!("Spawns to go: {spawn_count}");
                         }
                     }
-                    spawn_something(what, &room_id, world.clone()).await
+                    spawn_something(what, &room_id, &world).await
                 }
 
                 // Attack! From e.g. AttackCommand from player to start a fight.
@@ -498,11 +502,14 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
 /// # Args
 /// - `what` to spawn.
 /// - `where` to spawn ([Room] ID).
-async fn spawn_something(what: SpawnType, r_id: &str, world: Arc<RwLock<World>>) {
+async fn spawn_something(what: SpawnType, r_id: &str, world: &Arc<RwLock<World>>) {
     match &what {
         SpawnType::Mob { id } => {
-            if let Some(r_arc) = world.read().await.rooms.get(r_id) {
-                direct_spawn_something(what, r_arc).await
+            let w = world.read().await;
+            if let Some(r_arc) = w.rooms.get(r_id) {
+                let r_arc = r_arc.clone();
+                drop(w);
+                direct_spawn_something(what, &r_arc, world).await
             } else {
                 log::error!("Ayy! We don't have room '{}' to spawn '{id}' at!", r_id);
             }
@@ -517,15 +524,22 @@ async fn spawn_something(what: SpawnType, r_id: &str, world: Arc<RwLock<World>>)
 /// # Args
 /// - `what` to spawn.
 /// - `where` to spawn ([Room] ID).
-async fn direct_spawn_something(what: SpawnType, r#where: &Arc<RwLock<Room>>) {
+async fn direct_spawn_something(what: SpawnType, r_arc: &Arc<RwLock<Room>>, world: &Arc<RwLock<World>>) {
     match what {
         SpawnType::Mob { id } => {
             if let Some(mut mob) = (*ENT_BP_LIBRARY).read().await.get(&id) {
                 *(mob.id_mut()) = mob.id().re_uuid();
                 let mob_id = mob.id().to_string();
-                mob.set_location(&r#where);
-                r#where.write().await.entities.insert(mob_id.clone(), Arc::new(RwLock::new(mob)));
-                log::trace!("Life has spawned '{mob_id}' at '{}'", r#where.read().await.id());
+                mob.set_location(&r_arc);
+                let mob_arc = Arc::new(RwLock::new(mob));
+                {
+                    let mut w = world.write().await;
+                    // tell the world 1st…
+                    w.entities.insert(mob_id.clone(), Arc::downgrade(&mob_arc));
+                    // …then the room itself.
+                    r_arc.write().await.entities.insert(mob_id.clone(), mob_arc);
+                }// drop 'w' now…
+                log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
             } else {
                 log::warn!("There's no record of '{id}' in the entity catalogue…");
             }
@@ -652,7 +666,7 @@ mod life_tests {
                 drop(lock);
                 state = ctx!(state, LookCommand, "", s,c,w,p);
                 log::debug!("Lootage…?");
-                erec.loot_pinata().await;
+                erec.loot_pinata(&w).await;
                 log::debug!("Got loots…!");
             } else {
                 panic!("Where did the gobbo go?! It was right here!");

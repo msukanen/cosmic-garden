@@ -1,11 +1,11 @@
 //! When worlds collide…
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, usize};
+use std::{collections::HashMap, net::SocketAddr, sync::{Arc, Weak}, usize};
 
 use futures::{StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, player::Player, room::Room, string::{UNNAMED, as_id, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, mob::core::Entity, player::Player, room::Room, string::{UNNAMED, as_id, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
@@ -38,6 +38,8 @@ pub struct World {
     pub root_room_id: String,
     #[serde(skip)]
     pub root_room: Option<Arc<RwLock<Room>>>,
+    #[serde(default, skip)]
+    pub entities: HashMap<String, Weak<RwLock<Entity>>>,
 
     #[serde(default)]
     pub lost_and_found: HashMap<String, Item>,
@@ -65,6 +67,7 @@ impl World {
                 root_room,
             lost_and_found: HashMap::new(),
             channels: None,
+            entities: HashMap::new(),
         }
     }
 }
@@ -145,6 +148,7 @@ impl World {
                     },
                     lost_and_found: HashMap::new(),
                     channels: None,
+                    entities: HashMap::new(),
                 };
                 w.save(true).await?;
                 log::info!("World '{}' bootstrapped successfully.", w.name);
