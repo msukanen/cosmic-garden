@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::{Arc, Weak}, time::Duration};
 use nohash_hasher::BuildNoHashHasher;
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{combat::{Battler, Combatant, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::container::Storage, mob::StatValue, player::Player, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::approx::ApproxI32, world::World};
+use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::container::Storage, mob::StatValue, room::Room, string::{Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::approx::ApproxI32, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -15,8 +15,8 @@ macro_rules! get_operational_mock_life {
     };
 }
 
-/// Threshold above which we'll stop nagging the World and pre-fetch list(s) in one sweep…
-pub const PARALLEL_BATTLE_CONGESTION_THRESHOLD: usize = 50;
+// Threshold above which we'll stop nagging the World and pre-fetch list(s) in one sweep…
+//pub const PARALLEL_BATTLE_CONGESTION_THRESHOLD: usize = 50;
 
 pub(crate) type BattlerKey = usize;
 #[derive(Clone)]
@@ -105,9 +105,9 @@ impl BattleStage {
         self.active.remove(&battle_key);
     }
 
-    fn remove_b(&mut self, battler: &Battler) {
+    async fn remove_b(&mut self, battler: &Battler) {
         let key = lock2key!(arc &battler);
-        self.remove(key);
+        self.remove(key).await;
     }
 }
 
@@ -380,7 +380,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 }
 
                 // Player loggeed out.
-                SystemSignal::PlayerLogout { player } => bs.remove_b(&(player as Battler)),
+                SystemSignal::PlayerLogout { player } => bs.remove_b(&(player as Battler)).await,
 
                 //
                 // Public transportation (or denial of such thereof).
@@ -408,7 +408,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 }
 
                 // Abort battle for `who`.
-                SystemSignal::AbortBattleNow { who } => { bs.remove_b(&who); }
+                SystemSignal::AbortBattleNow { who } => bs.remove_b(&who).await,
                 
                 // Count how many ticks `sec` is currently.
                 SystemSignal::SecToTicks { sec, tick_type, out } => {
