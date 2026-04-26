@@ -649,7 +649,7 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
     let loc_field = req_field!(data, "location");
     let inv_field = req_field!(data, "inventory");
     let freeza_field = maybe_field!(data, "brain_freeze");
-    let brain_Freeze_logic = if let Some(field) = freeza_field {
+    let brain_freeze_logic = if let Some(field) = freeza_field {
         quote! { self.#field = freeze; }
     } else {
         quote! {}
@@ -682,7 +682,7 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
             }
 
             fn alter_brain_freeze(&mut self, freeze: bool) {
-                #brain_Freeze_logic
+                #brain_freeze_logic
             }
         }
     };
