@@ -48,11 +48,11 @@ macro_rules! err_iedit_buffer_inaccessible {
     /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);`
     /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr, |out:&str| out.contains("apple"));`
     macro_rules! ctx {
-        ($state:ident, $cmd:ident, $args:literal, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident) => {{
+        ($state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident) => {{
             crate::ctx!($state,$cmd,$args,$mock_sock,$sigs,$world,$plr,|_|true)
         }};
 
-        ($state:ident, $cmd:ident, $args:literal, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
+        ($state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
             let state = {
                 use crate::cmd::{Command,CommandCtx};
                 $mock_sock.get_mut().clear();

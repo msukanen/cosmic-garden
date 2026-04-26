@@ -1,10 +1,11 @@
 use std::num::{IntErrorKind, NonZeroU32, NonZeroUsize, ParseIntError};
 
-use crate::{string::{styling::{MAX_DESCRIPTION_LINES, RULER_LINE}, LineEndingExt}, tell_user};
+use crate::{string::{newline::LineEndingExt, styling::{MAX_DESCRIPTION_LINES, RULER_LINE}}, tell_user};
 
 #[derive(Debug)]
 pub enum EditorError {
     MaxLineCount,
+    TooLong,
     ParseIntError(ParseIntError),
 }
 
@@ -13,6 +14,7 @@ impl std::fmt::Display for EditorError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::MaxLineCount => write!(f, "Max line count of {MAX_DESCRIPTION_LINES} exceeded."),
+            Self::TooLong => write!(f, "Max text length of {} characters would have been exceeded.", 79 * MAX_DESCRIPTION_LINES),
             Self::ParseIntError(e) => write!(f, "Numeric error {}", e),
         }
     }
@@ -34,6 +36,7 @@ impl From<ParseIntError> for EditorError { fn from(value: ParseIntError) -> Self
 /// - `-` — remove line.
 /// - `=` — ignore `source`, use `args` as full replacement.
 pub async fn edit_text(writer: &mut (dyn tokio::io::AsyncWrite + Unpin + Send), args: &str, source: &str) -> Result<EdResult, EditorError> {
+    let source = source.trim_end();
     if args.is_empty() {
         return {
             let mut display = String::new();
@@ -60,7 +63,8 @@ pub async fn edit_text(writer: &mut (dyn tokio::io::AsyncWrite + Unpin + Send), 
     let op = args.chars().next();
     if let Some(c @ ('r'|'+')) = op {
         //
-        // 'r' -- insert as specified line…
+        // '+' -- insert as specified line…
+        // 'r' -- replace the specified line…
         //
         let args = args[1..].trim_start().splitn(2, ' ').collect::<Vec<&str>>();
         let lno = match args[0].parse::<usize>() {
@@ -86,6 +90,15 @@ pub async fn edit_text(writer: &mut (dyn tokio::io::AsyncWrite + Unpin + Send), 
             '+' => insert_nth_line(&source, lno, new_line),
             _ => unreachable!()
         };
+        let lno = text.lines().count();
+        if lno > MAX_DESCRIPTION_LINES {
+            tell_user!(writer, "Nope, not doing — too many lines {lno}. TL;DR… already at {}!\n", MAX_DESCRIPTION_LINES);
+            return Err(EditorError::MaxLineCount);
+        }
+        if text.len() > 79*MAX_DESCRIPTION_LINES && lno < MAX_DESCRIPTION_LINES {
+            tell_user!(writer, "Nope, not doing — text too cramped. Rewrite better…\n");
+            return Err(EditorError::TooLong);
+        }
         return Ok(EdResult::ContentReady { text, dirty: true, verbose });
     }
 
@@ -138,16 +151,24 @@ pub async fn edit_text(writer: &mut (dyn tokio::io::AsyncWrite + Unpin + Send), 
         }
         return Ok(EdResult::ContentReady { text: format!("{}\n", &args[1..]), dirty: true, verbose });
     }
-      
+    
     //
     // Append at end if no sub-command specified.
     //
-    let mut text = source.to_string();
-    text.push_str(&format!("{}\n", args));
+    let mut lf_ensured = source.ensure_lf();
+    if lf_ensured.lines().count() >= MAX_DESCRIPTION_LINES {
+        tell_user!(writer, "ERR - there's already {}+ lines of text… Can't add more.\n", MAX_DESCRIPTION_LINES);
+        return Err(EditorError::MaxLineCount);
+    }
+    if lf_ensured.len() + args.len() >= 79 * MAX_DESCRIPTION_LINES {
+        tell_user!(writer, "ERR - try to be more conscise. Description would exceed {} characters in length…\n", 79*MAX_DESCRIPTION_LINES);
+        return Err(EditorError::TooLong);
+    }
+    lf_ensured.push_str(&format!("{}\n", args));
     if !verbose {
         tell_user!(writer, "OK - text appended.\n");
     }
-    Ok(EdResult::ContentReady { text, dirty: true, verbose })
+    Ok(EdResult::ContentReady { text: lf_ensured, dirty: true, verbose })
 }
 
 /// Removes nth line from given `text`.
@@ -192,9 +213,9 @@ fn insert_nth_line(text: &str, line_num: usize, text_to_insert: &str) -> String 
         while lines.len() < index {
             lines.push("");
         }
-        lines.push(text_to_insert);
+        lines.push(text_to_insert.trim_end());
     } else {
-        lines.insert(index, text_to_insert);
+        lines.insert(index, text_to_insert.trim_end());
     }
 
     format!("{}\n", lines.join("\n"))
@@ -213,9 +234,9 @@ fn replace_nth_line(text: &str, line_num: usize, text_to_insert: &str) -> String
         while lines.len() < index {
             lines.push("");
         }
-        lines.push(text_to_insert);
+        lines.push(text_to_insert.trim_end());
     } else {
-        lines[index] = text_to_insert;
+        lines[index] = text_to_insert.trim_end();
     }
 
     format!("{}\n", lines.join("\n"))
@@ -237,9 +258,13 @@ macro_rules! access_ed_entry {
 }
 
 #[cfg(test)]
-mod desc_tests {
+mod ed_tests {
+    use std::io::Cursor;
+
+    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, desc::DescCommand}}, io::ClientState, string::{Describable, DescribableMut, newline::LineEndingExt, styling::MAX_DESCRIPTION_LINES}, util::access::Access, world::world_tests::get_operational_mock_world};
+
     #[test]
-    fn test_remove_nth_line() {
+    fn remove_nth_line() {
         use super::*;
         let text = "This text has\n3 lines.\nAt least before removal of line #2.";
         let r = remove_nth_line(text, "2");
@@ -248,5 +273,51 @@ mod desc_tests {
         } else {
             panic!("No go!");
         }
+    }
+
+    #[tokio::test]
+    async fn ed_79_21_plus() {
+        let mut b: Vec<u8> = vec![];
+        let mut s = Cursor::new(&mut b);
+        let (w,c,p,d) = get_operational_mock_world().await;
+        let c = c.out;
+        let l79: &'static str = "0123456789012345678901234567890123456789012345678901234567890123456789012345678\n";
+        let mut l21 = String::new();
+        for _ in 0..21 {
+            l21.push_str(l79);
+        }
+        assert_eq!(80*MAX_DESCRIPTION_LINES, l21.len());
+        let lined = (&*l21).ensure_lf();
+        assert_eq!(MAX_DESCRIPTION_LINES, lined.lines().count());
+        let l80: &'static str = "01234567890123456789012345678901234567890123456789012345678901234567890123456789";
+        let mut l80_21 = String::new();
+        for _ in 0..21 {
+            l80_21.push_str(l80);
+        }
+        let lined = (&*l80_21).ensure_lf();
+        let len = l80_21.len();
+        assert_eq!(80*MAX_DESCRIPTION_LINES, len);
+        let lno = lined.lines().count();
+        // within limits even if cramped?
+        if lno < MAX_DESCRIPTION_LINES && len > 79*MAX_DESCRIPTION_LINES {
+            // this should log an error
+            log::error!("Text cramped: {lno}L >= {MAX_DESCRIPTION_LINES}max or {len}C > {}C", 79*MAX_DESCRIPTION_LINES);
+        } else {
+            panic!("Hey!? Where's my error log for lno={lno} len={len}?");
+        }
+        // lets fool around with r-1's description…
+        let r1 = if let Some(r1) = w.read().await.rooms.get("r-1") {
+            r1.clone()
+        } else { panic!("r-1 poofed?") };
+        r1.write().await.set_desc(&l21);
+        let state = ClientState::Playing { player: p.clone() };
+        p.write().await.access = Access::Builder;
+        let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("01234"));
+        let state = ctx!(state, ReditCommand, "here", s,c,w,p);
+        let state = ctx!(state, DescCommand, "Maybe...",s,c,w,p,|out:&str| out.contains("ERR"));
+        let state = ctx!(state, DescCommand, "v+21 Maybe...",s,c,w,p,|out:&str| out.contains("too many lines"));
+        let state = ctx!(state, DescCommand, "vr21 Maybe...",s,c,w,p,|out:&str| out.contains("Maybe..."));
+        let state = ctx!(state, DescCommand, &format!("vr22 {}", l79),s,c,w,p,|out:&str| out.contains("Maximum help"));
+        let _ = ctx!(state, DescCommand, &format!("vr21 {}", l79),s,c,w,p,|out:&str| !out.contains("Maybe"));
     }
 }
