@@ -16,7 +16,6 @@ impl Command for SetCommand {
         show_help_if_needed!(ctx, "set");
         
         let (what, args) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
-        if args.is_empty() { show_help!(ctx, "set") }
 
         match what {
             "core_tick"|"core"|"core-tick" => set_core_tick(ctx, args).await,
@@ -73,12 +72,15 @@ async fn set_battle_tick(ctx: &mut CommandCtx<'_>, args: &str) {
 async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &Arc<RwLock<Player>>) {
     let config = plr.read().await.config.clone();
     let (var, args) = args.split_once(' ').unwrap_or((args, ""));
-    if args.is_empty() {
+    if var.is_empty() {
         let mut out = String::from("<c cyan>Config values:</c>\n");
         out.push_str(&format!("   <c blue>*</c> show-<c yellow>id</c>: <c yellow>{}</c>\n", config.show_id));
         out.push_str(&format!("   <c blue>*</c> show-<c yellow>self</c>: <c yellow>{}</c>\n", config.show_self_in_room));
         out.push_str(&format!("   <c blue>*</c> <c yellow>ghost</c>: <c yellow>{}</c>\n", config.is_ghost));
         err_tell_user!(ctx.writer, "{}", out);
+    }
+    if args.is_empty() {
+        err_tell_user!(ctx.writer, "<c green>Usage:</c> set config <var> <val>\n");
     }
 
     let tf = args.true_false();
@@ -96,8 +98,32 @@ async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &Arc<RwLock<P
 
 #[cfg(test)]
 mod cmd_set_tests {
+    use std::time::Duration;
+
+    use crate::{cmd::{help::HelpCommand, look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+
     #[tokio::test]
     async fn set_config_val() {
-
+        let mut b: Vec<u8> = vec![];
+        let mut s = std::io::Cursor::new(&mut b);
+        let (w,c,p,d) = get_operational_mock_world().await;
+        let jt = get_operational_mock_janitor!(c,w,d.0);
+        let gt = get_operational_mock_life!(c,w);
+        let lt = get_operational_mock_librarian!(c,w);
+        let c = c.out;
+        let state = ClientState::Playing { player: p.clone() };
+        tokio::time::sleep(Duration::from_secs(1)).await;
+        let state = ctx!(state, SetCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
+        p.write().await.access = Access::Builder;
+        let state = ctx!(state, SetCommand, "", s,c,w,p,|out:&str| out.contains("admin-only by nature"));
+        let state = ctx!(state, SetCommand, "xyc", s,c,w,p,|out:&str| out.contains("admin-only by nature"));
+        let state = ctx!(state, SetCommand, "config", s,c,w,p,|out:&str| out.contains("Config values"));
+        let state = ctx!(state, SetCommand, "config bla", s,c,w,p,|out:&str| out.contains("Usage"));
+        let state = ctx!(state, SetCommand, "config bla 5", s,c,w,p,|out:&str| out.contains("Accepted vars"));
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() }).ok();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("A goblin is here"));
+        let state = ctx!(state, SetCommand, "config id 5", s,c,w,p,|out:&str| out.contains("true"));
+        let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("goblin-"));
     }
 }
