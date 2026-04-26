@@ -71,6 +71,7 @@ pub enum Item {
     Key(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Consumable(ConsumableMatter),
     Primordial(PrimordialItem),
+    Corpse(ContainerVariant),
 }
 
 impl PartialEq<str> for Item {
@@ -83,8 +84,9 @@ impl PartialEq<str> for Item {
 impl Item {
     pub fn devolve(&mut self) {
         match self {
-            // Primordial doesn't need devolving…
+            // Primordial and Corpses don't devolve…
             Self::Primordial(_) => (),
+            Self::Corpse(_) => (),
             // …while everything else does.
             Self::Consumable(_) => *self = PrimordialItem::atomize(self),
             Self::Container(_) => *self = PrimordialItem::atomize(self),
@@ -99,6 +101,7 @@ impl Reflector for Item {
     fn reflect(&self) -> Self {
         match self {
             Self::Container(c) => Self::Container(c.reflect()),
+            Self::Corpse(c) => Self::Corpse(c.reflect()),
             Self::Key(k) => Self::Key(k.reflect()),
             Self::Tool(t) => Self::Tool(t.reflect()),
             Self::Weapon(w) => Self::Weapon(w.reflect()),
@@ -109,6 +112,7 @@ impl Reflector for Item {
     fn deep_reflect(&self) -> Self {
         match self {
             Self::Container(c) => Self::Container(c.deep_reflect()),
+            Self::Corpse(c) => Self::Corpse(c.deep_reflect()),
             Self::Key(k) => Self::Key(k.deep_reflect()),
             Self::Tool(t) => Self::Tool(t.deep_reflect()),
             Self::Weapon(w) => Self::Weapon(w.deep_reflect()),
@@ -207,7 +211,8 @@ impl Storage for Item {
 impl Describable for Item {
     fn desc<'a>(&'a self) -> &'a str {
         match self {
-            Self::Container(v) => v.desc(),
+            Self::Container(v) |
+            Self::Corpse(v)    => v.desc(),
             Self::Key(v) => v.desc(),
             Self::Primordial(v) => v.desc(),
             Self::Tool(v) => v.desc(),
@@ -220,6 +225,7 @@ impl Describable for Item {
 impl DescribableMut for Item {
     fn set_desc(&mut self, text: &str) -> bool {
         match self {
+            Self::Corpse(v)    |
             Self::Container(v) => v.set_desc(text),
             Self::Key(v) => v.set_desc(text),
             Self::Primordial(v) => v.set_desc(text),
@@ -234,7 +240,8 @@ impl Itemized for Item {
     fn size(&self) -> StorageSpace {
         match self {
             Self::Consumable(v) => v.size(),
-            Self::Container(v) => v.size(),
+            Self::Container(v) |
+            Self::Corpse(v)    => v.size(),
             Self::Key(v) => v.size(),
             Self::Primordial(v) => v.size(),
             Self::Tool(v) => v.size(),
@@ -252,6 +259,7 @@ impl ItemizedMut for Item {
             Self::Primordial(v) => v.set_size(sz),
             Self::Tool(v) => v.set_size(sz),
             Self::Weapon(v) => v.set_size(sz),
+            Self::Corpse(_) => false,
         }
     }
 }
@@ -280,8 +288,9 @@ impl Tickable for Item {
     async fn tick(&mut self) -> bool {
         match self {
             Self::Consumable(c) => c.tick().await,
-            Self::Container(c) => c.tick().await,
-            Self::Primordial(c) => c.tick().await,
+            Self::Container(c)  |
+            Self::Corpse(c)     => c.tick().await,
+            Self::Primordial(c)   => c.tick().await,
             _ => false
         }
     }
