@@ -460,13 +460,13 @@ fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     match &input.data {
         Data::Enum(data) => {
             let owner_ids = enum_getter!(data, owner);
-            let last_user_ids = enum_getter!(data, last_user);
+            let last_user_ids = enum_getter!(data, last_users);
             let sources = enum_getter!(data, source);
             
             quote! {
                 impl crate::item::ownership::Owned for #name {
                     fn owner(&self) -> Option<String> { match self {#(#owner_ids),*}}
-                    fn last_user(&self) -> Option<String> { match self {#(#last_user_ids),*}}
+                    fn last_users(&self) -> Option<&std::collections::VecDeque<String>> { match self {#(#last_user_ids),*}}
                     fn source(&self) -> crate::item::ownership::ItemSource { match self {#(#sources),*}}
                 }
             }
@@ -480,13 +480,13 @@ fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
             let (o_body, l_body, s_body) = if has_owner_field {
             (
                 quote! { self.owner.owner() },
-                quote! { self.owner.last_user() },
+                quote! { self.owner.last_users() },
                 quote! { self.owner.source() },
             )
             } else {
             (
                 quote! { self.owner_id.clone() },
-                quote! { self.last_user_id.clone() },
+                quote! { self.last_user_id.as_ref() },
                 quote! { self.source.clone() },
             )
             };
@@ -494,7 +494,7 @@ fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
             quote! {
                 impl crate::item::ownership::Owned for #name {
                     fn owner(&self) -> Option<String> { #o_body }
-                    fn last_user(&self) -> Option<String> { #l_body }
+                    fn last_users(&self) -> Option<&std::collections::VecDeque<String>> { #l_body }
                     fn source(&self) -> crate::item::ownership::ItemSource { #s_body }
                 }
             }
@@ -556,7 +556,13 @@ pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
                 },
                 quote! {// set_last_user
                     crate::string::slug::is_id(a)?;
-                    self.last_user_id = a.to_string().into();
+                    if let Some(luid) = &mut self.last_user_id {
+                        luid.push_front(a.to_string());
+                    } else {
+                        let mut v = std::collections::VecDeque::new();
+                        v.push_back(a.to_string());
+                        self.last_user_id = Some(v);
+                    }
                     Ok(())
                 },
                 quote! {// set_source

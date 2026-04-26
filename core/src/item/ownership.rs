@@ -1,5 +1,7 @@
 //! [Item][crate::item::Item] ownership tracking.
 
+use std::collections::VecDeque;
+
 use cosmic_garden_pm::OwnedMut;
 use serde::{Deserialize, Serialize};
 
@@ -10,8 +12,8 @@ pub trait Owned {
     /// True owner's ID, if any.
     fn owner(&self) -> Option<String>;
     
-    /// Last user's ID, if any.
-    fn last_user(&self) -> Option<String>;
+    /// Last users IDs, if any.
+    fn last_users(&self) -> Option<&VecDeque<String>>;
 
     /// Source of the [Item][crate::item::Item].
     fn source(&self) -> ItemSource;
@@ -30,7 +32,7 @@ pub trait OwnedMut: Owned {
 #[derive(Debug, Clone, Deserialize, Serialize, OwnedMut)]
 pub struct Owner {
     owner_id: Option<String>,
-    last_user_id: Option<String>,
+    last_user_id: Option<VecDeque<String>>,
     source: ItemSource,
 }
 
