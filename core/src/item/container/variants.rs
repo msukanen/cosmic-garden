@@ -1,11 +1,11 @@
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 
 use async_trait::async_trait;
 use cosmic_garden_pm::{IdentityMut, Storage, OwnedMut};
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::{r#const::SIZE_BALANCE, identity::{IdError, IdentityMut, IdentityQuery}, item::{Item, Itemized, ItemizedMut, StorageQueryError, container::{Storage, StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}, ownership::{ItemSource, ItemSourceError, Owned, OwnedMut}}, mob::core::Entity, string::{Describable, DescribableMut, Uuid}, traits::{Reflector, Tickable}};
+use crate::{r#const::SIZE_BALANCE, identity::{IdError, IdentityMut, IdentityQuery}, item::{Item, Itemized, ItemizedMut, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}}, ownership::{ItemSource, ItemSourceError, Owned, OwnedMut}}, mob::core::Entity, string::{Describable, DescribableMut, Uuid}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum ContainerVariantType {
@@ -89,7 +89,7 @@ impl IdentityQuery for CorpseSpec {
 }
 
 impl Owned for CorpseSpec {
-    fn last_user(&self) -> Option<String> { None }
+    fn last_users(&self) -> Option<&VecDeque<String>> { None }
     fn owner(&self) -> Option<String> { None }
     fn source(&self) -> ItemSource { ItemSource::System }
 }
@@ -101,48 +101,34 @@ impl OwnedMut for CorpseSpec {
 }
 
 impl Storage for CorpseSpec {
-    fn can_hold(&self, item: &Item) -> Result<(), StorageQueryError> {
-        self.spec.can_hold(item)
+    /// Corpses reject items and thus `can_hold()` will
+    /// [**auto-error**][StorageQueryError::NotContainer].
+    fn can_hold(&self, _: &Item) -> Result<(), StorageQueryError> {
+        //self.spec.can_hold(item)
+        Err(StorageQueryError::NotContainer)
     }
-
-    fn contains(&self, id: &str) -> bool {
-        self.spec.contains(id)
-    }
-
-    fn eject_all(&mut self) -> Option<Vec<Item>> {
-        self.spec.eject_all()
-    }
-
-    fn find_id_by_name(&self, name: &str) -> Option<String> {
-        self.spec.find_id_by_name(name)
-    }
-
+    fn contains(&self, id: &str) -> bool { self.spec.contains(id) }
+    fn eject_all(&mut self) -> Option<Vec<Item>> { self.spec.eject_all() }
+    fn find_id_by_name(&self, name: &str) -> Option<String> { self.spec.find_id_by_name(name) }
+    /// Corpses reject items…
     fn max_space(&self) -> StorageSpace {
-        self.spec.max_space()
+        //self.spec.max_space()
+        0
     }
-
-    fn peek_at(&self, id: &str) -> Option<&Item> {
-        self.spec.peek_at(id)
-    }
-
-    fn required_space(&self) -> StorageSpace {
-        self.spec.required_space()
-    }
-
+    fn peek_at(&self, id: &str) -> Option<&Item> { self.spec.peek_at(id) }
+    fn required_space(&self) -> StorageSpace { self.spec.required_space() }
+    /// Corpses reject items…
     fn space(&self) -> StorageSpace {
-        self.spec.space()
+        //self.spec.space()
+        0
     }
-
-    fn take(&mut self, id: &str) -> Option<Item> {
-        self.spec.take(id)
-    }
-
-    fn take_by_name(&mut self, id: &str) -> Option<Item> {
-        self.spec.take_by_name(id)
-    }
-
-    fn try_insert(&mut self, item: Item) -> Result<(), super::StorageError> {
-        self.spec.try_insert(item)
+    fn take(&mut self, id: &str) -> Option<Item> { self.spec.take(id) }
+    fn take_by_name(&mut self, id: &str) -> Option<Item> { self.spec.take_by_name(id) }
+    /// Corpses reject items and thus `try_insert()` will
+    /// [**auto-error**][StorageError::NotContainer].
+    fn try_insert(&mut self, item: Item) -> Result<(), StorageError> {
+        // self.spec.try_insert(item)
+        Err(StorageError::NotContainer(item))
     }
 }
 
