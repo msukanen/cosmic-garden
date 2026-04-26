@@ -100,7 +100,7 @@ async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &Arc<RwLock<P
 mod cmd_set_tests {
     use std::time::Duration;
 
-    use crate::{cmd::{help::HelpCommand, look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn set_config_val() {
@@ -124,6 +124,6 @@ mod cmd_set_tests {
         tokio::time::sleep(Duration::from_millis(100)).await;
         let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("A goblin is here"));
         let state = ctx!(state, SetCommand, "config id 5", s,c,w,p,|out:&str| out.contains("true"));
-        let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("goblin-"));
+        let _ = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("goblin-"));
     }
 }
