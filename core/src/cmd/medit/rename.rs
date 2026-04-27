@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::{IdentityMut, IdentityQuery}, show_help, show_help_if_needed, tell_user, tell_user_unk, util::access::{self, Accessor}, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::{IdentityMut, IdentityQuery}, show_help, show_help_if_needed, tell_user, tell_user_unk, util::access::Accessor, validate_access, validate_editor_mode};
 
 pub struct RenameCommand;
 
@@ -10,6 +10,7 @@ pub struct RenameCommand;
 impl Command for RenameCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
+        validate_editor_mode!(ctx, "MEdit");
         show_help_if_needed!(ctx, "rename");
 
         let (what, args) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
@@ -27,12 +28,12 @@ impl Command for RenameCommand {
                     }
                     if !access.is_admin() {
                         drop(w);
-                        tell_user_unk!(ctx.writer);
-                        show_help!(ctx, "rename");
+                        err_tell_user!(ctx.writer, "<c red>[ERR]</c> Re-ID requires admin privileges.\n");
                     }
                     let old_id = ent.id().to_string();
                     if let Ok(_) = ent.set_id(args) {
                         let ent_id = ent.id().to_string();
+                        ctx.state.set_dirty(true);
                         drop(w);
                         tell_user!(ctx.writer, "Entity '{}' re-ID'd as '{}'.\n", old_id, ent_id);
                         return ;
@@ -43,13 +44,11 @@ impl Command for RenameCommand {
                 },
                 // normal rename:
                 _ => {
-                    if !args.is_empty() {
-                        drop(w);
-                        show_help!(ctx, "rename");
-                    }
                     let old_title = ent.title().to_string();
-                    ent.set_title(what);
-                    tell_user!(ctx.writer, "Entity '{}' renamed as '{}'.\n", old_title, what);
+                    ent.set_title(ctx.args);
+                    ctx.state.set_dirty(true);
+                    drop(w);
+                    tell_user!(ctx.writer, "Entity '{}' renamed as '{}'.\n", old_title, ctx.args);
                 }
             }
         } else {
@@ -70,7 +69,7 @@ mod medit_rename_tests {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,c,p,_) = get_operational_mock_world().await;
-        let lt = get_operational_mock_librarian!(c,w);
+        let _ = get_operational_mock_librarian!(c,w);
         tokio::time::sleep(Duration::from_secs(1)).await;// let the thread(s) stabilize…
         let c = c.out;
         let state = ClientState::Playing { player: p.clone() };
