@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::RwLock, time};
 
-use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::{BP_LIBRARY, HELP_LIBRARY}, signal::{SigReceiver, SignalSenderChannels}}, world::World};
+use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::{BP_LIBRARY, ENT_BP_LIBRARY, HELP_LIBRARY}, signal::{SigReceiver, SignalSenderChannels}}, world::World};
 
 lazy_static! {
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
@@ -61,6 +61,7 @@ pub(crate) async fn janitor(
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
                 SystemSignal::ReindexLibrary => save_help_asap(&out).await,
                 SystemSignal::NewBlueprintEntry => save_bp_asap(&out).await,
+                SystemSignal::NewEntityEntry => save_ent_bp_asap(&out).await,
                 SystemSignal::PlayerNeedsSaving(lock) => {
                     let p_id = lock.read().await.id().to_string();
                     save_player_now(lock, &p_id).await;
@@ -144,7 +145,7 @@ async fn save_the_whales(world: Arc<RwLock<World>>, force_save: bool) -> bool {
 /// [Room(s)][Room] save cycle.
 async fn room_save() {
     let rooms_to_save = {
-        let mut qlock = (*ROOMS_TO_SAVE).write().await;
+        let mut qlock = ROOMS_TO_SAVE.write().await;
         qlock.drain(..).collect::<Vec<_>>()
     };
     if rooms_to_save.is_empty() { return ; }
@@ -156,7 +157,7 @@ async fn room_save() {
         }
     }
     if !rooms_to_requeue.is_empty() {
-        (*ROOMS_TO_SAVE).write().await.extend(rooms_to_requeue);
+        ROOMS_TO_SAVE.write().await.extend(rooms_to_requeue);
     }
 }
 
@@ -164,7 +165,7 @@ async fn room_save() {
 pub async fn add_item_to_lnf<T>(item: T)
 where T: Into<Item> + IdentityQuery
 {
-    let mut lock = (*LOST_AND_FOUND).write().await;
+    let mut lock = LOST_AND_FOUND.write().await;
     log::warn!("Item '{}' added into L'n'F queue", item.id());
     lock.push(item.into());
 }
@@ -172,7 +173,7 @@ where T: Into<Item> + IdentityQuery
 /// Lost and found. Persist it all, someone might need it later…
 async fn lost_and_found(world: Arc<RwLock<World>>) {
     let items_to_save = {
-        let mut lock = (*LOST_AND_FOUND).write().await;
+        let mut lock = LOST_AND_FOUND.write().await;
         lock.drain(..).collect::<Vec<_>>()
     };
     if items_to_save.is_empty() { return ;}
@@ -189,7 +190,7 @@ async fn lost_and_found(world: Arc<RwLock<World>>) {
 
 /// ASAP save of [HelpPage]s.
 async fn save_help_asap(out: &SignalSenderChannels) {
-    if let Err(e) = (*HELP_LIBRARY).write().await.save().await {
+    if let Err(e) = HELP_LIBRARY.write().await.save().await {
         log::error!("Help anomaly! {e:?}");
         return ;
     }
@@ -199,10 +200,18 @@ async fn save_help_asap(out: &SignalSenderChannels) {
 
 /// ASAP save of [HelpPage]s.
 async fn save_bp_asap(out: &SignalSenderChannels) {
-    if let Err(e) = (*BP_LIBRARY).write().await.save().await {
+    if let Err(e) = BP_LIBRARY.write().await.save().await {
         log::error!("Blueprint anomaly! {e:?}");
         return ;
     }
     // Nudge the librarian, but don't wait if he's asleep…
     out.librarian.send(SystemSignal::ReindexLibrary).ok();
+}
+
+/// ASAP save of [Entity] library.
+async fn save_ent_bp_asap(_out: &SignalSenderChannels) {
+    if let Err(e) = ENT_BP_LIBRARY.write().await.save().await {
+        log::error!("Entity DNA anomaly! {e:?}");
+        return ;
+    }
 }

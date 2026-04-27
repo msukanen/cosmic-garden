@@ -99,7 +99,14 @@ pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver),
 
                 SystemSignal::NewBlueprintEntry => {
                     log::trace!("A new blueprint? Let's see what's that all about…");
+                    // TODO any validation of entry/entries needed?
                     out.janitor.send(SystemSignal::NewBlueprintEntry).ok();
+                }
+
+                SystemSignal::NewEntityEntry => {
+                    log::trace!("A new thing for entity catalogue? Let's see it's all about…");
+                    // TODO any validation of entry/entries needed?
+                    out.janitor.send(SystemSignal::NewEntityEntry).ok();
                 }
 
                 SystemSignal::Shutdown => { break; }

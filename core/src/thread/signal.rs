@@ -30,6 +30,8 @@ pub enum SystemSignal {
     NewLibraryEntry,
     /// New blueprint entry, from e.g. builders.
     NewBlueprintEntry,
+    /// New entity blueprint entry, from e.g. builders.
+    NewEntityEntry,
 
     ///--- Life Thread
     /// Notion to spawn something…
