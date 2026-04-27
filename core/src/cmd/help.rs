@@ -35,10 +35,10 @@ impl Command for HelpCommand {
         };
 
         let page_id = match ctx.state.edit_mode() {
-            Some(EditorMode::Help { .. }) => format!("hedit:{}", ctx.args),
-            Some(EditorMode::Room { .. }) => format!("redit:{}", ctx.args),
-            Some(EditorMode::Item { .. }) => format!("iedit:{}", ctx.args),
-            Some(EditorMode::Mob { .. }) => format!("medit:{}", ctx.args),
+            Some(EditorMode::Hedit { .. }) => format!("hedit:{}", ctx.args),
+            Some(EditorMode::Redit { .. }) => format!("redit:{}", ctx.args),
+            Some(EditorMode::Iedit { .. }) => format!("iedit:{}", ctx.args),
+            Some(EditorMode::Medit { .. }) => format!("medit:{}", ctx.args),
             None => ctx.args.to_string()
         };
 

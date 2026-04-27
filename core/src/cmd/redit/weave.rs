@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, redit::abort::AbortCommand}, io::Broadcast, thread::janitor::ROOMS_TO_SAVE, player_or_bust, tell_user};
+use crate::{cmd::{Command, CommandCtx, redit::abort::AbortCommand}, io::Broadcast, thread::janitor::ROOMS_TO_SAVE, validate_editor_mode, player_or_bust, tell_user};
 
 pub struct WeaveCommand;
 
@@ -10,6 +10,7 @@ pub struct WeaveCommand;
 impl Command for WeaveCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = player_or_bust!(ctx);
+        validate_editor_mode!(ctx, "REdit");
         if !ctx.state.is_dirty() {
             tell_user!(ctx.writer, "You weave your hands, but nothing happens…\nProbably because there was no modifications pending.\n");
             return ;
