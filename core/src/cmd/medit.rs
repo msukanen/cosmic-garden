@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, io::ClientState, mob::core::Entity, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::ENT_BP_LIBRARY, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, identity::IdentityQuery, io::ClientState, mob::core::Entity, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::ENT_BP_LIBRARY, validate_access};
 
 include!(concat!(env!("OUT_DIR"), "/medit_registry.rs"));
 
@@ -39,6 +39,7 @@ impl Command for MeditCommand {
         if let Some(found) = found {
             let mut p = plr.write().await;
             p.activity_type = ActivityType::Building;
+            tell_user!(ctx.writer, "MEdit invoked for <c cyan>{}</c> #<c gray>'{}'</c>", found.id(), found.title());
             p.medit_buffer = found.into();
             ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Mob { dirty: false } };
             return ;
