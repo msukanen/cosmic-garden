@@ -101,8 +101,8 @@ impl HelpRenderCmd for RenderHelpPage {
         
         // …and render…
         match mode {
-            RenderHelpMode::Full => tell_user!(ctx.writer, "{}{}\n{}\n\n{}", header, alias_div, body, usage),
-            RenderHelpMode::Quick => tell_user!(ctx.writer, "{}\n\n{}", body, usage),
+            RenderHelpMode::Full => tell_user!(ctx.writer, "{}{}\n{}\n\n{}", header, alias_div, body.trim_end(), usage),
+            RenderHelpMode::Quick => tell_user!(ctx.writer, "{}\n\n{}", body.trim_end(), usage),
             RenderHelpMode::UsageOnly => tell_user!(ctx.writer, "{}", usage)
         }
         true
@@ -140,6 +140,6 @@ mod cmd_help_tests {
         let state = ctx!(state, HelpCommand, "sempai",s,c.out,w,p,|out:&str| out.contains("nothing about"));
         let state = ctx!(state, AbortCommand, "",s,c.out,w,p);
         let state = ctx!(state, IeditCommand, "apple",s,c.out,w,p);
-        let _ = ctx!(state, HelpCommand, "sempai",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
+        let _ = ctx!(state, HelpCommand, "q sempai",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
     }
 }
