@@ -1,6 +1,6 @@
 //! Mob core.
 
-use std::sync::Weak;
+use std::{fmt::Display, sync::Weak};
 
 use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
@@ -50,6 +50,20 @@ impl From<&EntitySize> for i8 {
     }
 }
 
+impl Display for EntitySize {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", match self {
+            Self::Gargantuan => "gargantuan",
+            Self::Huge => "huge",
+            Self::Large => "large",
+            Self::Medium => "medium",
+            Self::Small => "small",
+            Self::Tiny => "tiny",
+            Self::VeryTiny => "very tiny",
+        })
+    }
+}
+
 #[derive(Debug, Clone, DescribableMut, Deserialize, Serialize, IdentityMut, Mob, MobMut, FactionMut, CombatantMut)]
 pub struct Entity {
     id: String,
@@ -66,7 +80,7 @@ pub struct Entity {
     faction: EntityFaction,
     max_weapon_size: WeaponSize,
     size: EntitySize,
-    equipped_weapon: Option<Item>,
+    pub(crate) equipped_weapon: Option<Item>,
     #[serde(default, skip)]
     location: Weak<RwLock<Room>>,
     #[serde(default = "entity_inv_default")]
