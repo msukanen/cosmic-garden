@@ -1,0 +1,121 @@
+//! Weave an entity
+//! * into existence,
+//! * as a blueprint, or
+//! * inject edits into a live specimen.
+
+use std::time::Duration;
+
+use async_trait::async_trait;
+
+use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke, look::LookCommand}, validate_editor_mode, err_tell_user, identity::IdentityQuery, roomloc_or_bust, show_help, string::StrUuid, tell_user, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::SpawnType}, validate_access};
+
+pub struct WeaveCommand;
+
+#[async_trait]
+impl Command for WeaveCommand {
+    async fn exec(&self, ctx: &mut CommandCtx<'_>) {
+        let plr = validate_access!(ctx, builder);
+        let loc = roomloc_or_bust!(plr);
+        validate_editor_mode!(ctx, "MEdit");
+
+        let (op, args) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
+        let Some(buf) = plr.write().await.medit_buffer.take() else {
+            log::error!("Builder medit_buffer was empty?! Bug with MEdit?");
+            err_tell_user!(ctx.writer, "You could've sworn you were editing specs of an entity, but no…?\n");
+        };
+        
+        // "weave" w/o args
+        if op.is_empty() {
+            let w = ctx.world.read().await;
+            if let Some(ent) = w.entities.get(buf.id()) {
+                if let Some(arc) = ent.upgrade() {
+                    drop(w);
+                    let mut lock = arc.write().await;
+                    tell_user!(ctx.writer, "Modifications injected into '{}'… for the better or worse.\n", buf.id());
+                    lock.copyback(buf);
+                } else {
+                    tell_user!(ctx.writer, "No can do … '{}' has left the mortal coil before weave.\n");
+                    drop(w);
+                    BufferNuke.exec({ctx.args = "q"; ctx}).await;
+                }
+                return ;
+            } else {
+                drop(w);
+                plr.write().await.medit_buffer = buf.into();
+                tell_user!(ctx.writer, "No such entity exists yet. To spawn a BP into reality, <c yellow>weave persist spawn</c>.\n\n");
+                show_help!(ctx, "q weave");
+            }
+        }
+        
+        match op {
+            "persist" => {
+                validate_access!(ctx, admin);
+                let ent_stem = buf.id().show_uuid(false).to_string();
+                ENT_BP_LIBRARY.write().await.shelve(buf, ctx.out);
+                let mut spawn = false;
+                if args == "spawn" {
+                    spawn = true;
+                    ctx.out.life.send(SystemSignal::Spawn {
+                        what: SpawnType::Mob { id: ent_stem },
+                        room_id: loc.read().await.id().to_string()
+                    }).ok();
+                }
+                tell_user!(ctx.writer, "Entity blueprint persisted{}\n",
+                    if spawn {
+                        " and a live specimen based on it spawned."
+                    } else {""});
+                if !spawn { return; }
+            }
+
+            "spawn" => {
+                ctx.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob {
+                    id: buf.id().show_uuid(false).to_string() },
+                    room_id: loc.read().await.id().to_string() }).ok();
+                tell_user!(ctx.writer, "{} is being spawned… hopefully.\n", buf.title());
+            }
+
+            _ => show_help!(ctx, "u weave")
+        }
+
+        tokio::time::sleep(Duration::from_millis(100)).await;// leave life-thread plenty of time to comply (or to not to)…
+        LookCommand.exec(ctx).await;
+    }
+}
+
+#[cfg(test)]
+mod medit_tests {
+    use std::{io::Cursor, time::Duration};
+
+    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, edit::EditorMode, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+
+    #[tokio::test]
+    async fn weave_test() {
+        let mut b: Vec<u8> = vec![];
+        let mut s = Cursor::new(&mut b);
+        let (w,c,p,_) = get_operational_mock_world().await;
+        // we don't need janitor running as we're not persisting anything for real …
+        let gt = get_operational_mock_life!(c,w);
+        let lt = get_operational_mock_librarian!(c,w);
+        let c = c.out;
+        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        let state = ClientState::Playing { player: p.clone() };
+        let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
+        assert!(p.read().await.medit_buffer.is_none());
+        p.write().await.access = Access::Builder;
+        let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,p,|out:&str| out.contains("MEdit first"));
+        let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Invokes"));
+        let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,p);
+        assert!(matches!(state, ClientState::Editing { mode: EditorMode::Mob { .. },.. }));
+        let state = ctx!(sup true, state, RenameCommand, "Hoblin! the mighty, and stuff!", s,c,w,p);
+        let state = ctx!(sup true, state, RenameCommand, "id hoblin" ,s,c,w,p,|out:&str| out.contains("Re-ID"));
+        p.write().await.access = Access::Admin;
+        let state = ctx!(sup true, state, RenameCommand, "id hoblin" ,s,c,w,p,|out:&str| out.contains("re-ID'd"));
+        let state = ctx!(sup true, state, WeaveCommand, "",s,c,w,p,|out:&str| out.contains("a no-op"));
+        p.write().await.config.show_id = true;
+        let state = ctx!(sup true, state, WeaveCommand, "persist spawn",s,c,w,p,|out:&str| out.contains("(hoblin-"));
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "hoblin".to_string() }, room_id: "r-1".into() }).ok();
+        tokio::time::sleep(Duration::from_millis(75)).await;
+        let state = ctx!(state, LookCommand,"",s,c,w,p);
+    }
+}
