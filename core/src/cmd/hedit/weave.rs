@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke}, thread::librarian::HELP_LIBRARY, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke}, thread::librarian::HELP_LIBRARY, tell_user, validate_access, validate_editor_mode};
 
 pub struct WeaveCommand;
 
@@ -10,6 +10,7 @@ pub struct WeaveCommand;
 impl Command for WeaveCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
+        validate_editor_mode!(ctx, "HEdit");
         if !ctx.state.is_dirty() {
             tell_user!(ctx.writer, "Not dirty... *stretch* - done with edits?\n");
             BufferNuke.exec({ctx.args = "quiet";ctx}).await;
