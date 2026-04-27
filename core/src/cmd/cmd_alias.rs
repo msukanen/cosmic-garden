@@ -61,6 +61,13 @@ macro_rules! cmd_xedit_title {
 macro_rules! cmd_xedit_desc {
     ($iam:expr, $ctx:ident, $ed:ident, $ed_v:literal) => {{
         use crate::string::description::{Describable, DescribableMut};
+        paste::paste! {
+            if !matches!($ctx.state, crate::io::ClientState::Editing { mode: crate::edit::EditorMode::[<$ed:camel>]{..},..}) {
+                log::error!("Logic error: Macro for {} called while in state {:?}", $ed_v, $ctx.state);
+                crate::err_tell_user!($ctx.writer, "[FATAL] editor/mode mismatch. Go blame some dev, quick! Meanwhile, grab a coffee.\n");
+            }
+        }
+
         let plr = crate::validate_access!($ctx, builder);
         let res = crate::util::ed::edit_text($ctx.writer, $ctx.args, crate::access_ed_entry!(plr, $ed).desc()).await;
         let verbose = match res {
