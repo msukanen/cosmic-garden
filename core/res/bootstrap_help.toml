@@ -467,7 +467,7 @@ Note: some of the <var> are admin-only by nature...
 usage = ["set <var> <val>"]
 [[help_pages]]
 id = "medit"
-access = "builder"
+access = "any_builder"
 title = "medit"
 alias = ["medit", "entity editor", "mob-edit", "mob editor"]
 contents = """
@@ -477,7 +477,7 @@ an entity blueprint.
 usage = ["medit <id|blueprint>"]
 [[help_pages]]
 id = "medit-rename"
-access = "builder"
+access = "any_builder"
 title = "rename"
 alias = ["medit-rename", "rename mob"]
 contents = """
@@ -486,4 +486,23 @@ contents = """
 usage = [
     "rename <name>",
     "rename id <stem>"
+]
+[[help_pages]]
+id = "medit-weave"
+access = "any_builder"
+title = "weave"
+alias = ["medit-weave", "save mob", "save entity"]
+contents = """
+'weave' brings edits…
+
+  <c gray>a)</c> back into an existing live specimen,
+  <c gray>b)</c> a new specimen based on existing blueprint,
+  <c gray>c)</c> <c cyan>[staff]</c> into a new blueprint + <c yellow>b)</c>,
+
+Note that <c yellow>weave</c> without arguments is a no-op when not editing a live specimen.
+"""
+usage = [
+    "weave",
+    "weave spawn",
+    "weave persist [spawn]"
 ]
