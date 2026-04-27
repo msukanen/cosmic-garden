@@ -506,3 +506,40 @@ usage = [
     "weave spawn",
     "weave persist [spawn]"
 ]
+[[help_pages]]
+id = "medit-iex"
+access = "any_builder"
+title = "iex"
+alias = ["medit-iex", "entity examine", "mob examine"]
+contents = """
+'iex' prints out the details on an Entity currently in the editor buffer.
+"""
+usage = ["iex"]
+[[help_pages]]
+id = "medit-set"
+access = "any_builder"
+title = "set"
+alias = ["medit-set"]
+contents = """
+'set' various aspects on an Entity in the editor buffer.
+
+ * <stat> <val>
+ * <stat> <val> max <val>
+ * faction <type>
+ * size <category>
+ * max-weapon-size <category>
+
+<stat> are currently:
+ * BRN, HP, MP, NIM, REP, SAN, SN, STR
+
+<type> for faction:
+ * Friendly, Hostile, Neutral, Guard
+
+<category> for size and max-weapon-size:
+ * <c gray>[for size only:]</c> Very tiny, Gargantuan
+ * Tiny, Small, Medium, Large, Huge
+"""
+usage = [
+    "set <stat> <val> [max <val>]",
+    "set <stat> max <val>"
+]
