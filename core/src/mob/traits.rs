@@ -11,4 +11,6 @@ pub trait Mob : IdentityQuery + Combatant {
 
 /// Mutable variant of [Mob].
 pub trait MobMut : Mob + CombatantMut {
+    fn max_weapon_size_mut(&mut self) -> &mut WeaponSize;
+    fn size_mut(&mut self) -> &mut EntitySize;
 }

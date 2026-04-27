@@ -2,11 +2,12 @@
 
 use std::{fmt::Display, sync::Weak};
 
+use async_trait::async_trait;
 use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, Damager}, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY, traits::Tickable};
 
 /// Generic [Entity] size categories
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -61,6 +62,41 @@ impl Display for EntitySize {
             Self::Tiny => "tiny",
             Self::VeryTiny => "very tiny",
         })
+    }
+}
+
+#[derive(Debug)]
+pub enum EntitySizeError {
+    NotSize(String),
+    VoidSize,
+}
+
+impl Display for EntitySizeError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::VoidSize => write!(f, "An empty value does not represent any kind of size/stature…"),
+            Self::NotSize(v) => write!(f, "'{v}' is not any recognizeable size/stature…"),
+        }
+    }
+}
+
+impl TryFrom<&str> for EntitySize {
+    type Error = EntitySizeError;
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.chars().nth(0) {
+            Some(v) => Ok(match v {
+                'g'|'G' => Self::Gargantuan,
+                'h'|'H' => Self::Huge,
+                'l'|'L' => Self::Large,
+                'm'|'M' => Self::Medium,
+                's'|'S' => Self::Small,
+                't'|'T' => Self::Tiny,
+                'v'|'V' => Self::VeryTiny,
+                _ => return Err(EntitySizeError::NotSize(value.into()))
+            }),
+
+            _ => Err(EntitySizeError::VoidSize)
+        }
     }
 }
 
@@ -170,12 +206,36 @@ impl Entity {
         self.size = ent.size;
         self.desc = ent.desc;
     }
+
+    pub fn stat_mut(&mut self, stat_type: &StatType) -> &mut Stat {
+        match stat_type {
+            StatType::Brn => &mut self.brn,
+            StatType::HP => &mut self.hp,
+            StatType::MP => &mut self.mp,
+            StatType::Nim => &mut self.nim,
+            StatType::SN => &mut self.sn,
+            StatType::Str => &mut self.strn,
+            StatType::San => &mut self.san,
+            StatType::Rep => unimplemented!("Entity do not have 'reputation' stat."),
+        }
+    }
 }
 
 impl Damager for Entity {
     fn dmg(&self) -> StatValue {
         let Some(Item::Weapon(w)) = &self.equipped_weapon else { return 1.0 * self.str() / 100.0 };
         w.base_dmg * str_based_dmg_mul(self.str().current(), true) * (self.size.rel_vs_weapon(&w.weapon_size))
+    }
+}
+
+#[async_trait]
+impl Tickable for Entity {
+    async fn tick(&mut self) -> bool {
+        let hp = self.hp_mut().tick().await;
+        let mp = self.mp_mut().tick().await;
+        let sn = self.sn_mut().tick().await;
+        let san = self.san_mut().tick().await;
+        hp || mp || sn || san
     }
 }
 
