@@ -3,7 +3,7 @@
 use std::{collections::HashMap, fmt::Display, sync::{Arc, Weak}};
 
 use async_trait::async_trait;
-use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob, MobMut};
+use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
@@ -33,7 +33,7 @@ impl Display for ActivityType {
 }
 
 /// A player's character contained here…
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Mob, MobMut, CombatantMut, Factioned)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, Mob, CombatantMut, Factioned)]
 pub struct Player {
     /// ID of owner of this specific [Player] character.
     pub(super) owner_id: String,
