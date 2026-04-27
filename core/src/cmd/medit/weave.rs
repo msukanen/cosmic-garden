@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke, look::LookCommand}, validate_editor_mode, err_tell_user, identity::IdentityQuery, roomloc_or_bust, show_help, string::StrUuid, tell_user, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::SpawnType}, validate_access};
+use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke, look::LookCommand}, err_tell_user, identity::IdentityQuery, player::ActivityType, roomloc_or_bust, show_help, string::StrUuid, tell_user, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::SpawnType}, validate_access, validate_editor_mode};
 
 pub struct WeaveCommand;
 
@@ -36,8 +36,8 @@ impl Command for WeaveCommand {
                 } else {
                     tell_user!(ctx.writer, "No can do … '{}' has left the mortal coil before weave.\n");
                     drop(w);
-                    BufferNuke.exec({ctx.args = "q"; ctx}).await;
                 }
+                BufferNuke.exec({ctx.args = "q"; ctx}).await;
                 return ;
             } else {
                 drop(w);
@@ -77,7 +77,8 @@ impl Command for WeaveCommand {
             _ => show_help!(ctx, "u weave")
         }
 
-        tokio::time::sleep(Duration::from_millis(100)).await;// leave life-thread plenty of time to comply (or to not to)…
+        BufferNuke.exec({ctx.args = "q"; ctx}).await;
+        tokio::time::sleep(Duration::from_millis(75)).await;// leave life-thread plenty of time to comply (or to not to)…
         LookCommand.exec(ctx).await;
     }
 }
@@ -93,9 +94,9 @@ mod medit_tests {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,c,p,_) = get_operational_mock_world().await;
-        // we don't need janitor running as we're not persisting anything for real …
-        let gt = get_operational_mock_life!(c,w);
-        let lt = get_operational_mock_librarian!(c,w);
+        // we don't need janitor running as we're not persisting anything onto disk here …
+        let _ = get_operational_mock_life!(c,w);
+        let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
         tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
         let state = ClientState::Playing { player: p.clone() };
@@ -116,6 +117,6 @@ mod medit_tests {
         let state = ctx!(sup true, state, WeaveCommand, "persist spawn",s,c,w,p,|out:&str| out.contains("(hoblin-"));
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "hoblin".to_string() }, room_id: "r-1".into() }).ok();
         tokio::time::sleep(Duration::from_millis(75)).await;
-        let state = ctx!(state, LookCommand,"",s,c,w,p);
+        let _ = ctx!(state, LookCommand,"",s,c,w,p);
     }
 }

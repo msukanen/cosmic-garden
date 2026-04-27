@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::{IdentityMut, IdentityQuery}, show_help, show_help_if_needed, tell_user, tell_user_unk, util::access::Accessor, validate_access, validate_editor_mode};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::{IdentityMut, IdentityQuery}, show_help, show_help_if_needed, tell_user, util::access::Accessor, validate_access, validate_editor_mode};
 
 pub struct RenameCommand;
 
