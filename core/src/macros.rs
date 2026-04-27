@@ -36,6 +36,9 @@ macro_rules! err_iedit_buffer_inaccessible {
     // Requires /src/test/world_test_harness.inc contents in the test fn.
     // 
     /// # Args
+    /// - [abrt true|false] - ::abort() instead of panic!()
+    /// - [sup true|false] - suppress "client" spam
+    /// - `state` - ClientState
     /// - `cmd`
     /// - `args`
     /// - `mock_sock`
@@ -45,14 +48,31 @@ macro_rules! err_iedit_buffer_inaccessible {
     /// - `assert`ion expr
     /// 
     /// # Examples
-    /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr);`
-    /// - `ctx!(IeditCommand, "apple", mock_sock, tx, world, plr, |out:&str| out.contains("apple"));`
+    /// - `ctx!(state, IeditCommand, "apple", mock_sock, sigs, world, plr);`
+    /// - `ctx!(state, IeditCommand, "apple", mock_sock, sigs, world, plr, |out:&str| out.contains("apple"));`
+    /// - `ctx!(sup true, state, IeditCommand, "apple", mock_sock, sigs, world, plr, |out:&str| out.contains("apple"));`
+    /// - `ctx!(abrt true sup true, state, IeditCommand, "apple", mock_sock, sigs, world, plr, |out:&str| out.contains("apple"));`
     macro_rules! ctx {
         ($state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident) => {{
             crate::ctx!($state,$cmd,$args,$mock_sock,$sigs,$world,$plr,|_|true)
         }};
 
         ($state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
+            crate::ctx!(sup false,$state,$cmd,$args,$mock_sock,$sigs,$world,$plr,$assert)
+        }};
+
+        // sup "spam"?
+        (sup $sup:literal, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident) => {{
+            crate::ctx!(abrt false sup $sup,$state,$cmd,$args,$mock_sock,$sigs,$world,$plr,|_|true)
+        }};
+
+        // sup "spam"?
+        (sup $sup:literal, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
+            crate::ctx!(abrt false sup $sup,$state,$cmd,$args,$mock_sock,$sigs,$world,$plr,$assert)
+        }};
+
+        // abrt instead of panic? sup "spam"?
+        (abrt $abrt:literal sup $sup:literal, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
             let state = {
                 use crate::cmd::{Command,CommandCtx};
                 $mock_sock.get_mut().clear();
@@ -67,28 +87,19 @@ macro_rules! err_iedit_buffer_inaccessible {
                 $cmd.exec(&mut ctx).await;
                 ctx.state.clone()
             };
-            // log::debug!("ctx!({}) complete?", stringify!($cmd));
             let out_raw = $mock_sock.get_ref();
-            // if out_raw.len() > 5 {
-            //     log::debug!(" ... processing ctx!(..) ahead, got more than 5 bytes…");
-            // } else {
-            //     log::debug!("Less than 5?!");
-            // }
-            // some assertions to do… maybe.
             let out = String::from_utf8_lossy(out_raw).to_string().trim_end().to_string();
-            let assert_result = //tokio::task::block_in_place(|| {
-                $assert(&out)
-            //})
-            ;
-            // log::debug!("    ...got assert_result...: {assert_result}");
-            if !out.is_empty() {
+            let assert_result = $assert(&out);
+            if !out.is_empty() && !$sup {
                 log::debug!("\n{}", out.to_string());
             }
                 if !assert_result {
                     log::error!("{}", stringify!($assert));
                     log::error!("Ridonkylous! Read above...");
                     
-                    //std::process::abort();
+                    if $abrt {
+                        std::process::abort();
+                    }
                     panic!("Oops");
                 }
             state
