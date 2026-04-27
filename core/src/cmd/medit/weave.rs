@@ -107,7 +107,7 @@ mod medit_tests {
         let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,p,|out:&str| out.contains("MEdit first"));
         let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Invokes"));
         let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,p);
-        assert!(matches!(state, ClientState::Editing { mode: EditorMode::Mob { .. },.. }));
+        assert!(matches!(state, ClientState::Editing { mode: EditorMode::Medit { .. },.. }));
         let state = ctx!(sup true, state, RenameCommand, "Hoblin! the mighty, and stuff!", s,c,w,p);
         let state = ctx!(sup true, state, RenameCommand, "id hoblin" ,s,c,w,p,|out:&str| out.contains("Re-ID"));
         p.write().await.access = Access::Admin;

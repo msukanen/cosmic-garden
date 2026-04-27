@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, tell_user, util::ed::{EdResult, edit_text}, validate_access};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, tell_user, validate_editor_mode, util::ed::{EdResult, edit_text}, validate_access};
 
 pub struct UsageCommand;
 
@@ -10,6 +10,7 @@ pub struct UsageCommand;
 impl Command for UsageCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
+        validate_editor_mode!(ctx, "HEdit");
         let mut doc = {
             let p = plr.read().await;
             let Some(buffer) = &p.hedit_buffer else {

@@ -68,7 +68,7 @@ struct Edit;
 impl HeditEdit for Edit {
     async fn edit(&self, ctx: &mut CommandCtx<'_>, page: HelpPage, new: bool) {
         let plr = player_or_bust!(ctx);
-        ctx.state = crate::io::ClientState::Editing { player: plr.clone(), mode: crate::edit::EditorMode::Help { dirty: new } };
+        ctx.state = crate::io::ClientState::Editing { player: plr.clone(), mode: crate::edit::EditorMode::Hedit { dirty: new } };
         let mut p = plr.write().await;
         p.hedit_buffer = Some(page);
         p.activity_type = ActivityType::Building;

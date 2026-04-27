@@ -1,21 +1,7 @@
-//! Identity related proc-macro(s)…
+//! Garden's proc-macro(s)…
 use proc_macro::TokenStream;
 use quote::quote;
 use syn::{Attribute, Data, DeriveInput, parse_macro_input};
-
-// enum MemberAccess {
-//     Direct,
-//     Delegate(proc_macro2::Ident),
-// }
-
-// fn detect_member_access(data: &Data, target_field: &str) -> MemberAccess {
-//     if let Data::Struct(s) = data {
-//         if s.fields.iter().any(|f| f.ident.as_ref().map_or(false, |i| i == target_field)) {
-//             return MemberAccess::Delegate(format_ident!("{}", target_field));
-//         }
-//     }
-//     MemberAccess::Direct
-// }
 
 fn is_tagged_attr(attr: &Attribute, what: &str, goal: &str) -> bool {
     if attr.path().is_ident(what) {
@@ -250,10 +236,17 @@ pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
     let name = &input.ident;
 
 //    let base_impl = generate_mob_impl(&input);
-    let Data::Struct(_) = input.data else { panic!("Struct only!") };
+    let Data::Struct(data) = input.data else { panic!("Struct only!") };
+    let wsz_field = req_field!(data, "max_weapon_size");
+    let sz_field = req_field!(data, "size");
     let mut_impl = quote! {
         impl crate::mob::traits::MobMut for #name {
-
+            fn max_weapon_size_mut(&mut self) -> &mut crate::item::weapon::WeaponSize {
+                &mut self.#wsz_field
+            }
+            fn size_mut(&mut self) -> &mut crate::mob::core::EntitySize {
+                &mut self.#sz_field
+            }
         }
     };
     TokenStream::from(quote! {

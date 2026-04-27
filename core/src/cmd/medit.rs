@@ -41,7 +41,7 @@ impl Command for MeditCommand {
             p.activity_type = ActivityType::Building;
             tell_user!(ctx.writer, "MEdit invoked for <c cyan>{}</c> #<c gray>'{}'</c>", found.id(), found.title());
             p.medit_buffer = found.into();
-            ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Mob { dirty: false } };
+            ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Medit { dirty: false } };
             return ;
         }
 

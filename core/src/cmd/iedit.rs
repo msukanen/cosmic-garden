@@ -51,6 +51,6 @@ impl Command for IeditCommand {
             w.iedit_buffer = target_item.or_else(|| Some(PrimordialItem::new(id)));
             w.activity_type = ActivityType::Building;
         }
-        ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Item { dirty: true } };
+        ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Iedit { dirty: true } };
     }
 }

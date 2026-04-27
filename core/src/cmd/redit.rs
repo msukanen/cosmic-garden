@@ -66,7 +66,7 @@ impl Command for ReditCommand {
             let mut w = plr.write().await;
             w.activity_type = ActivityType::Building;
             w.redit_buffer = Some(room);
-            ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Room{ dirty: false } }
+            ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Redit{ dirty: false } }
         }
     }
 }
