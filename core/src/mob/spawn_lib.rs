@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{entity_entry_fp, entity_lib_fp}, mob::core::Entity, serial::string_vec_to_bool_map, string::StrUuid, thread::librarian::ENT_BP_LIBRARY};
+use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{entity_entry_fp, entity_lib_fp}, mob::core::Entity, serial::string_vec_to_bool_map, string::StrUuid, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::SignalSenderChannels}};
 
 /// Entity (blueprint) library!
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -100,9 +100,17 @@ impl EntityLibrary {
         Ok(())
     }
 
-    /// Get an [Entity] blueprint from cold storage, if exists.
+    /// Get a copy of an [Entity] blueprint from cold storage, if exists.
     pub fn get(&self, id: &str) -> Option<Entity> {
         self.bps.get(id.show_uuid(false)).cloned()
+    }
+
+    /// Shelve a new [Entity] blueprint.
+    pub fn shelve(&mut self, bp: Entity, out: &SignalSenderChannels) {
+        let id = bp.id().show_uuid(false).to_string();
+        self.id_stem.insert(id.clone(), true);
+        self.bps.insert(id, bp);
+        out.librarian.send(SystemSignal::NewEntityEntry).ok();
     }
 }
 
