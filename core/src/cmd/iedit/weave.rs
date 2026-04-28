@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::IdentityQuery, io::ClientState, item::{Item, container::Storage, primordial::Metamorphize}, tell_user, thread::{SystemSignal, add_item_to_lnf, librarian::BP_LIBRARY}, validate_access};
+use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::IdentityQuery, io::ClientState, item::{Item, container::Storage, primordial::Metamorphize}, tell_user, thread::{add_item_to_lnf, librarian::shelve_item_blueprint}, validate_access};
 
 pub struct WeaveCommand;
 
@@ -39,10 +39,7 @@ impl Command for WeaveCommand {
         let persistable = !matches!(final_item, Item::Primordial(_));
         let mut persist = ctx.args == "persist" && persistable;
         if persist {
-            let mut lib = (*BP_LIBRARY).write().await;
-            persist = lib.shelve(&final_item, true);
-            // ping the librarian. If they don't hear, just move along. They'll notice sooner or later.
-            ctx.out.librarian.send(SystemSignal::NewBlueprintEntry).ok();
+            persist = shelve_item_blueprint(&final_item, &ctx.out).await;
         }
 
         log::trace!("Builder metamorph: {final_item:?}");

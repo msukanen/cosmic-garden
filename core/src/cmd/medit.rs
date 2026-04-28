@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, identity::IdentityQuery, io::ClientState, mob::core::Entity, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::ENT_BP_LIBRARY, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, identity::IdentityQuery, io::ClientState, mob::core::Entity, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::get_entity_blueprint, validate_access};
 
 include!(concat!(env!("OUT_DIR"), "/medit_registry.rs"));
 
@@ -31,9 +31,7 @@ impl Command for MeditCommand {
         }
         // wasn't found yet. Get a blueprint?
         else {
-            if let Some(bp) = ENT_BP_LIBRARY.read().await.get(ctx.args) {
-                found = bp.into();
-            }
+            found = get_entity_blueprint(ctx.args, &ctx.out).await;
         }
 
         if let Some(found) = found {

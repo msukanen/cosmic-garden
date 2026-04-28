@@ -1,6 +1,6 @@
 //! Errors ad hominis…
 
-use crate::{identity::IdError, item::container::StorageError, password::PasswordError, room::RoomError};
+use crate::{identity::IdError, item::container::StorageError, mob::core::EntityError, password::PasswordError, room::RoomError};
 
 /// Cosmic Garden error type - a thin wrapper around more specific ones.
 // Rarely of any use for other but sanitizing [Debug] output.
@@ -28,5 +28,8 @@ pub enum CgError {
     TomlDe(#[from] toml::de::Error),
 
     #[error("Document-Fire: {0}")]
-    TomlSer(#[from] toml::ser::Error)
+    TomlSer(#[from] toml::ser::Error),
+
+    #[error("Entity not found: {0}")]
+    Entity(#[from] EntityError),
 }

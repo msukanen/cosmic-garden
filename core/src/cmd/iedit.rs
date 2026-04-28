@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{container::Storage, primordial::PrimordialItem}, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::BP_LIBRARY, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{container::Storage, primordial::PrimordialItem}, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::get_item_blueprint, validate_access};
 
 include!(concat!(env!("OUT_DIR"), "/iedit_registry.rs"));
 
@@ -34,8 +34,7 @@ impl Command for IeditCommand {
                 if let Some(item) = p_loc.write().await.take_by_name(id) {
                     Some(item)
                 } else {
-                    // blueprint library at least…?
-                    (*BP_LIBRARY).read().await.get(id)
+                    get_item_blueprint(id, &ctx.out).await
                 }
             } else {
                 found

@@ -1,8 +1,9 @@
 //! Help system basics…
 
 use async_trait::async_trait;
+use tokio::sync::oneshot;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, player_or_bust, string::Describable, tell_user, thread::librarian::HELP_LIBRARY, util::{HelpPage, access::Accessor}};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, player_or_bust, string::Describable, tell_user, thread::SystemSignal, util::{HelpPage, access::Accessor}};
 
 pub struct HelpCommand;
 
@@ -42,10 +43,14 @@ impl Command for HelpCommand {
             None => ctx.args.to_string()
         };
 
-        // .get() doing a check is probably redundant, or .render() doing it is redundant, but whatever XD … double or nothing.
-        if let Some(page) = &(*HELP_LIBRARY).read().await.get(&page_id, &access.into(), false) {
-            if RenderHelpPage.render(ctx, mode, page, false).await {
-                return ;
+        let (out, recv) = oneshot::channel::<Option<HelpPage>>();
+        if let Ok(_) = ctx.out.librarian.send(SystemSignal::HelpRequest { page_id: page_id.clone(), access, bypass: false, out }) {
+            if let Ok(page) = recv.await {
+                if let Some(page) = page {
+                    if RenderHelpPage.render(ctx, mode, &page, false).await {
+                        return ;
+                    }
+                }
             }
         }
 
@@ -111,16 +116,18 @@ impl HelpRenderCmd for RenderHelpPage {
 
 #[cfg(test)]
 mod cmd_help_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
     use super::*;
-    use crate::{cmd::{hedit::{HeditCommand, abort::AbortCommand, desc::DescCommand, weave::WeaveCommand}, iedit::IeditCommand}, ctx, get_operational_mock_librarian, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::{hedit::{HeditCommand, abort::AbortCommand, desc::DescCommand, weave::WeaveCommand}, iedit::IeditCommand}, ctx, get_operational_mock_librarian, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn namespacing_get() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
+        let _ = get_operational_mock_librarian!(c,w);
+        stabilize_threads!();
         let state = ctx!(state, HelpCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("nothing about"));
         let state = ctx!(state, HeditCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
@@ -128,11 +135,8 @@ mod cmd_help_tests {
         let state = ctx!(state, HeditCommand, "new iedit:sempai",s,c.out,w,p,|out:&str| out.contains("desc ="));
         let state = ctx!(state, HelpCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("nothing about"));
         let state = ctx!(state, HelpCommand, "",s,c.out,w,p,|out:&str| out.contains("desc ="));
-        get_operational_mock_librarian!(c,w);
-        tokio::time::sleep(Duration::from_secs(2)).await;// let the lib stabilize...
         let state = ctx!(state, DescCommand, "= New stuff?",s,c.out,w,p);
         let state = ctx!(state, WeaveCommand, "",s,c.out,w,p);
-        tokio::time::sleep(Duration::from_secs(2)).await;
         let state = ctx!(state, HelpCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
         let state = ctx!(state, HelpCommand, "iedit-sempai",s,c.out,w,p,|out:&str| out.contains("New stuff?\n\n"));
         let state = ctx!(state, HeditCommand, "new dummy",s,c.out,w,p,|out:&str| out.contains("desc ="));

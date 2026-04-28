@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke}, thread::librarian::HELP_LIBRARY, tell_user, validate_access, validate_editor_mode};
+use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke}, tell_user, thread::librarian::shelve_help_page, validate_access, validate_editor_mode};
 
 pub struct WeaveCommand;
 
@@ -25,7 +25,8 @@ impl Command for WeaveCommand {
         drop(p);
 
         if let Some(page) = page {
-            if !(*HELP_LIBRARY).write().await.shelve(&page, &ctx.out) {
+            let shelved = shelve_help_page(&page, &ctx.out).await;
+            if !shelved {
                 tell_user!(ctx.writer, "Something's off… Probably need to check your work closer.\nEither the librarian is busy or there's something else wrong…\n");
                 let mut p = plr.write().await;
                 p.hedit_buffer = Some(page);

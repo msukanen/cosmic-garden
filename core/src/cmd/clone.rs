@@ -47,9 +47,9 @@ impl Command for CloneCommand {
 
 #[cfg(test)]
 mod cmd_clone_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{r#const::SMALL_ITEM, get_operational_mock_librarian, io::ClientState, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, string::Uuid, world::world_tests::get_operational_mock_world};
+    use crate::{r#const::SMALL_ITEM, stabilize_threads, get_operational_mock_librarian, io::ClientState, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, string::Uuid, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn cmd_clone_knife() {
@@ -58,7 +58,7 @@ mod cmd_clone_tests {
         let (w,c,(state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
-        tokio::time::sleep(Duration::from_secs(1)).await;// stabilize the thread(s)…
+        stabilize_threads!();
         let item = Item::Weapon(WeaponSpec {
             id: "dinged-knifelike".re_uuid(),
             name: "A dinged knife".into(),

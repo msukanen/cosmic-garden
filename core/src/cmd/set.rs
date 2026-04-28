@@ -98,9 +98,7 @@ async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &Arc<RwLock<P
 
 #[cfg(test)]
 mod cmd_set_tests {
-    use std::time::Duration;
-
-    use crate::{cmd::{look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::{look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn set_config_val() {
@@ -111,7 +109,7 @@ mod cmd_set_tests {
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        stabilize_threads!();
         let state = ctx!(state, SetCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, SetCommand, "", s,c,w,p,|out:&str| out.contains("admin-only by nature"));
@@ -120,7 +118,7 @@ mod cmd_set_tests {
         let state = ctx!(state, SetCommand, "config bla", s,c,w,p,|out:&str| out.contains("Usage"));
         let state = ctx!(state, SetCommand, "config bla 5", s,c,w,p,|out:&str| out.contains("Accepted vars"));
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() }).ok();
-        tokio::time::sleep(Duration::from_millis(100)).await;
+        stabilize_threads!(100);
         let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("A goblin is here"));
         let state = ctx!(state, SetCommand, "config id 5", s,c,w,p,|out:&str| out.contains("true"));
         let _ = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("goblin-"));

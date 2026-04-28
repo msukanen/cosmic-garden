@@ -2,17 +2,9 @@
 
 use std::{sync::Arc, time::Duration};
 
-use lazy_static::lazy_static;
 use tokio::sync::RwLock;
 
-use crate::{identity::IdentityQuery, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary}, mob::spawn_lib::EntityLibrary, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::HelpLibrary, world::World};
-
-lazy_static! {
-    pub(crate) static ref BP_LIBRARY: Arc<RwLock<BlueprintLibrary>> = Arc::new(RwLock::new(BlueprintLibrary::default()));
-
-    pub(crate) static ref HELP_LIBRARY: Arc<RwLock<HelpLibrary>> = Arc::new(RwLock::new(HelpLibrary::default()));
-    pub(crate) static ref ENT_BP_LIBRARY: Arc<RwLock<EntityLibrary>> = Arc::new(RwLock::new(EntityLibrary::default()));
-}
+use crate::{identity::IdentityQuery, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::{HelpLibrary, HelpPage, access::Access}, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -22,15 +14,25 @@ macro_rules! get_operational_mock_librarian {
     };
 }
 
+struct Library {
+    help: HelpLibrary,
+    entity: EntityLibrary,
+    bp: BlueprintLibrary,
+}
+
 /// 
 /// Librarian wake up.
 /// 
 /// This thread keeps the world's documents nice and tidy.
 /// 
-pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver), world: Arc<RwLock<World>>) {
+pub async fn librarian(
+        (out, mut incoming): (SignalSenderChannels, SigReceiver),
+        world: Arc<RwLock<World>>,
+) {
     // Bootstrap/load blueprints.
     log::info!("Library establishing… blueprints @ '{}'", blueprint_lib_fp().display());
-    if let Err(e) = BlueprintLibrary::load_or_bootstrap().await {
+    let bp = BlueprintLibrary::load_or_bootstrap().await;
+    if let Err(e) = bp {
         // Halt the printing press!!!
         log::error!("FAIL: Library in fire!!! {e:?}");
         return ;
@@ -38,7 +40,8 @@ pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver),
 
     // Bootstrap/load help files.
     log::info!("Library establishing… helpful documents @ '{}'", help_lib_fp().display());
-    if let Err(e) = HelpLibrary::load_or_bootstrap().await {
+    let help = HelpLibrary::load_or_bootstrap().await;
+    if let Err(e) = help {
         // Shucks! The documents are in fire!
         log::error!("Help! The help system is in distress! {e:?}");
         return ;
@@ -46,12 +49,18 @@ pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver),
 
     // Bootstrap/load entity blueprints.
     log::info!("Library establishing… biology @ '{}'", entity_lib_fp().display());
-    if let Err(e) = EntityLibrary::load_or_bootstrap().await {
+    let entity = EntityLibrary::load_or_bootstrap().await;
+    if let Err(e) = entity {
         // Aaah! The zoo is escaping!
         log::error!("Uwah! The zoo is in chaos! {e:?}");
         return ;
     }
 
+    let mut lib = Library {
+        bp: bp.unwrap(),
+        help: help.unwrap(),
+        entity: entity.unwrap(),
+    };
     log::info!("Library didn't catch fire, yay.");
     let mut dusting_shelves_interval = tokio::time::interval(Duration::from_mins(10));
     let mut dusting_documents_interval = tokio::time::interval(Duration::from_mins(10));
@@ -61,61 +70,53 @@ pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver),
         tokio::select! {
             _ = dusting_shelves_interval.tick() => {
                 log::trace!("Librarian sweeping the shelves pristine…");
-                let mut lib = BP_LIBRARY.write().await;
-                if let Err(e) = lib.save().await {
+                if let Err(e) = lib.bp.save().await {
                     log::error!("\"FFS!\", a snag while saving blueprints: {e:?}");
                 }
             }
 
             _ = dusting_documents_interval.tick() => {
                 log::trace!("Librarian rummages through the documents…");
-                let mut lib = HELP_LIBRARY.write().await;
-                if let Err(e) = lib.save().await {
+                if let Err(e) = lib.help.save().await {
                     log::error!("\"Seriously!?…\", a snag while saving documents: {e:?}");
                 }
             }
 
             _ = species_catalogue_interval.tick() => {
                 log::trace!("Librarian checks through the species catalogue…");
-                let mut lib = ENT_BP_LIBRARY.write().await;
-                if let Err(e) = lib.save().await {
+                if let Err(e) = lib.entity.save().await {
                     log::error!("\"What's going on here?!…\", a snag while saving the zoological documents: {e:?}");
                 }
             }
 
             Some(sig) = incoming.recv() => match sig {
-                SystemSignal::NewLibraryEntry => {
+                SystemSignal::NewHelpEntry { entry, out } => {
                     log::trace!("A new library entry? Let's see about that…");
-                    if reorganize_library(&out).await {{
-                        let phonebook = out.clone();
-                        tokio::spawn(async move {
-                            tokio::time::sleep(Duration::from_secs(30)).await;
-                            if let Err(e) = phonebook.janitor.send(SystemSignal::ReindexLibrary) {
-                                log::error!("Janitor is still not picking up the phone. Bah, he'll sort it out sooner or later… {e:?}");
-                            }
-                        });
-                    }}
+                    let shelved = lib.help.shelve(&entry);
+                    if shelved {
+                        reorganize_library(&mut lib.help).await;
+                    }
+                    out.send(shelved).ok();
                 }
 
-                SystemSignal::NewBlueprintEntry => {
+                SystemSignal::NewBlueprintEntry { entry, out } => {
                     log::trace!("A new blueprint? Let's see what's that all about…");
-                    // TODO any validation of entry/entries needed?
-                    out.janitor.send(SystemSignal::NewBlueprintEntry).ok();
+                    let shelved = lib.bp.shelve(entry, true);
+                    lib.bp.save().await.ok();
+                    out.send(shelved).ok();
                 }
 
-                SystemSignal::NewEntityEntry => {
+                SystemSignal::NewEntityEntry { entry } => {
                     log::trace!("A new thing for entity catalogue? Let's see it's all about…");
-                    // TODO any validation of entry/entries needed?
-                    out.janitor.send(SystemSignal::NewEntityEntry).ok();
+                    lib.entity.shelve(entry);
+                    lib.entity.save().await.ok();
                 }
 
                 SystemSignal::Shutdown => { break; }
 
                 SystemSignal::Spawn { what: SpawnType::Item { id }, room_id } => {
-                    let lock = BP_LIBRARY.read().await;
-                    if let Some(found) = lock.get(&id) {
+                    if let Some(found) = lib.bp.get(&id) {
                         let item = found.reflect();
-                        drop(lock);
                         if let Some(dest) = world.read().await.rooms.get(&room_id) {
                             let item_id = item.id().to_string();
                             let mut lock = dest.write().await;
@@ -135,30 +136,119 @@ pub async fn librarian((out, mut incoming): (SignalSenderChannels, SigReceiver),
                 }
 
                 // relay all other spawns but Item to Life.
-                SystemSignal::Spawn { what, room_id } => {out.life.send(SystemSignal::Spawn { what, room_id }).ok();},
+                SystemSignal::Spawn { what, room_id } => { out.life.send(SystemSignal::Spawn { what, room_id }).ok(); },
+
+                // help page request…
+                SystemSignal::HelpRequest { page_id, access, bypass, out } => {
+                    log::debug!("Help request about '{page_id}'");
+                    out.send(lib.help.get(&page_id, &access, bypass)).ok();
+                }
+
+                // entity BP request…
+                SystemSignal::EntityBlueprintReq { id, out } => {
+                    out.send(lib.entity.get(&id)).ok();
+                }
                 _ => ()
             }
         }
     }
 
-    BP_LIBRARY.write().await.save().await.ok();
-    ENT_BP_LIBRARY.write().await.save().await.ok();
-    HELP_LIBRARY.write().await.save().await.ok();
+    lib.bp.save().await.ok();
+    lib.entity.save().await.ok();
+    lib.help.save().await.ok();
     log::info!("Librarian checking out.");
 }
 
 /// Reorganize the library, reindex, etc.
-/// 
-/// # Return
-/// Anything to report?
-async fn reorganize_library(outgoing: &SignalSenderChannels) -> bool {
-    (*HELP_LIBRARY).write().await
+async fn reorganize_library(lib: &mut HelpLibrary) {
+    lib
         .check_new_docs()
         .rebuild_aliases();
-    // ring the janitor …
-    if let Err(e) = outgoing.janitor.send(SystemSignal::ReindexLibrary) {
-        log::warn!("Janitor seems to be busy… I'll schedule call for later… {e:?}");
-        return true;
+}
+
+/// Helper to get an [Entity] blueprint.
+/// 
+/// # Args
+/// - `id` of [Entity] blueprint.
+/// - `out` going signal system…
+pub async fn get_entity_blueprint(id: &str, out: &SignalSenderChannels) -> Option<Entity> {
+    let (oneshot, recv) = tokio::sync::oneshot::channel::<Option<Entity>>();
+    if let Ok(_) = out.librarian.send(SystemSignal::EntityBlueprintReq { id: id.into(), out: oneshot }) {
+        if let Ok(reply) = recv.await {
+            return reply
+        }
+    }
+    None
+}
+
+/// Attempt to shelve an [Entity] blueprint.
+/// 
+/// # Args
+/// - [`entity`][Entity] to persist as a blueprint.
+pub async fn shelve_entity_blueprint(entity: &Entity, out: &SignalSenderChannels) {
+    out.librarian.send(SystemSignal::NewEntityEntry { entry: entity.clone() }).ok();
+}
+
+/// Attempt to shelve an [Item] blueprint.
+/// 
+/// # Args
+/// - `item` to persist as an [Item] blueprint.
+/// 
+/// # Returns
+/// Success of persistance.
+pub async fn shelve_item_blueprint(item: &Item, out: &SignalSenderChannels) -> bool {
+    let (oneshot, recv) = tokio::sync::oneshot::channel::<bool>();
+    if let Ok(_) = out.librarian.send(SystemSignal::NewBlueprintEntry { entry: item.clone(), out: oneshot }) {
+        if let Ok(reply) = recv.await {
+            return reply;
+        }
+    }
+    false
+}
+
+/// Helper to get an [Item] blueprint.
+/// 
+/// # Args
+/// - `id` of [Item] blueprint.
+/// - `out` going signal system…
+pub async fn get_item_blueprint(id: &str, out: &SignalSenderChannels) -> Option<Item> {
+    let (oneshot, recv) = tokio::sync::oneshot::channel::<Option<Item>>();
+    if let Ok(_) = out.librarian.send(SystemSignal::ItemBlueprintReq { id: id.into(), out: oneshot }) {
+        if let Ok(reply) = recv.await {
+            return reply
+        }
+    }
+    None
+}
+
+/// Helper to get a [HelpPage].
+/// 
+/// # Args
+/// - `id` of [HelpPage].
+/// - `out`going signal system…
+pub async fn get_help_page(id: &str, access: Access, bypass: bool, out: &SignalSenderChannels) -> Option<HelpPage> {
+    log::debug!("Oneshot get_help_page …");
+    let (oneshot, recv) = tokio::sync::oneshot::channel::<Option<HelpPage>>();
+    if let Ok(_) = out.librarian.send(SystemSignal::HelpRequest { page_id: id.into(), access, bypass, out: oneshot }) {
+        log::debug!("… got reply …");
+        if let Ok(reply) = recv.await {
+            return reply
+        }
+    }
+    None
+}
+
+/// Attempt to shelve a [HelpPage].
+/// 
+/// # Args
+/// - [`entry`][HelpPage] to shelve.
+/// - `out`going signal system…
+pub async fn shelve_help_page(entry: &HelpPage, out: &SignalSenderChannels) -> bool {
+    let (oneshot, recv) = tokio::sync::oneshot::channel::<bool>();
+    if let Ok(_) = out.librarian.send(SystemSignal::NewHelpEntry { entry: entry.clone(), out: oneshot }) {
+        if let Ok(reply) = recv.await {
+            return reply;
+        }
     }
     false
 }

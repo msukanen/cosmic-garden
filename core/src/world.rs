@@ -318,7 +318,7 @@ pub(crate) mod world_tests {
         ),
         (   tokio::sync::oneshot::Sender<()>,
             tokio::sync::oneshot::Receiver<()>
-        )
+        ),
     ){
         use std::io::Write;
         let _ = env_logger::
@@ -358,7 +358,7 @@ pub(crate) mod world_tests {
         (   std::sync::Arc::new(tokio::sync::RwLock::new(world)),
             sigs,
             (crate::io::ClientState::Playing { player: plr.clone() }, plr.clone()),
-            (dtx, drx)
+            (dtx, drx),
         )
     }
 

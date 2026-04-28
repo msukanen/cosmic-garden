@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::sync::{RwLock, broadcast, mpsc};
 
-use crate::{combat::Battler, io::Broadcast, player::Player, room::Room, thread::life::TickType, util::direction::Direction};
+use crate::{combat::Battler, io::Broadcast, item::Item, mob::core::Entity, player::Player, room::Room, thread::life::TickType, util::{HelpPage, access::Access, direction::Direction}};
 
 pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
 pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
@@ -14,7 +14,9 @@ pub enum SystemSignal {
     /// Generic "we're shutting down, brace for impact".
     Shutdown,
 
+    //
     //--- Janitor ---
+    //
     /// Player logging out, queue or otherwise.
     PlayerNeedsSaving (Arc<RwLock<Player>>),
     /// Save the whales, now!
@@ -22,16 +24,40 @@ pub enum SystemSignal {
     /// Item tucked into L'n'F.
     LostAndFound,
 
+    //
     //--- Librarian ---
-    /// sent by Librarian -> IO, save the library
-    /// sent by IO -> Librarian, reindex your aliases
-    ReindexLibrary,
-    /// New library entry, from e.g. builders.
-    NewLibraryEntry,
+    //
+    // New help entry.
+    NewHelpEntry {
+        entry: HelpPage,
+        out: tokio::sync::oneshot::Sender<bool>
+    },
     /// New blueprint entry, from e.g. builders.
-    NewBlueprintEntry,
+    NewBlueprintEntry {
+        entry: Item,
+        out: tokio::sync::oneshot::Sender<bool>
+    },
     /// New entity blueprint entry, from e.g. builders.
-    NewEntityEntry,
+    NewEntityEntry {
+        entry: Entity
+    },
+    /// Request a help page.
+    HelpRequest {
+        page_id: String,
+        access: Access,
+        bypass: bool,
+        out: tokio::sync::oneshot::Sender<Option<HelpPage>>
+    },
+    /// Request [Entity] blueprint.
+    EntityBlueprintReq {
+        id: String,
+        out: tokio::sync::oneshot::Sender<Option<Entity>>
+    },
+    /// Request [Item] blueprint.
+    ItemBlueprintReq {
+        id: String,
+        out: tokio::sync::oneshot::Sender<Option<Item>>
+    },
 
     ///--- Life Thread
     /// Notion to spawn something…

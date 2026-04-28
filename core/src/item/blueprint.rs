@@ -1,7 +1,7 @@
 //! Blueprint library.
 
 use std::{collections::HashMap, fmt::Display};
-use crate::{r#const::WORLD_ID, identity::{IdentityMut, IdentityQuery}, io::{blueprint_entry_fp, blueprint_lib_fp}, item::Item, serial::string_vec_to_bool_map, string::{StrUuid, Uuid}, thread::librarian::BP_LIBRARY};
+use crate::{r#const::WORLD_ID, identity::{IdentityMut, IdentityQuery}, io::{blueprint_entry_fp, blueprint_lib_fp}, item::Item, serial::string_vec_to_bool_map, string::{StrUuid, Uuid}};
 
 use serde::{Deserialize, Serialize};
 use tokio::fs;
@@ -28,7 +28,7 @@ impl BlueprintLibrary {
     /// 
     /// # Return
     /// `true` if shelved for real.
-    pub fn shelve(&mut self, item: &Item, replace: bool) -> bool {
+    pub fn shelve(&mut self, item: Item, replace: bool) -> bool {
         let id = item.id().no_uuid().to_string();
 
         if self.id_stem.contains_key(&id) && !replace {
@@ -71,17 +71,17 @@ impl From<serde_json::Error> for BlueprintError { fn from(value: serde_json::Err
 
 impl BlueprintLibrary {
     /// Load or bootstrap the blueprint library.
-    pub async fn load_or_bootstrap() -> Result<(), BlueprintError> {
+    pub async fn load_or_bootstrap() -> Result<BlueprintLibrary, BlueprintError> {
         // Library present? If no, make one.
         let Ok(mf) = fs::read_to_string(blueprint_lib_fp()).await else {
             log::warn!("No library established yet. Setting defaults…");
-            let mut lock = (*BP_LIBRARY).write().await;
-            lock.world_id = WORLD_ID.as_str().into();
-            lock.id_stem = HashMap::new();
-            lock.items = HashMap::new();
-            lock.save().await?;
+            let mut lib = BlueprintLibrary::default();
+            lib.world_id = WORLD_ID.as_str().into();
+            lib.id_stem = HashMap::new();
+            lib.items = HashMap::new();
+            lib.save().await?;
             log::info!("Library in place, just no blueprints yet.");
-            return Ok(());
+            return Ok(lib);
         };
 
         // Load the library.
@@ -100,12 +100,8 @@ impl BlueprintLibrary {
 
         // erase failed stems from library
         lib.id_stem.retain(|id,_| lib.items.contains_key(id));
-
-        let mut lock = (*BP_LIBRARY).write().await;
-        *lock = lib;
-        log::info!("Blueprint library for '{}' is now live with {} specimen.", WORLD_ID.as_str(), lock.items.len());
-
-        Ok(())
+        log::info!("Blueprint library for '{}' is now live with {} specimen.", WORLD_ID.as_str(), lib.items.len());
+        Ok(lib)
     }
 
     /// Save the blueprint library and all the dirty marked entries.

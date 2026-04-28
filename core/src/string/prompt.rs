@@ -97,6 +97,6 @@ macro_rules! reprompt_playing_user {
             }
             _=> None
         };
-        tell_user!(&mut $writer, "{}", prompt.unwrap_or("".into()));
+        crate::tell_user!(&mut $writer, "{}", prompt.unwrap_or("".into()));
     }};
 }

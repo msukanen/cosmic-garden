@@ -52,13 +52,15 @@ impl Command for UsageCommand {
 mod hedit_usage_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{hedit::{HeditCommand, usage::UsageCommand}, help::HelpCommand}, ctx, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{hedit::{HeditCommand, usage::UsageCommand}, help::HelpCommand}, ctx, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn dummy_entry_usage_check() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
+        let _ = get_operational_mock_librarian!(c,w);
+        stabilize_threads!();
         let state = ctx!(state, HeditCommand, "dummy",s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, HeditCommand, "dummy",s,c.out,w,p,|out:&str| out.contains("no such topic"));

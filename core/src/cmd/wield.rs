@@ -60,9 +60,9 @@ impl Command for WieldCommand {
 
 #[cfg(test)]
 mod cmd_wield_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{cmd::{get::GetCommand, look::LookCommand, shutdown::ShutdownCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::{get::GetCommand, look::LookCommand, shutdown::ShutdownCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn wield_knife_ok() {
@@ -73,10 +73,10 @@ mod cmd_wield_tests {
         let _ = get_operational_mock_librarian!(c,w);
         let _ = get_operational_mock_life!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
-        tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
+        stabilize_threads!();
         log::debug!("Sending…");
         c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room_id: "r-1".into() }).ok();
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        stabilize_threads!(100);
         let state = ctx!(state, LookCommand, "", s,c,w,p);
         let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));
         log::debug!("Got the knife!");

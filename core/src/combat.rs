@@ -92,9 +92,9 @@ pub trait CombatantMut : Combatant {
 
 #[cfg(test)]
 mod combatant_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, stabilize_threads, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
 
     /// Simulate 100 players' "gank squad" vs 1 (tough) goblin.
     /// 
@@ -107,11 +107,12 @@ mod combatant_tests {
         get_operational_mock_librarian!(c,w);
         get_operational_mock_life!(c,w);
 
-        tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
+        stabilize_threads!();
 
         // Spawn a lil gobbo.
-        let Ok(_) = Entity::new("goblin").await else { panic!("Where'd the lil goblin's blueprint go?!"); };
+        let Ok(_) = Entity::new("goblin", &c.out).await else { panic!("Where'd the lil goblin's blueprint go?!"); };
         let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() });
+        stabilize_threads!(150);
       
         let mut rx = c.out.broadcast.subscribe();
         tokio::spawn(async move {
@@ -126,7 +127,6 @@ mod combatant_tests {
                 }
             }
         });
-        tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
         {
             let c = c.out.clone();
             let w = w.clone();
@@ -136,7 +136,7 @@ mod combatant_tests {
                 let state = ClientState::Playing { player: p.clone() };
                 let state = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
                 let state = ctx!(state, AttackCommand, "goblin",s,c,w,p);
-                tokio::time::sleep(Duration::from_secs(2)).await;
+                stabilize_threads!(2000);
                 let _ = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
             });
         }
@@ -156,11 +156,10 @@ mod combatant_tests {
                 let mut b: Vec<u8> = vec![];
                 let mut s = Cursor::new(&mut b);
                 let state = ClientState::Playing { player: p2.clone() };
-                //let state = ctx!(state, LookCommand, "",s,c,w,p2,|out:&str| out.contains("goblin is here"));
                 let _ = ctx!(state, AttackCommand, "goblin",s,c,w,p2);
             });
         }}
-        tokio::time::sleep(Duration::from_secs(2)).await;
+        stabilize_threads!(2000);
         log::debug!("--terminated--")
     }
 
@@ -171,10 +170,10 @@ mod combatant_tests {
         let lt = get_operational_mock_librarian!(c,w);
         let gt = get_operational_mock_life!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        stabilize_threads!();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room_id: "r-1".into() }).ok();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the spawns stabilize…, Just in Case™
+        stabilize_threads!(150);
         let mut rx = c.broadcast.subscribe();
         tokio::spawn(async move {
             loop {
@@ -193,8 +192,7 @@ mod combatant_tests {
                 }
             }
         });
-        log::debug!("still alive?");
-        tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
+        stabilize_threads!(50);
         {
             tokio::spawn({async move {
                 let mut b: Vec<u8> = vec![];
@@ -204,9 +202,10 @@ mod combatant_tests {
                 let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));
                 let state = ctx!(state, WieldCommand, "knife", s,c,w,p,|out:&str| out.contains("wield"));
                 let state = ctx!(state, AttackCommand, "goblin",s,c,w,p);
-                log::debug!("AttackCommand fired. Waiting 6 seconds (or less) of combat to pass…");
-                tokio::time::sleep(Duration::from_secs(6)).await;
-                let _ = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
+                static STAB_TIME: u64 = 5000;
+                log::debug!("AttackCommand fired. Waiting {STAB_TIME}ms (or less) of combat to pass…");
+                stabilize_threads!(STAB_TIME);
+                let _ = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("corpse-inventory"));
                 c.shutdown().await;
             }});
         }
@@ -224,11 +223,10 @@ mod combatant_tests {
         let gt = get_operational_mock_life!(c,w);
         let lt = get_operational_mock_librarian!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
-        tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
+        stabilize_threads!();
         c.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room_id: "r-1".into() }).ok();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the spawns stabilize…, Just in Case™
-        //tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
+        stabilize_threads!(150);
         let mut rx = c.broadcast.subscribe();
         tokio::spawn(async move {
             loop {
@@ -242,23 +240,19 @@ mod combatant_tests {
                 }
             }
         });
-        log::debug!("still alive?");
-        tokio::time::sleep(Duration::from_secs(2)).await;// let things stabilize in peace…
-        let senders = c.clone();
 
         tokio::spawn({async move {
             let mut b: Vec<u8> = vec![];
             let mut s = Cursor::new(&mut b);
             log::debug!("1st LookCommand warming up...");
-            tokio::time::sleep(Duration::from_secs(2)).await;
             let state = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
             let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));
             let state = ctx!(state, WieldCommand, "knife", s,c,w,p,|out:&str| out.contains("wield"));
             log::debug!("AttackCommand warming up...");
             let _ = ctx!(state, AttackCommand, "goblin",s,c,w,p);
             log::debug!("AttackCommand fired.");
-            tokio::time::sleep(Duration::from_millis(50)).await;
-            senders.shutdown().await;
+            stabilize_threads!(50);
+            c.shutdown().await;
             log::debug!("Shutdown initiated.");
             return;
         }});

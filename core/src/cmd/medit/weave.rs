@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke, look::LookCommand}, err_tell_user, identity::IdentityQuery, player::ActivityType, roomloc_or_bust, show_help, string::StrUuid, tell_user, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::SpawnType}, validate_access, validate_editor_mode};
+use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke, look::LookCommand}, err_tell_user, identity::IdentityQuery, roomloc_or_bust, show_help, string::StrUuid, tell_user, thread::{SystemSignal, librarian::shelve_entity_blueprint, signal::SpawnType}, validate_access, validate_editor_mode};
 
 pub struct WeaveCommand;
 
@@ -51,7 +51,7 @@ impl Command for WeaveCommand {
             "persist" => {
                 validate_access!(ctx, admin);
                 let ent_stem = buf.id().show_uuid(false).to_string();
-                ENT_BP_LIBRARY.write().await.shelve(buf, ctx.out);
+                shelve_entity_blueprint(&buf, &ctx.out).await;
                 let mut spawn = false;
                 if args == "spawn" {
                     spawn = true;

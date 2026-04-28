@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, help::HelpCommand}, thread::librarian::HELP_LIBRARY, player::ActivityType, player_or_bust, show_help_if_needed, tell_user, util::HelpPage, validate_access};
+use crate::{cmd::{Command, CommandCtx, help::HelpCommand}, player::ActivityType, player_or_bust, show_help_if_needed, tell_user, thread::librarian::get_help_page, util::HelpPage, validate_access};
 
 // Get modules.
 include!(concat!(env!("OUT_DIR"), "/hedit_registry.rs"));
@@ -30,10 +30,7 @@ impl Command for HeditCommand {
                     return ;
                 }
 
-                let page = (*HELP_LIBRARY).read().await.get(args, &access, false);
-                if let Some(page) = page
-                {
-                    // old page, lets work on that.
+                if let Some(page) = get_help_page(args, access.clone(), false, &ctx.out).await {
                     Edit.edit(ctx, page, false).await;
                     return;
                 } else {
@@ -47,9 +44,8 @@ impl Command for HeditCommand {
                     return;
                 }
             }
-            other => {
-                let page = (*HELP_LIBRARY).read().await.get(other, &access, false);
-                if let Some(page) = page {
+            _ => {
+                if let Some(page) = get_help_page(ctx.args, access.clone(), false, &ctx.out).await {
                     // old page, lets work on that.
                     Edit.edit(ctx, page, false).await;
                     return;

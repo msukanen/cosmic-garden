@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{entity_entry_fp, entity_lib_fp}, mob::core::Entity, serial::string_vec_to_bool_map, string::StrUuid, thread::{SystemSignal, librarian::ENT_BP_LIBRARY, signal::SignalSenderChannels}};
+use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{entity_entry_fp, entity_lib_fp}, mob::core::Entity, serial::string_vec_to_bool_map, string::StrUuid};
 
 /// Entity (blueprint) library!
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -19,12 +19,11 @@ pub struct EntityLibrary {
 
 impl EntityLibrary {
     /// Load/bootstrap [EntityLibrary]
-    pub(crate) async fn load_or_bootstrap() -> Result<(), CgError> {
+    pub(crate) async fn load_or_bootstrap() -> Result<EntityLibrary, CgError> {
         let Ok(mf) = fs::read_to_string(entity_lib_fp()).await else {
             log::warn!("No entity database of any sort yet. Making (an empty) one…");
 
-            let mut lock = (*ENT_BP_LIBRARY).write().await;
-            *lock = EntityLibrary::default();
+            let mut lib = EntityLibrary::default();
 
             let basic_mobs_toml = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/res/bootstrap_mob.toml"));
             #[derive(Deserialize)]
@@ -34,12 +33,12 @@ impl EntityLibrary {
             let wrapper: BasicMobs = toml::from_str(basic_mobs_toml)?;
             for mob in wrapper.mobs {
                 log::debug!(" EL-boot → '{}'", mob.id());
-                lock.id_stem.insert(mob.id().to_string(), true);
-                lock.bps.insert(mob.id().to_string(), mob);
+                lib.id_stem.insert(mob.id().to_string(), true);
+                lib.bps.insert(mob.id().to_string(), mob);
             }
-            lock.save().await?;
+            lib.save().await?;
 
-            return  Ok(())
+            return  Ok(lib)
         };
 
         // We got a loaded lib in `mf`
@@ -70,13 +69,11 @@ impl EntityLibrary {
 
         // mop up stems that failed to load…
         lib.id_stem.retain(|id,_| lib.bps.contains_key(id));
-        let mut lock = (*ENT_BP_LIBRARY).write().await;
         let count = lib.id_stem.len();
-        *lock = lib;
         let plural = if count == 1 {"y"} else {"ies"};
         log::info!("Entity catalogue for '{}' established with {count} entr{plural}.", WORLD_ID.as_str());
 
-        Ok(())
+        Ok(lib)
     }
 
     /// Save entity library and all the registered, modified entries.
@@ -106,11 +103,10 @@ impl EntityLibrary {
     }
 
     /// Shelve a new [Entity] blueprint.
-    pub fn shelve(&mut self, bp: Entity, out: &SignalSenderChannels) {
+    pub fn shelve(&mut self, bp: Entity) {
         let id = bp.id().show_uuid(false).to_string();
         self.id_stem.insert(id.clone(), true);
         self.bps.insert(id, bp);
-        out.librarian.send(SystemSignal::NewEntityEntry).ok();
     }
 }
 

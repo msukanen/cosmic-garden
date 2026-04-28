@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::RwLock, time};
 
-use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, librarian::{BP_LIBRARY, ENT_BP_LIBRARY, HELP_LIBRARY}, signal::{SigReceiver, SignalSenderChannels}}, world::World};
+use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, world::World};
 
 lazy_static! {
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
@@ -28,7 +28,7 @@ macro_rules! get_operational_mock_janitor {
 /// in (relative) sync.
 /// 
 pub(crate) async fn janitor(
-    (out, mut incoming): (SignalSenderChannels, SigReceiver),
+    (_out, mut incoming): (SignalSenderChannels, SigReceiver),
     world: Arc<RwLock<World>>,
     args: Option<Cli>,
     done_tx: tokio::sync::oneshot::Sender<()>
@@ -59,9 +59,6 @@ pub(crate) async fn janitor(
 
                 SystemSignal::SaveWorld => {save_the_whales(world.clone(), true).await;},
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
-                SystemSignal::ReindexLibrary => save_help_asap(&out).await,
-                SystemSignal::NewBlueprintEntry => save_bp_asap(&out).await,
-                SystemSignal::NewEntityEntry => save_ent_bp_asap(&out).await,
                 SystemSignal::PlayerNeedsSaving(lock) => {
                     let p_id = lock.read().await.id().to_string();
                     save_player_now(lock, &p_id).await;
@@ -77,8 +74,6 @@ pub(crate) async fn janitor(
     save_the_whales(world.clone(), true).await;// save the whales!
     room_save().await;// …and the rooms
     autosave_queue(world.clone()).await;// well, and players.
-    save_help_asap(&out).await;
-    save_bp_asap(&out).await;
 
     // notify main thread that we've closed the shop.
     let _ = done_tx.send(());
@@ -186,32 +181,4 @@ async fn lost_and_found(world: Arc<RwLock<World>>) {
 
     // Force world save so that current L'n'F is stored along the world file.
     save_the_whales(world.clone(), true).await;
-}
-
-/// ASAP save of [HelpPage]s.
-async fn save_help_asap(out: &SignalSenderChannels) {
-    if let Err(e) = HELP_LIBRARY.write().await.save().await {
-        log::error!("Help anomaly! {e:?}");
-        return ;
-    }
-    // Nudge the librarian, but don't wait if he's asleep…
-    out.librarian.send(SystemSignal::ReindexLibrary).ok();
-}
-
-/// ASAP save of [HelpPage]s.
-async fn save_bp_asap(out: &SignalSenderChannels) {
-    if let Err(e) = BP_LIBRARY.write().await.save().await {
-        log::error!("Blueprint anomaly! {e:?}");
-        return ;
-    }
-    // Nudge the librarian, but don't wait if he's asleep…
-    out.librarian.send(SystemSignal::ReindexLibrary).ok();
-}
-
-/// ASAP save of [Entity] library.
-async fn save_ent_bp_asap(_out: &SignalSenderChannels) {
-    if let Err(e) = ENT_BP_LIBRARY.write().await.save().await {
-        log::error!("Entity DNA anomaly! {e:?}");
-        return ;
-    }
 }

@@ -330,13 +330,15 @@ async fn do_dmg(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
 mod cmd_iedit_set_tests {
     use std::time::Duration;
 
-    use crate::{cmd::{iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, title::TitleCommand, weave::WeaveCommand}, shutdown::ShutdownCommand}, ctx, thread::{janitor, librarian, life}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, title::TitleCommand, weave::WeaveCommand}, shutdown::ShutdownCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
     
     #[tokio::test]
     async fn iedit_set_something_on_primordial() {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
+        let _ = get_operational_mock_librarian!(c,w);
+        stabilize_threads!();
         let state = ctx!(state, IeditCommand, "apple", s, c.out, w, p, |out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, IeditCommand, "apple", s, c.out, w, p);
@@ -356,6 +358,8 @@ mod cmd_iedit_set_tests {
         let mut buffer: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut buffer);
         let (w,c,(state, plr),_) = get_operational_mock_world().await;
+        let _ = get_operational_mock_librarian!(c,w);
+        stabilize_threads!();
         let state = ctx!(state, IeditCommand, "apple", s, c.out, w, plr,|out:&str| out.contains("Huh?"));
         plr.write().await.access = Access::Builder;
         let state = ctx!(state, IeditCommand, "apple", s, c.out, w, plr);
@@ -375,6 +379,8 @@ mod cmd_iedit_set_tests {
         let mut buffer: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut buffer);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
+        let _ = get_operational_mock_librarian!(c,w);
+        stabilize_threads!();
         let state = ctx!(state, IeditCommand, "apple", s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, IeditCommand, "apple", s,c.out,w,p,|out:&str| out.contains("new"));
@@ -407,10 +413,11 @@ mod cmd_iedit_set_tests {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
         let (w,c,(state, p),d) = get_operational_mock_world().await;
+        let jt = get_operational_mock_janitor!(c,w,d.0);
+        let lt = get_operational_mock_life!(c,w);
+        let ht = get_operational_mock_librarian!(c,w);
+        stabilize_threads!();
         let b = c.out.clone();
-        let lt = tokio::spawn(life((b.clone(), c.recv.life), w.clone()));
-        let ht = tokio::spawn(librarian((b.clone(), c.recv.librarian), w.clone()));
-        let jt = tokio::spawn(janitor((b.clone(), c.recv.janitor), w.clone(), None, d.0));
         tokio::time::sleep(Duration::from_secs(6)).await;
         let state = ctx!(state, IeditCommand, "knife", s,b,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

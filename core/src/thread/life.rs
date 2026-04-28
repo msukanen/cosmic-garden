@@ -3,9 +3,9 @@
 use std::{collections::HashMap, sync::{Arc, Weak}, time::Duration};
 
 use nohash_hasher::BuildNoHashHasher;
-use tokio::{sync::{RwLock, mpsc}, time};
+use tokio::{sync::{RwLock, mpsc, oneshot}, time};
 
-use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::Item, mob::StatValue, room::Room, string::{DescribableMut, Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, translocate, util::approx::ApproxI32, world::World};
+use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::Item, mob::{StatValue, core::Entity}, room::Room, string::{DescribableMut, Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, translocate, util::approx::ApproxI32, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -348,7 +348,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                             log::info!("Spawns to go: {spawn_count}");
                         }
                     }
-                    spawn_something(what, &room_id, &world).await
+                    spawn_something(&out, what, &room_id, &world).await
                 }
 
                 // Attack! From e.g. AttackCommand from player to start a fight.
@@ -502,14 +502,14 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
 /// # Args
 /// - `what` to spawn.
 /// - `where` to spawn ([Room] ID).
-async fn spawn_something(what: SpawnType, r_id: &str, world: &Arc<RwLock<World>>) {
+async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, r_id: &str, world: &Arc<RwLock<World>>) {
     match &what {
         SpawnType::Mob { id } => {
             let w = world.read().await;
             if let Some(r_arc) = w.rooms.get(r_id) {
                 let r_arc = r_arc.clone();
                 drop(w);
-                direct_spawn_something(what, &r_arc, world).await
+                direct_spawn_something(out, what, &r_arc, world).await
             } else {
                 log::error!("Ayy! We don't have room '{}' to spawn '{id}' at!", r_id);
             }
@@ -524,24 +524,34 @@ async fn spawn_something(what: SpawnType, r_id: &str, world: &Arc<RwLock<World>>
 /// # Args
 /// - `what` to spawn.
 /// - `where` to spawn ([Room] ID).
-async fn direct_spawn_something(what: SpawnType, r_arc: &Arc<RwLock<Room>>, world: &Arc<RwLock<World>>) {
+async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_arc: &Arc<RwLock<Room>>, world: &Arc<RwLock<World>>)
+{
     match what {
         SpawnType::Mob { id } => {
-            if let Some(mut mob) = (*ENT_BP_LIBRARY).read().await.get(&id) {
-                *(mob.id_mut()) = mob.id().re_uuid();
-                let mob_id = mob.id().to_string();
-                mob.set_location(&r_arc);
-                let mob_arc = Arc::new(RwLock::new(mob));
-                {
-                    let mut w = world.write().await;
-                    // tell the world 1st…
-                    w.entities.insert(mob_id.clone(), Arc::downgrade(&mob_arc));
-                    // …then the room itself.
-                    r_arc.write().await.entities.insert(mob_id.clone(), mob_arc);
-                }// drop 'w' now…
-                log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
+            let (oneshot, recv) = oneshot::channel::<Option<Entity>>();
+            if let Ok(_) = out.librarian.send(SystemSignal::EntityBlueprintReq { id: id.clone(), out: oneshot }) {
+                if let Ok(reply) = recv.await {
+                    if let Some(mut mob) = reply {
+                        *(mob.id_mut()) = mob.id().re_uuid();
+                        let mob_id = mob.id().to_string();
+                        mob.set_location(&r_arc);
+                        let mob_arc = Arc::new(RwLock::new(mob));
+                        {
+                            let mut w = world.write().await;
+                            // tell the world 1st…
+                            w.entities.insert(mob_id.clone(), Arc::downgrade(&mob_arc));
+                            // …then the room itself.
+                            r_arc.write().await.entities.insert(mob_id.clone(), mob_arc);
+                        }// drop 'w' now…
+                        log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
+                    } else {
+                        log::warn!("There's no record of '{id}' in the entity catalogue…");
+                    }
+                } else {
+                    log::warn!("Librarian is too busy to check her catalogues for '{id}'… Oh well.");
+                }
             } else {
-                log::warn!("There's no record of '{id}' in the entity catalogue…");
+                log::warn!("Message system congestion. No can do…");
             }
         }
 
@@ -585,9 +595,9 @@ async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resoluti
 
 #[cfg(test)]
 mod life_tests {
-    use std::{io::Cursor, sync::Arc, time::Duration};
+    use std::{io::Cursor, sync::Arc};
 
-    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn goblin_ocean() {
@@ -596,12 +606,12 @@ mod life_tests {
         #[cfg(not(feature = "stresstest"))]
         const MILLION_GOBBOS: usize = 1_000;// just 1,000 if not stresstesting...
 
-        let (w,c,_,d) = get_operational_mock_world().await;
-        get_operational_mock_janitor!(c,w,d.0);
+        let (w,c,_,j) = get_operational_mock_world().await;
+        get_operational_mock_janitor!(c,w,j.0);
         get_operational_mock_life!(c,w);
         get_operational_mock_librarian!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
-        tokio::time::sleep(Duration::from_secs(2)).await;// let the threads stabilize…
+        stabilize_threads!();
         let (otx,orx) = tokio::sync::oneshot::channel::<()>();
         c.life.send(SystemSignal::CountSpawns { num: MILLION_GOBBOS, out: otx }).ok();
         for _ in 1..=MILLION_GOBBOS {
@@ -616,14 +626,14 @@ mod life_tests {
     async fn loot_pinata() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,(mut state, p),d) = get_operational_mock_world().await;
-        let _ = get_operational_mock_janitor!(c,w,d.0);
+        let (w,c,(mut state, p),j) = get_operational_mock_world().await;
+        let _ = get_operational_mock_janitor!(c,w,j.0);
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        stabilize_threads!();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into()}, room_id: "r-1".into()}).ok();
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        stabilize_threads!(100);
         log::debug!("Stabilized…");
         let lock = w.read().await;
         if let Some(r1) = lock.rooms.get("r-1") {
@@ -673,7 +683,7 @@ mod life_tests {
         } else {
             panic!("Ok, where did the room vanish?");
         }
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        stabilize_threads!(100);
         p.write().await.access = Access::Builder;
         p.write().await.config.show_id = true;
         let _ = ctx!(state, LookCommand, "", s,c,w,p);

@@ -20,8 +20,9 @@ impl Command for RenameCommand {
             (w, access)
         };
         if let Some(ent) = &mut w.medit_buffer {
-            match what {
-                "id" => {
+            let is_op = what.chars().all(|c| !c.is_uppercase());
+            match (is_op, what) {
+                (true, "id") => {
                     if args.is_empty() {
                         drop(w);
                         show_help!(ctx, "rename");
@@ -41,6 +42,11 @@ impl Command for RenameCommand {
                         drop(w);
                         err_tell_user!(ctx.writer, "Can't call them '{}', sorry. Try something else…\n", args);
                     }
+                },
+                (true, _) => {
+                    drop(w);
+                    tell_user!(ctx.writer, "<c red>[ERR]</c> '{}' is not a recognized op…\n\n", what);
+                    show_help!(ctx, "q rename");
                 },
                 // normal rename:
                 _ => {
@@ -78,7 +84,7 @@ mod medit_rename_tests {
         let state = ctx!(state, RenameCommand, "",s,c,w,p);
         let state = ctx!(state, RenameCommand, "Hoblin",s,c,w,p,|out:&str| out.contains("Hoblin"));
         let state = ctx!(state, RenameCommand, "ixd hoblin",s,c,w,p,|out:&str| out.contains("rename <name>"));
-        let state = ctx!(state, RenameCommand, "id hoblin",s,c,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, RenameCommand, "id hoblin",s,c,w,p,|out:&str| out.contains("Re-ID requires"));
         p.write().await.access = Access::Admin;
         let _ = ctx!(state, RenameCommand, "id hoblin",s,c,w,p,|out:&str| out.contains("re-ID"));
     }

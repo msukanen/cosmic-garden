@@ -7,7 +7,7 @@ use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mo
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::{IdentityMut, IdentityQuery}, io::entity_entry_fp, item::{Item, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::librarian::ENT_BP_LIBRARY, traits::Tickable};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::entity_entry_fp, item::{Item, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable};
 
 /// Generic [Entity] size categories
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -153,6 +153,21 @@ fn entity_inv_default() -> ContainerVariant {
     ContainerVariant::raw(ContainerVariantType::Corpse)
 }
 
+#[derive(Debug)]
+pub enum EntityError {
+    NoSuchEntity(String)
+}
+
+impl Display for EntityError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::NoSuchEntity(e) => write!(f, "No such entity as '{e}'")
+        }
+    }
+}
+
+impl std::error::Error for EntityError {}
+
 impl Entity {
     #[cfg(test)]
     pub fn re_uuid(&mut self) {
@@ -160,16 +175,15 @@ impl Entity {
         *self.id_mut() = self.id().re_uuid()
     }
 
-    pub async fn new(id: &str) -> Result<Self, CgError> {
-        let Some(mut ent) = (*ENT_BP_LIBRARY).read().await.get(&id) else {
+    pub async fn new(id: &str, out: &SignalSenderChannels) -> Result<Self, CgError> {
+        if let Some(ent) = get_entity_blueprint(id, out).await {
             return Ok(Self {
                 id: id.show_uuid(false).into(),
-                ..Self::default()
+                ..ent
             });
-        };
-
-        *(ent.id_mut()) = id.show_uuid(false).into();
-        Ok(ent)
+        }
+        
+        Err(CgError::from(EntityError::NoSuchEntity(id.into())))
     }
 
     /// Save the entity blueprint.
@@ -241,9 +255,9 @@ impl Tickable for Entity {
 
 #[cfg(test)]
 mod entity_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;
@@ -286,15 +300,15 @@ mod entity_tests {
         let (w,c,(state, p),_) = get_operational_mock_world().await;
         get_operational_mock_librarian!(c,w);
         get_operational_mock_life!(c,w);
-        tokio::time::sleep(Duration::from_secs(3)).await;// let things stabilize in peace…
-        let Ok(mob) = Entity::new("goblin").await else {
+        stabilize_threads!();
+        let Ok(mob) = Entity::new("goblin", &c.out).await else {
             panic!("Where'd the lil goblin go?!");
         };
         if let Err(e) = mob.save_bp().await {
             panic!("goblin fail: {e:?}");
         }
         let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() });
-        tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
+        stabilize_threads!(100);
         let state = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("goblin is here"));
         p.write().await.config.show_id = true;
         p.write().await.access = Access::Builder;
