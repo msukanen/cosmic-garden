@@ -565,3 +565,22 @@ of items will not carry over, however, and will default
 This command doesn't guessimate - you have to use discrete IDs.
 """
 usage = ["clone <id>"]
+[[help_pages]]
+id = "spawn"
+access = "any_builder"
+title = "spawn"
+alias = ["spawn", "materialize"]
+contents = """
+'spawn' an Entity or Item by blueprint.
+
+A spawned entity may or may not be hostile toward occupants of the room it
+gets spawned in...
+
+To get list of spawnable stuff, use <c yellow>spawn list ..</c>. The optional
+<term> can be used to narrow down search on large lists.
+"""
+usage = [
+    "spawn <id-stem>",
+    "spawn list entity [<term>]",
+    "spawn list item [<term>]"
+]
