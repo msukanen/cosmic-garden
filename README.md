@@ -35,11 +35,8 @@ The major threads in a nutshell:
 
   * a persistent co-worker deals with combat reporting in stead of life-thread
     itself.
-  
-  In case things get hairy, life-thread spawns extra workers as needed, just
-  like Janitor.
-* Janitor acts as a… janitor. He and his co-spawns are the only ones touching
-  disk I/O directly past initial bootstraps.
+* Janitor acts as a… janitor. He and his co-spawns deal with disk I/O and other
+  janitorial stuff.
 
 ### Security
 
