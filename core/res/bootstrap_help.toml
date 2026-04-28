@@ -543,3 +543,23 @@ usage = [
     "set <stat> <val> [max <val>]",
     "set <stat> max <val>"
 ]
+[[help_pages]]
+id = "clone"
+access = "builder"
+title = "clone"
+alias = ["clone", "clown", "copy", "mirror", "replicate"]
+contents = """
+'clone' makes a near identical copy of
+
+ a) what you're holding (inventory/hand)
+ b) what is present at your location
+
+Note that 'clone' replicates also the contents of containers. Ownership
+of items will not carry over, however, and will default
+
+ a) to whoever picks them up (or to whoever you give them) first.
+ b) to the clone, if an entity.
+
+This command doesn't guessimate - you have to use discrete IDs.
+"""
+usage = ["clone <id>"]
