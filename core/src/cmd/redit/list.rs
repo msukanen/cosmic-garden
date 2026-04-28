@@ -35,14 +35,13 @@ impl Command for ListCommand {
 mod cmd_iedit_list {
     use dicebag::InclusiveRandomRange;
 
-    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, list::ListCommand}}, ctx, io::ClientState, room::Room, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, list::ListCommand}}, ctx, room::Room, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn exits_listing() {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
-        let (w, c, p, _) = get_operational_mock_world().await;
-        let state = ClientState::Playing { player: p.clone() };
+        let (w,c,(state, p),_) = get_operational_mock_world().await;
         let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, ReditCommand, "this", s, c.out, w, p);
@@ -54,8 +53,7 @@ mod cmd_iedit_list {
     async fn exits_listing_parallel() {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
-        let (w, c, p, _) = get_operational_mock_world().await;
-        let state = ClientState::Playing { player: p.clone() };
+        let (w,c,(state, p),_) = get_operational_mock_world().await;
         let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, ReditCommand, "this", s, c.out, w, p);

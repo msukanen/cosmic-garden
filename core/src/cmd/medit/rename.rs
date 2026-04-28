@@ -62,17 +62,16 @@ impl Command for RenameCommand {
 mod medit_rename_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand}, ctx, get_operational_mock_librarian, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand}, ctx, get_operational_mock_librarian, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn rename_normal() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,p,_) = get_operational_mock_world().await;
+        let (w,c,(state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_librarian!(c,w);
         tokio::time::sleep(Duration::from_secs(1)).await;// let the thread(s) stabilize…
         let c = c.out;
-        let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(state, MeditCommand, "goblin",s,c,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, MeditCommand, "goblin",s,c,w,p);

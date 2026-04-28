@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::{Arc, Weak}, time::Duration};
 use nohash_hasher::BuildNoHashHasher;
 use tokio::{sync::{RwLock, mpsc}, time};
 
-use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::{Item, container::{Storage, variants::ContainerVariant}}, mob::StatValue, room::Room, string::{DescribableMut, Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, translocate, util::approx::ApproxI32, world::World};
+use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::Item, mob::StatValue, room::Room, string::{DescribableMut, Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, librarian::ENT_BP_LIBRARY, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, translocate, util::approx::ApproxI32, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -587,7 +587,7 @@ async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resoluti
 mod life_tests {
     use std::{io::Cursor, sync::Arc, time::Duration};
 
-    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, io::ClientState, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn goblin_ocean() {
@@ -616,7 +616,7 @@ mod life_tests {
     async fn loot_pinata() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,p,d) = get_operational_mock_world().await;
+        let (w,c,(mut state, p),d) = get_operational_mock_world().await;
         let _ = get_operational_mock_janitor!(c,w,d.0);
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
@@ -626,7 +626,6 @@ mod life_tests {
         tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
         log::debug!("Stabilized…");
         let lock = w.read().await;
-        let mut state = ClientState::Playing { player: p.clone() };
         if let Some(r1) = lock.rooms.get("r-1") {
             let r1 = r1.clone();
             drop(lock);

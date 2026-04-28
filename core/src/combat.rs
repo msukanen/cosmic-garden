@@ -101,7 +101,7 @@ mod combatant_tests {
     /// Estimated runtime in debug mode exactly 4.05s (including all the sleeps).
     #[tokio::test]
     async fn simple_combat() {
-        let (w, mut c, p, _) = get_operational_mock_world().await;
+        let (w, mut c,(_, p),_) = get_operational_mock_world().await;
         // let's accommodate the 100+ "players"…
         (c.out.broadcast, _) = tokio::sync::broadcast::channel::<Broadcast>( 128 );
         get_operational_mock_librarian!(c,w);
@@ -166,7 +166,7 @@ mod combatant_tests {
 
     #[tokio::test(flavor="multi_thread")]
     async fn knife_fite() {
-        let (w,c,p,d) = get_operational_mock_world().await;
+        let (w,c,(_, p),d) = get_operational_mock_world().await;
         let jt = get_operational_mock_janitor!(c,w,d.0);
         let lt = get_operational_mock_librarian!(c,w);
         let gt = get_operational_mock_life!(c,w);
@@ -219,7 +219,7 @@ mod combatant_tests {
 
     #[tokio::test]
     async fn player_vanish_midcombat() {
-        let (w,c,p,d) = get_operational_mock_world().await;
+        let (w,c,(state, _),d) = get_operational_mock_world().await;
         let jt = get_operational_mock_janitor!(c,w,d.0);
         let gt = get_operational_mock_life!(c,w);
         let lt = get_operational_mock_librarian!(c,w);
@@ -249,7 +249,6 @@ mod combatant_tests {
         tokio::spawn({async move {
             let mut b: Vec<u8> = vec![];
             let mut s = Cursor::new(&mut b);
-            let state = ClientState::Playing { player: p.clone() };
             log::debug!("1st LookCommand warming up...");
             tokio::time::sleep(Duration::from_secs(2)).await;
             let state = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));

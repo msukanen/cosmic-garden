@@ -100,18 +100,17 @@ async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &Arc<RwLock<P
 mod cmd_set_tests {
     use std::time::Duration;
 
-    use crate::{cmd::{look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn set_config_val() {
         let mut b: Vec<u8> = vec![];
         let mut s = std::io::Cursor::new(&mut b);
-        let (w,c,p,d) = get_operational_mock_world().await;
+        let (w,c,(state, p),d) = get_operational_mock_world().await;
         let _ = get_operational_mock_janitor!(c,w,d.0);
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
-        let state = ClientState::Playing { player: p.clone() };
         tokio::time::sleep(Duration::from_secs(1)).await;
         let state = ctx!(state, SetCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

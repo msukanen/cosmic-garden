@@ -114,14 +114,13 @@ mod cmd_help_tests {
     use std::{io::Cursor, time::Duration};
 
     use super::*;
-    use crate::{cmd::{hedit::{HeditCommand, abort::AbortCommand, desc::DescCommand, weave::WeaveCommand}, iedit::IeditCommand}, ctx, get_operational_mock_librarian, io::ClientState, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{hedit::{HeditCommand, abort::AbortCommand, desc::DescCommand, weave::WeaveCommand}, iedit::IeditCommand}, ctx, get_operational_mock_librarian, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn namespacing_get() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,p,_) = get_operational_mock_world().await;
-        let state = ClientState::Playing { player: p.clone() };
+        let (w,c,(state, p),_) = get_operational_mock_world().await;
         let state = ctx!(state, HelpCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("nothing about"));
         let state = ctx!(state, HeditCommand, "iedit:sempai",s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

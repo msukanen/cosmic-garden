@@ -310,14 +310,16 @@ impl World {
 pub(crate) mod world_tests {
     use crate::{cformat, identity::IdentityMut};
 
-    pub(crate) async fn get_operational_mock_world() ->
-        (
-            std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
-            crate::SignalChannels,
-            std::sync::Arc<tokio::sync::RwLock<crate::player::Player>>,
-            (tokio::sync::oneshot::Sender<()>, tokio::sync::oneshot::Receiver<()>)
+    pub(crate) async fn get_operational_mock_world() -> (
+        std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
+        crate::SignalChannels,
+        (   crate::io::ClientState,
+            std::sync::Arc<tokio::sync::RwLock<crate::player::Player>>
+        ),
+        (   tokio::sync::oneshot::Sender<()>,
+            tokio::sync::oneshot::Receiver<()>
         )
-    {
+    ){
         use std::io::Write;
         let _ = env_logger::
              Builder::from_default_env()
@@ -355,7 +357,7 @@ pub(crate) mod world_tests {
 
         (   std::sync::Arc::new(tokio::sync::RwLock::new(world)),
             sigs,
-            plr.clone(),
+            (crate::io::ClientState::Playing { player: plr.clone() }, plr.clone()),
             (dtx, drx)
         )
     }

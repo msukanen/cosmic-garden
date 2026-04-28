@@ -243,7 +243,7 @@ impl Tickable for Entity {
 mod entity_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, io::ClientState, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;
@@ -283,7 +283,7 @@ mod entity_tests {
     async fn entity_save() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w, c,p, _) = get_operational_mock_world().await;
+        let (w,c,(state, p),_) = get_operational_mock_world().await;
         get_operational_mock_librarian!(c,w);
         get_operational_mock_life!(c,w);
         tokio::time::sleep(Duration::from_secs(3)).await;// let things stabilize in peace…
@@ -295,7 +295,6 @@ mod entity_tests {
         }
         let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() });
         tokio::time::sleep(Duration::from_secs(1)).await;// let things stabilize in peace…
-        let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("goblin is here"));
         p.write().await.config.show_id = true;
         p.write().await.access = Access::Builder;

@@ -6,7 +6,7 @@ use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, item::{Item, It
 
 pub struct IexCommand;
 
-static IEX_UNSET: &'static str = "<c gray><unset></c>";
+//static IEX_UNSET: &'static str = "<c gray><unset></c>";
 
 #[async_trait]
 impl Command for IexCommand {

@@ -93,13 +93,12 @@ mod medit_tests {
     async fn weave_test() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,p,_) = get_operational_mock_world().await;
+        let (w,c,(state, p),_) = get_operational_mock_world().await;
         // we don't need janitor running as we're not persisting anything onto disk here …
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
         tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
-        let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
         let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
         assert!(p.read().await.medit_buffer.is_none());

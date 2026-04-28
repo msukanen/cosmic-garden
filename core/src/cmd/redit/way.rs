@@ -53,16 +53,15 @@ impl Command for WayCommand {
 mod cmd_redit_way {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, io::{Broadcast, ClientState}, thread::life, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, io::Broadcast, thread::life, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn way_creation_r1r2() {
         let mut buf: Vec<u8> = Vec::new();
         let mut s = Cursor::new(&mut buf);
-        let (w,c,p, _) = get_operational_mock_world().await;
+        let (w,c,(state, p),_) = get_operational_mock_world().await;
         let lt = tokio::spawn(life((c.out.clone(), c.recv.life), w.clone()));
         tokio::time::sleep(Duration::from_secs(2)).await; // let life() stabilize
-        let state = ClientState::Playing { player: p.clone() };
         let state = ctx!(state, LookCommand, "", s,c.out,w,p);
         let state = ctx!(state, WayCommand, "east r-3",s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

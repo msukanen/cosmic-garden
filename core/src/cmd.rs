@@ -111,22 +111,22 @@ pub async fn parse_and_exec<'a>(mut ctx: CommandCtx<'_>) -> ClientState {
 
 #[cfg(test)]
 mod cmd_tests {
-    use crate::{cmd::{Command, CommandCtx, look::LookCommand}, io::ClientState, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{Command, CommandCtx, look::LookCommand}, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn synthetic_commandctx() {
-        let mut buffer: Vec<u8> = Vec::new();
-        let mut mock_sock = std::io::Cursor::new(&mut buffer);
-        let (world, sigs, plr, _) = get_operational_mock_world().await;
+        let mut b: Vec<u8> = vec![];
+        let mut s = std::io::Cursor::new(&mut b);
+        let (w,c,(state, _),_) = get_operational_mock_world().await;
         let mut ctx = CommandCtx {
-            writer: &mut mock_sock,
+            writer: &mut s,
             args: "",
             pre_pad_n: false,
-            out: &sigs.out,
-            state: ClientState::Playing { player: plr.clone() },
-            world: world.clone(),
+            out: &c.out,
+            state,
+            world: w.clone(),
         };
         LookCommand.exec(&mut ctx).await;
-        log::debug!("{buffer:?}");
+        log::debug!("{b:?}");
     }
 }
