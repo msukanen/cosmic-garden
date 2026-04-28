@@ -7,7 +7,6 @@ use serde::{Deserialize, Serialize};
 use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageMut, specs::StorageSpace, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut, Uuid}, traits::{Reflector, Tickable}};
 
 pub mod blueprint; pub use blueprint::BlueprintLibrary;
-pub mod owner;
 pub mod consumable;
 pub mod container; pub use container::{StorageError, StorageQueryError};
 pub mod key;

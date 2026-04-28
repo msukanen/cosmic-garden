@@ -63,6 +63,15 @@ macro_rules! enum_getter_w_arg {
     };
 }
 
+macro_rules! enum_defaulter {
+    ($data:ident, $defr:ident) => {
+        $data.variants.iter().map(|v| {
+            let variant_name = &v.ident;
+            quote! { Self::#variant_name(inner) => inner.$defr() }
+        })
+    };
+}
+
 macro_rules! enum_setter {
     ($data:ident, $setter:ident) => {
         $data.variants.iter().map(|v| {
@@ -445,7 +454,7 @@ pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
 }
 
 //
-/// Generate read-only [Owned] variant's internals to be reused by [OwnedMut] deriver.
+/// Generate read-only [Owned] trait internals.
 //
 fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
@@ -507,24 +516,29 @@ pub fn owned_derive(input: TokenStream) -> TokenStream {
 }
 
 //
-/// Derive [OwnedMut] and [Owned].
+/// Generate [OwnedMut] trait internals.
 //
-#[proc_macro_derive(OwnedMut)]
-pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
+fn generate_ownedmut_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
 
-    let base_impl = generate_owned_impl(&input);
-    let mut_impl = match &input.data {
+    match &input.data {
         Data::Enum(data) => {
             let set_owner_ids = enum_setter!(data, change_owner);
             let set_last_user_ids = enum_setter!(data, set_last_user);
             let set_sources = enum_setter_3!(data, set_source);
+
+            let e_owner_ids = enum_defaulter!(data, erase_owner_r);
+            let e_last_user_ids = enum_defaulter!(data, erase_last_user_r);
+            let u_sources = enum_setter_3!(data, unify_source_r);
             quote! {
                 impl crate::item::ownership::OwnedMut for #name {
                     fn change_owner(&mut self, a: &str) { match self {#(#set_owner_ids),*}}
                     fn set_last_user(&mut self, a: &str) -> Result<(), crate::identity::IdError> { match self {#(#set_last_user_ids),*}}
-                    fn set_source(&mut self, a: &str, b: &str, c: crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { match self {#(#set_sources),*}}
+                    fn set_source(&mut self, a: &str, b: &str, c: &crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { match self {#(#set_sources),*}}
+
+                    fn erase_owner_r(&mut self) { match self {#(#e_owner_ids),*}}
+                    fn erase_last_user_r(&mut self) { match self {#(#e_last_user_ids),*}}
+                    fn unify_source_r(&mut self, a: &str, b: &str, c: &crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { match self {#(#u_sources),*}}
                 }
             }
         }
@@ -533,13 +547,22 @@ pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
             let has_owner_field = data.fields.iter().any(|f| {
                 f.ident.as_ref().map(|i| i == "owner").unwrap_or(false)
             });
+            let has_contents_field = data.fields.iter().any(|f|{
+                f.ident.as_ref().map(|i| i == "contents").unwrap_or(false)
+            });
 
-            let (o_body, l_body, s_body) = if has_owner_field {(
+            let (o_body, l_body, s_body,
+                e_o_body, e_l_body, u_s_body
+                ) = if has_owner_field {(
                 quote! { self.owner.change_owner(a) },
                 quote! { self.owner.set_last_user(a) },
                 quote! { self.owner.set_source(a,b,c) },
+                quote! { self.owner.erase_owner_r() },
+                quote! { self.owner.erase_last_user_r() },
+                quote! { self.owner.unify_source_r(a,b,c) },
             )} else {(
-                quote! {// change_owner
+                // change_owner
+                quote! {
                     if let Some(ref mut prev_owner) = self.owner_id {
                         log::trace!("Changing ownership from '{}' to '{}'", prev_owner, a);
                         *prev_owner = a.to_string();
@@ -547,7 +570,9 @@ pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
                         self.owner_id = a.to_string().into();
                     }
                 },
-                quote! {// set_last_user
+
+                // set_last_user
+                quote! {
                     crate::string::slug::is_id(a)?;
                     if let Some(luid) = &mut self.last_user_id {
                         luid.push_front(a.to_string());
@@ -558,7 +583,141 @@ pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
                     }
                     Ok(())
                 },
-                quote! {// set_source
+
+                // set_source
+                quote! {
+                    if let crate::item::ownership::ItemSource::Blueprint = c {
+                        log::warn!("Hol'up! Rejecting demotion of '{}' to blueprint by '{}'.", a, b);
+                        return Err(crate::item::ownership::ItemSourceError::Rejected);
+                    }
+                    self.source = c.clone();
+                    Ok(())
+                },
+
+                // erase owner
+                quote! { self.owner_id = None; },
+
+                // erase last users
+                quote! { self.last_user_id = None; },
+
+                // unify sources
+                quote! { self.set_source(a,b,c) },
+            )};
+
+            if has_contents_field {
+                quote! {
+                    impl crate::item::ownership::OwnedMut for #name {
+                        fn change_owner(&mut self, a: &str) { #o_body }
+                        fn set_last_user(&mut self, a: &str) -> Result<(), crate::identity::IdError> { #l_body }
+                        fn set_source(&mut self, a: &str, b: &str, c: &crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { #s_body }
+
+                        fn erase_owner_r(&mut self) {
+                            #e_o_body;
+                            for (_,i) in self.contents.iter_mut() {
+                                i.erase_owner_r();
+                            }
+                        }
+                        fn erase_last_user_r(&mut self) {
+                            #e_l_body;
+                            for (_,i) in self.contents.iter_mut() {
+                                i.erase_last_user_r();
+                            }
+                        }
+                        fn unify_source_r(&mut self, a: &str, b: &str, c: &crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> {
+                            let ok = #u_s_body;
+                            // it's fine to recurse, no ItemSourceError
+                            if let Ok(ok) = ok {
+                                for (_,i) in self.contents.iter_mut() {
+                                    i.unify_source_r(a,b,c).ok();
+                                }
+                            }
+                            ok
+                        }
+                    }
+                }
+            } else {
+                quote! {
+                    impl crate::item::ownership::OwnedMut for #name {
+                        fn change_owner(&mut self, a: &str) { #o_body }
+                        fn set_last_user(&mut self, a: &str) -> Result<(), crate::identity::IdError> { #l_body }
+                        fn set_source(&mut self, a: &str, b: &str, c: &crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { #s_body }
+
+                        fn erase_owner_r(&mut self) { #e_o_body }
+                        fn erase_last_user_r(&mut self) { #e_l_body }
+                        fn unify_source_r(&mut self, a: &str, b: &str, c: &crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { #u_s_body }
+                    }
+                }
+            }
+        }
+
+        _ => unimplemented!("Only for Enum/Struct!")
+    }
+}
+
+//
+/// Derive [OwnedMut] and [Owned].
+//
+#[proc_macro_derive(OwnedMut)]
+pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let base_impl = generate_owned_impl(&input);
+    let mut_impl = generate_ownedmut_impl(&input);
+
+    TokenStream::from(quote! {
+        #base_impl
+        #mut_impl
+    })
+}
+
+fn generate_ownederasure_mut_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+    let name = &input.ident;
+
+    match &input.data {
+        Data::Enum(data) => {
+            let set_owner_ids = enum_setter!(data, erase_owner_r);
+            let set_last_user_ids = enum_setter!(data, erase_last_user_r);
+            let set_sources = enum_setter_3!(data, set_source);
+            quote! {
+                impl crate::item::ownership::OwnedErasureMut for #name {
+                }
+            }
+        }
+        
+        Data::Struct(data) => {
+            let has_owner_field = data.fields.iter().any(|f| {
+                f.ident.as_ref().map(|i| i == "owner").unwrap_or(false)
+            });
+
+            let (o_body, l_body, s_body) = if has_owner_field {(
+                quote! { self.owner.erase_owner_r() },
+                quote! { self.owner.erase_last_user_r() },
+                quote! { self.owner.unify_source_r(a,b,c) },
+            )} else {(
+                // change_owner
+                quote! {
+                    if let Some(ref mut prev_owner) = self.owner_id {
+                        log::trace!("Changing ownership from '{}' to '{}'", prev_owner, a);
+                        *prev_owner = a.to_string();
+                    } else {
+                        self.owner_id = a.to_string().into();
+                    }
+                },
+
+                // set_last_user
+                quote! {
+                    crate::string::slug::is_id(a)?;
+                    if let Some(luid) = &mut self.last_user_id {
+                        luid.push_front(a.to_string());
+                    } else {
+                        let mut v = std::collections::VecDeque::new();
+                        v.push_back(a.to_string());
+                        self.last_user_id = Some(v);
+                    }
+                    Ok(())
+                },
+
+                // set_source
+                quote! {
                     if let crate::item::ownership::ItemSource::Blueprint = c {
                         log::warn!("Hol'up! Rejecting demotion of '{}' to blueprint by '{}'.", a, b);
                         return Err(crate::item::ownership::ItemSourceError::Rejected);
@@ -568,21 +727,16 @@ pub fn owned_mut_derive(input: TokenStream) -> TokenStream {
                 }
             )};
             quote! {
-                impl crate::item::ownership::OwnedMut for #name {
-                    fn change_owner(&mut self, a: &str) { #o_body }
-                    fn set_last_user(&mut self, a: &str) -> Result<(), crate::identity::IdError> { #l_body }
-                    fn set_source(&mut self, a: &str, b: &str, c: crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { #s_body }
+                impl crate::item::ownership::OwnedErasureMut for #name {
+                    fn erase_owner_r(&mut self) { #o_body }
+                    fn erase_last_user_r(&mut self) { #l_body }
+                    fn unify_source_r(&mut self, a: &str, b: &str, c: crate::item::ownership::ItemSource) -> Result<(), crate::item::ownership::ItemSourceError> { #s_body }
                 }
             }
         }
 
         _ => unimplemented!("Only for Enum/Struct!")
-    };
-
-    TokenStream::from(quote! {
-        #base_impl
-        #mut_impl
-    })
+    }
 }
 
 //

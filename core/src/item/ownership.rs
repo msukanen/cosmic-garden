@@ -26,7 +26,14 @@ pub trait OwnedMut: Owned {
     /// Change last user of [Item][crate::item::Item].
     fn set_last_user(&mut self, new_id: &str) -> Result<(), IdError>;
     /// Set [ItemSource] of [Item][crate::item::Item].
-    fn set_source(&mut self, of: &str, by: &str, new_source: ItemSource) -> Result<(), ItemSourceError>;
+    fn set_source(&mut self, of: &str, by: &str, new_source: &ItemSource) -> Result<(), ItemSourceError>;
+
+    /// Deep-dive ownership erasure.
+    fn erase_owner_r(&mut self);
+    /// Recursive erasure of last user info of [Item][crate::item::Item] and its contents.
+    fn erase_last_user_r(&mut self);
+    /// Recursively set [ItemSource] of [Item][crate::item::Item] and its contents.
+    fn unify_source_r(&mut self, of: &str, by: &str, new_source: &ItemSource) -> Result<(), ItemSourceError>;
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize, OwnedMut)]

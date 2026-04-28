@@ -97,7 +97,10 @@ impl Owned for CorpseSpec {
 impl OwnedMut for CorpseSpec {
     fn change_owner(&mut self, _: &str) {}
     fn set_last_user(&mut self, _: &str) -> Result<(), IdError> { Ok(()) }
-    fn set_source(&mut self, _: &str, _: &str, _: ItemSource) -> Result<(), ItemSourceError> { Ok(()) }
+    fn set_source(&mut self, _: &str, _: &str, _: &ItemSource) -> Result<(), ItemSourceError> { Ok(()) }
+    fn erase_owner_r(&mut self) {}
+    fn erase_last_user_r(&mut self) {}
+    fn unify_source_r(&mut self, _: &str, _: &str, _: &ItemSource) -> Result<(), ItemSourceError> { Ok(()) }
 }
 
 impl Storage for CorpseSpec {
