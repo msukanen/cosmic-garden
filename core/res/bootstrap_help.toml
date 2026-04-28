@@ -482,6 +482,8 @@ title = "rename"
 alias = ["medit-rename", "rename mob"]
 contents = """
 'rename' an Entity (or change its ID, too, if admin).
+
+Note that <name> has to begin with an upper-case letter!
 """
 usage = [
     "rename <name>",
