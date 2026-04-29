@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::sync::RwLock;
 
-use crate::{identity::IdentityQuery, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::{HelpLibrary, HelpPage, access::Access}, world::World};
+use crate::{identity::IdentityQuery, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, string::TryAttachUuid, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::{HelpLibrary, HelpPage, access::Access}, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -114,10 +114,11 @@ pub async fn librarian(
 
                 SystemSignal::Shutdown => { break; }
 
-                SystemSignal::Spawn { what: SpawnType::Item { id }, room_id } => {
+                SystemSignal::Spawn { what: SpawnType::Item { id }, room, .. } => {
                     if let Some(found) = lib.bp.get(&id) {
                         let item = found.reflect();
-                        if let Some(dest) = world.read().await.rooms.get(&room_id) {
+                        let r_id = room.id().await;
+                        if let Some(dest) = world.read().await.rooms.get(&r_id) {
                             let item_id = item.id().to_string();
                             let mut lock = dest.write().await;
                             if let Err(e) = lock.try_insert(item) {
@@ -126,7 +127,7 @@ pub async fn librarian(
                                 add_item_to_lnf(e).await;
                                 continue;
                             }
-                            log::info!("Librarian spawned '{item_id}' to '{room_id}'")
+                            log::info!("Librarian spawned '{item_id}' to '{r_id}'")
                         }
                     } else {
                         #[cfg(test)]{
@@ -136,17 +137,22 @@ pub async fn librarian(
                 }
 
                 // relay all other spawns but Item to Life.
-                SystemSignal::Spawn { what, room_id } => { out.life.send(SystemSignal::Spawn { what, room_id }).ok(); },
+                SystemSignal::Spawn { what, room, .. } => { out.life.send(SystemSignal::Spawn { what, room, reply: None }).ok(); },
 
                 // help page request…
                 SystemSignal::HelpRequest { page_id, access, bypass, out } => {
-                    log::debug!("Help request about '{page_id}'");
+                    //log::debug!("Help request about '{page_id}'");
                     out.send(lib.help.get(&page_id, &access, bypass)).ok();
                 }
 
                 // entity BP request…
                 SystemSignal::EntityBlueprintReq { id, out } => {
                     out.send(lib.entity.get(&id)).ok();
+                }
+
+                // item BP request…
+                SystemSignal::ItemBlueprintReq { id, out } => {
+                    out.send(lib.bp.get(&id).maybe_with_uuid()).ok();
                 }
                 _ => ()
             }
@@ -227,10 +233,8 @@ pub async fn get_item_blueprint(id: &str, out: &SignalSenderChannels) -> Option<
 /// - `id` of [HelpPage].
 /// - `out`going signal system…
 pub async fn get_help_page(id: &str, access: Access, bypass: bool, out: &SignalSenderChannels) -> Option<HelpPage> {
-    log::debug!("Oneshot get_help_page …");
     let (oneshot, recv) = tokio::sync::oneshot::channel::<Option<HelpPage>>();
     if let Ok(_) = out.librarian.send(SystemSignal::HelpRequest { page_id: id.into(), access, bypass, out: oneshot }) {
-        log::debug!("… got reply …");
         if let Ok(reply) = recv.await {
             return reply
         }
