@@ -3,6 +3,8 @@
 use lazy_static::lazy_static;
 use regex::Regex;
 
+use crate::{identity::{IdentityMut, IdentityQuery}, item::Item};
+
 lazy_static! {
     pub(crate) static ref UUID_RE: Regex = Regex::new(
         r"(?P<uuid>[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})$"
@@ -12,8 +14,15 @@ lazy_static! {
     ).unwrap();
 }
 
-pub trait Uuid {
+pub trait UuidCore {
     fn with_uuid(&self) -> String;
+}
+
+pub trait TryAttachUuid<T> {
+    fn maybe_with_uuid(&self) -> Option<T>;
+}
+
+pub trait Uuid : UuidCore {
     fn no_uuid(&self) -> String;
     fn re_uuid(&self) -> String;
 }
@@ -45,20 +54,39 @@ impl StrUuid for str {
     }
 }
 
+impl UuidCore for &str {
+    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
+}
 impl Uuid for &str {
-    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
     #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
     #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
 }
 
+impl UuidCore for String {
+    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
+}
 impl Uuid for String {
-    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
     #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
     #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
 }
 
-impl Uuid for &String {
+impl UuidCore for &String {
     #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
+}
+impl Uuid for &String {
     #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
     #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
+}
+
+impl TryAttachUuid<Item> for Option<Item> {
+    fn maybe_with_uuid(&self) -> Option<Item> {
+        match self {
+            Some(item) => {
+                let mut new = item.clone();
+                *(new.id_mut()) = item.id().re_uuid();
+                Some(new)
+            }
+            None => None
+        }
+    }
 }
