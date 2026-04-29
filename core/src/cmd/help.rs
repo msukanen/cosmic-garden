@@ -3,7 +3,7 @@
 use async_trait::async_trait;
 use tokio::sync::oneshot;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, player_or_bust, string::Describable, tell_user, thread::SystemSignal, util::{HelpPage, access::Accessor}};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, player_or_bust, string::Describable, tell_user, thread::SystemSignal, util::access::Accessor, help::HelpPage};
 
 pub struct HelpCommand;
 

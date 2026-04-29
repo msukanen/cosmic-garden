@@ -2,7 +2,7 @@
 
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{r#const::HARDCODED_RESERVED, identity::{IdError, MAX_ID_LEN}, string::UuidCore};
+use crate::{r#const::HARDCODED_RESERVED, identity::{IdError, MAX_ID_LEN}, util::uuid::UuidCore};
 
 /// A trait for all the slugs…
 pub trait Slugger {
@@ -173,7 +173,7 @@ pub fn as_id_with_uuid(value: &str) -> Result<String, IdError> {
 
 #[cfg(test)]
 mod slug_tests {
-    use crate::string::{UUID_RE, Uuid};
+    use crate::util::uuid::{Uuid, UUID_RE};
 
     use super::*;
 

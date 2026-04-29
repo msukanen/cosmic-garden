@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::{item::consumable::EffectType, string::Uuid, traits::Tickable};
+use crate::{item::consumable::EffectType, util::uuid::Uuid, traits::Tickable};
 
 /// All sorts of affects from good to bad to something else…
 #[derive(Debug, Clone, Deserialize, Serialize)]

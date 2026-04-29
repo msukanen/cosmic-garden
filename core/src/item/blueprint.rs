@@ -1,7 +1,14 @@
 //! Blueprint library.
 
 use std::{collections::HashMap, fmt::Display};
-use crate::{r#const::WORLD_ID, identity::{IdentityMut, IdentityQuery}, io::{blueprint_entry_fp, blueprint_lib_fp}, item::Item, serial::string_vec_to_bool_map, string::{StrUuid, Uuid}};
+use crate::{
+    r#const::WORLD_ID,
+    identity::{IdentityMut, IdentityQuery},
+    io::{blueprint_entry_fp, blueprint_lib_fp},
+    item::Item,
+    serial::string_vec_to_bool_map,
+    uuid::{StrUuid, Uuid}
+};
 
 use serde::{Deserialize, Serialize};
 use tokio::fs;

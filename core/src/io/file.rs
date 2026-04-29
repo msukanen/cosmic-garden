@@ -2,7 +2,7 @@
 
 use std::path::PathBuf;
 
-use crate::{r#const::{BP_PATH, ENTITY_BP_PATH, HELP_PATH, ROOM_PATH, SAVE_PATH, WORLD_ID, WORLD_PATH}, string::StrUuid};
+use crate::{r#const::{BP_PATH, ENTITY_BP_PATH, HELP_PATH, ROOM_PATH, SAVE_PATH, WORLD_ID, WORLD_PATH}, uuid::StrUuid};
 const EXT_BLUEPRINT: &'static str = ".blueprint";
 const EXT_SAVE: &'static str = ".player";
 const EXT_USER: &'static str = ".user";

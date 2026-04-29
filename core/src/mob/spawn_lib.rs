@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{entity_entry_fp, entity_lib_fp}, mob::core::Entity, serial::string_vec_to_bool_map, string::StrUuid};
+use crate::{r#const::WORLD_ID, error::CgError, identity::IdentityQuery, io::{entity_entry_fp, entity_lib_fp}, mob::core::Entity, serial::string_vec_to_bool_map, util::uuid::StrUuid};
 
 /// Entity (blueprint) library!
 #[derive(Debug, Clone, Deserialize, Serialize)]

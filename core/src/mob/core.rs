@@ -7,7 +7,7 @@ use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mo
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::entity_entry_fp, item::{Item, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::{StrUuid, UNNAMED, as_id_with_uuid}, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::entity_entry_fp, item::{Item, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::{UNNAMED, as_id_with_uuid}, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable, util::uuid::StrUuid};
 
 /// Generic [Entity] size categories
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -171,7 +171,7 @@ impl std::error::Error for EntityError {}
 impl Entity {
     #[cfg(test)]
     pub fn re_uuid(&mut self) {
-        use crate::{identity::{IdentityMut, IdentityQuery}, string::uuid::Uuid};
+        use crate::{identity::{IdentityMut, IdentityQuery}, util::uuid::Uuid};
         *self.id_mut() = self.id().re_uuid()
     }
 
@@ -257,7 +257,7 @@ impl Tickable for Entity {
 mod entity_tests {
     use std::io::Cursor;
 
-    use crate::{stabilize_threads, cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, mob::core::Entity, string::{UNNAMED, UUID_RE}, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, mob::core::Entity, string::UNNAMED, util::uuid::UUID_RE, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;

@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{container::specs::StorageSpace, matter::{Matter, MatterState}, ownership::Owner}, mob::{StatType, StatValue, affect::{Affect, Affector}}, string::Uuid, traits::{Reflector, Tickable}};
+use crate::{item::{container::specs::StorageSpace, matter::{Matter, MatterState}, ownership::Owner}, mob::{StatType, StatValue, affect::{Affect, Affector}}, util::uuid::Uuid, traits::{Reflector, Tickable}};
 
 /// Various nutrition types (plus not edible).
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -68,12 +68,12 @@ impl Matter for ConsumableMatter {
 
 pub trait Consumable {
     fn uses(&self) -> Option<usize>;
-    fn nutrition(&self) -> EffectType;
+    fn effect(&self) -> EffectType;
 }
 
 pub trait ConsumableMut: Consumable {
     fn uses_mut(&mut self) -> &mut Option<usize>;
-    fn nutrition_mut(&mut self) -> &mut EffectType;
+    fn effect_mut(&mut self) -> &mut EffectType;
 }
 
 impl Consumable for ConsumableMatter {
@@ -81,7 +81,7 @@ impl Consumable for ConsumableMatter {
         self.uses
     }
 
-    fn nutrition(&self) -> EffectType {
+    fn effect(&self) -> EffectType {
         self.nutrition.clone()
     }
 }
@@ -91,7 +91,7 @@ impl ConsumableMut for ConsumableMatter {
         &mut self.uses
     }
 
-    fn nutrition_mut(&mut self) -> &mut EffectType {
+    fn effect_mut(&mut self) -> &mut EffectType {
         &mut self.nutrition
     }
 }

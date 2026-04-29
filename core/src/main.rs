@@ -14,6 +14,7 @@ pub mod combat;
 mod r#const;
 mod edit;
 mod error;
+mod help;
 mod identity;
 mod item;
 #[macro_use]
@@ -27,7 +28,7 @@ mod string;
 mod thread;
 mod traits;
 mod user;
-mod util;
+mod util; use util::uuid as uuid;
 mod world;
 
 /// Command line options…

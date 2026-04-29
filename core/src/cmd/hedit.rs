@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, help::HelpCommand}, player::ActivityType, player_or_bust, show_help_if_needed, tell_user, thread::librarian::get_help_page, util::HelpPage, validate_access};
+use crate::{cmd::{Command, CommandCtx, help::HelpCommand}, player::ActivityType, player_or_bust, show_help_if_needed, tell_user, thread::librarian::get_help_page, help::HelpPage, validate_access};
 
 // Get modules.
 include!(concat!(env!("OUT_DIR"), "/hedit_registry.rs"));
