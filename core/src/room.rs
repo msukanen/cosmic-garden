@@ -23,6 +23,39 @@ impl Display for RoomError {
 
 impl std::error::Error for RoomError {}
 
+/// Payload for [SystemSignal].
+pub enum RoomPayload {
+    Id(String),
+    Arc(Arc<RwLock<Room>>)
+}
+
+impl From<&str> for RoomPayload {
+    fn from(value: &str) -> Self {
+        Self::Id(value.into())
+    }
+}
+
+impl From<String> for RoomPayload {
+    fn from(value: String) -> Self {
+        Self::Id(value)
+    }
+}
+
+impl From<Arc<RwLock<Room>>> for RoomPayload {
+    fn from(value: Arc<RwLock<Room>>) -> Self {
+        Self::Arc(value)
+    }
+}
+
+impl RoomPayload {
+    pub async fn id(&self) -> String {
+        match self {
+            Self::Id(s) => s.to_string(),
+            Self::Arc(arc) => arc.read().await.id().into()
+        }
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct Room {
     id: String,
