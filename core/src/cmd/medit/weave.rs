@@ -57,7 +57,8 @@ impl Command for WeaveCommand {
                     spawn = true;
                     ctx.out.life.send(SystemSignal::Spawn {
                         what: SpawnType::Mob { id: ent_stem },
-                        room_id: loc.read().await.id().to_string()
+                        room: loc.read().await.id().into(),
+                        reply: None
                     }).ok();
                 }
                 tell_user!(ctx.writer, "Entity blueprint persisted{}\n",
@@ -70,7 +71,9 @@ impl Command for WeaveCommand {
             "spawn" => {
                 ctx.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob {
                     id: buf.id().show_uuid(false).to_string() },
-                    room_id: loc.read().await.id().to_string() }).ok();
+                    room: loc.read().await.id().into(),
+                    reply: None
+                }).ok();
                 tell_user!(ctx.writer, "{} is being spawned… hopefully.\n", buf.title());
             }
 
@@ -114,7 +117,7 @@ mod medit_tests {
         let state = ctx!(sup true, state, WeaveCommand, "",s,c,w,p,|out:&str| out.contains("a no-op"));
         p.write().await.config.show_id = true;
         let state = ctx!(sup true, state, WeaveCommand, "persist spawn",s,c,w,p,|out:&str| out.contains("(hoblin-"));
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "hoblin".to_string() }, room_id: "r-1".into() }).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "hoblin".to_string() }, room: "r-1".into(), reply: None }).ok();
         tokio::time::sleep(Duration::from_millis(75)).await;
         let _ = ctx!(state, LookCommand,"",s,c,w,p);
     }
