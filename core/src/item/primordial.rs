@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{Item, Itemized, StorageError, StorageQueryError, consumable::{ConsumableMatter, EffectType}, container::{Storage, StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, mob::StatValue, string::{Describable, Uuid}, traits::{Reflector, Tickable}};
+use crate::{identity::IdentityQuery, item::{Item, Itemized, StorageError, StorageQueryError, consumable::{ConsumableMatter, EffectType}, container::{Storage, StorageMut, specs::{ContainerSpec, MaxSpaceSpec, StorageSpace}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, mob::StatValue, string::{Describable, Uuid, UuidCore}, traits::{Reflector, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {

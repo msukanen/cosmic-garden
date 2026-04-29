@@ -120,7 +120,7 @@ mod medit_set_tests {
         let _ = get_operational_mock_librarian!(c,w);
         tokio::time::sleep(Duration::from_secs(1)).await;
         let c = c.out;
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() }).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         tokio::time::sleep(Duration::from_millis(75)).await;
         let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

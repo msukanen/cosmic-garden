@@ -117,7 +117,7 @@ mod cmd_set_tests {
         let state = ctx!(state, SetCommand, "config", s,c,w,p,|out:&str| out.contains("Config values"));
         let state = ctx!(state, SetCommand, "config bla", s,c,w,p,|out:&str| out.contains("Usage"));
         let state = ctx!(state, SetCommand, "config bla 5", s,c,w,p,|out:&str| out.contains("Accepted vars"));
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() }).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(100);
         let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("A goblin is here"));
         let state = ctx!(state, SetCommand, "config id 5", s,c,w,p,|out:&str| out.contains("true"));

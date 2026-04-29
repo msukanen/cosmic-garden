@@ -111,7 +111,7 @@ mod combatant_tests {
 
         // Spawn a lil gobbo.
         let Ok(_) = Entity::new("goblin", &c.out).await else { panic!("Where'd the lil goblin's blueprint go?!"); };
-        let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into() });
+        let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None });
         stabilize_threads!(150);
       
         let mut rx = c.out.broadcast.subscribe();
@@ -171,8 +171,8 @@ mod combatant_tests {
         let gt = get_operational_mock_life!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
         stabilize_threads!();
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room_id: "r-1".into() }).ok();
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(150);
         let mut rx = c.broadcast.subscribe();
         tokio::spawn(async move {
@@ -224,8 +224,8 @@ mod combatant_tests {
         let lt = get_operational_mock_librarian!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
         stabilize_threads!();
-        c.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room_id: "r-1".into() }).ok();
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
+        c.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(150);
         let mut rx = c.broadcast.subscribe();
         tokio::spawn(async move {

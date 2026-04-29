@@ -75,7 +75,7 @@ mod cmd_wield_tests {
         let c = c.out;// we don't need the c.recv part anymore here…
         stabilize_threads!();
         log::debug!("Sending…");
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room_id: "r-1".into() }).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(100);
         let state = ctx!(state, LookCommand, "", s,c,w,p);
         let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));

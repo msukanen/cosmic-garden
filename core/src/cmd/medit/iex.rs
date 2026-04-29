@@ -66,7 +66,7 @@ mod medit_iex_tests {
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
         tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".to_string() }, room_id: "r-1".into() }).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".to_string() }, room: "r-1".into(), reply: None }).ok();
         tokio::time::sleep(Duration::from_millis(75)).await;
         let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

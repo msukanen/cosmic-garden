@@ -90,7 +90,7 @@ macro_rules! enum_setter_3 {
     };
 }
 
-/// Generate read-only [IdentityQuery] variant's internals to be reused by [IdentityMut] deriver.
+/// Generate read-only [IdentityQuery] variant's internals.
 fn generate_identity_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
