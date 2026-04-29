@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::sync::{RwLock, broadcast, mpsc};
 
-use crate::{combat::Battler, io::Broadcast, item::Item, mob::core::Entity, player::Player, room::Room, thread::life::TickType, util::{HelpPage, access::Access, direction::Direction}};
+use crate::{combat::Battler, io::Broadcast, item::Item, mob::core::Entity, player::Player, room::{Room, RoomPayload}, thread::life::TickType, util::{HelpPage, access::Access, direction::Direction}};
 
 pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
 pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
@@ -27,7 +27,7 @@ pub enum SystemSignal {
     //
     //--- Librarian ---
     //
-    // New help entry.
+    /// New help entry.
     NewHelpEntry {
         entry: HelpPage,
         out: tokio::sync::oneshot::Sender<bool>
@@ -59,9 +59,15 @@ pub enum SystemSignal {
         out: tokio::sync::oneshot::Sender<Option<Item>>
     },
 
-    ///--- Life Thread
+    //
+    // --- Life Thread ---
+    // 
     /// Notion to spawn something…
-    Spawn { what: SpawnType, room_id: String },
+    Spawn {
+        what: SpawnType,
+        room: RoomPayload,
+        reply: Option<tokio::sync::oneshot::Sender<bool>>,
+    },
     Attack { atk_arc: Battler, vct_arc: Battler },
     PlayerLogout { player: Arc<RwLock<Player>> },
     WantTransportFromTo { who: Arc<RwLock<Player>>, from: Arc<RwLock<Room>>, to: Arc<RwLock<Room>>, via: Direction },

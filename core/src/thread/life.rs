@@ -5,7 +5,7 @@ use std::{collections::HashMap, sync::{Arc, Weak}, time::Duration};
 use nohash_hasher::BuildNoHashHasher;
 use tokio::{sync::{RwLock, mpsc, oneshot}, time};
 
-use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::Item, mob::{StatValue, core::Entity}, room::Room, string::{DescribableMut, Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, translocate, util::approx::ApproxI32, world::World};
+use crate::{combat::{Battler, CombatantMut}, identity::{IdentityMut, IdentityQuery}, io::Broadcast, item::Item, mob::{StatValue, core::Entity}, room::{Room, RoomPayload}, string::{DescribableMut, Uuid, styling::maybe_plural}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, translocate, util::approx::ApproxI32, world::World};
 
 #[cfg(test)]
 #[macro_export]
@@ -328,13 +328,13 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 },
 
                 // Re-send item spawns to Librarian.
-                SystemSignal::Spawn {what: SpawnType::Item {id}, room_id} => {
+                SystemSignal::Spawn {what: SpawnType::Item {id}, room, reply} => {
                     log::warn!("Routing SystemSignal::Spawn{{Item}} to Librarian. FIX the source, should go straight to Librarian and not via Life.");
-                    out.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id }, room_id }).ok();
+                    out.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id }, room, reply }).ok();
                 }
 
                 // Spawn some [Entity].
-                SystemSignal::Spawn {what, room_id} => {
+                SystemSignal::Spawn {what, room, reply} => {
                     #[cfg(all(test, feature = "stresstest"))]
                     {
                         spawn_count = spawn_count.saturating_sub(1);
@@ -348,7 +348,10 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                             log::info!("Spawns to go: {spawn_count}");
                         }
                     }
-                    spawn_something(&out, what, &room_id, &world).await
+                    let ok = spawn_something(&out, what, &room, &world).await;
+                    if let Some(out) = reply {
+                        out.send(ok).ok();
+                    }
                 }
 
                 // Attack! From e.g. AttackCommand from player to start a fight.
@@ -501,21 +504,24 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
 /// 
 /// # Args
 /// - `what` to spawn.
-/// - `where` to spawn ([Room] ID).
-async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, r_id: &str, world: &Arc<RwLock<World>>) {
+/// - [`room`][RoomPayload] to spawn in.
+/// - [`world`][World].
+/// 
+/// # Returns
+/// Spawned?
+async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &RoomPayload, world: &Arc<RwLock<World>>) -> bool {
     match &what {
         SpawnType::Mob { id } => {
             let w = world.read().await;
-            if let Some(r_arc) = w.rooms.get(r_id) {
+            if let Some(r_arc) = w.rooms.get(&room.id().await) {
                 let r_arc = r_arc.clone();
                 drop(w);
                 direct_spawn_something(out, what, &r_arc, world).await
             } else {
-                log::error!("Ayy! We don't have room '{}' to spawn '{id}' at!", r_id);
+                log::error!("Ayy! We don't have room '{}' to spawn '{id}' at!", room.id().await);
+                false
             }
-        }
-
-        _ => ()
+        },_=> false
     }
 }
 
@@ -524,7 +530,10 @@ async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, r_id: &str
 /// # Args
 /// - `what` to spawn.
 /// - `where` to spawn ([Room] ID).
-async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_arc: &Arc<RwLock<Room>>, world: &Arc<RwLock<World>>)
+/// 
+/// # Returns
+/// Spawned?
+async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_arc: &Arc<RwLock<Room>>, world: &Arc<RwLock<World>>) -> bool
 {
     match what {
         SpawnType::Mob { id } => {
@@ -544,6 +553,7 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_a
                             r_arc.write().await.entities.insert(mob_id.clone(), mob_arc);
                         }// drop 'w' now…
                         log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
+                        return true;
                     } else {
                         log::warn!("There's no record of '{id}' in the entity catalogue…");
                     }
@@ -557,6 +567,8 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_a
 
         _ => ()
     }
+
+    false
 }
 
 /// Fite!
@@ -615,7 +627,7 @@ mod life_tests {
         let (otx,orx) = tokio::sync::oneshot::channel::<()>();
         c.life.send(SystemSignal::CountSpawns { num: MILLION_GOBBOS, out: otx }).ok();
         for _ in 1..=MILLION_GOBBOS {
-            c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room_id: "r-1".into()}).ok();
+            c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         }
         // let the dust settle…
         let _ = orx.await;
@@ -632,7 +644,7 @@ mod life_tests {
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
         stabilize_threads!();
-        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into()}, room_id: "r-1".into()}).ok();
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into()}, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(100);
         log::debug!("Stabilized…");
         let lock = w.read().await;
