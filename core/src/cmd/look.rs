@@ -46,10 +46,17 @@ impl Command for LookCommand {
                 },
             )
         };
+
+        let quick = ctx.args == "q";
+
         // Room lore:
-        let mut output: String = format!("<c yellow>{}</c>\n\n", title);
-        output.push_str(&desc);
-        output.push('\n');
+        let mut output: String = String::new();
+        
+        if !quick {
+            output.push_str(&format!("<c yellow>{}</c>\n\n", title));
+            output.push_str(&desc);
+            output.push('\n');
+        }
         // Content:
         for (id,title) in content {
             if is_builder && show_id {
@@ -74,20 +81,26 @@ impl Command for LookCommand {
         let ppl_arcs = who.iter()
             .filter_map(|(_,w)| w.upgrade())
             .collect::<Vec<Arc<RwLock<Player>>>>();
-        let (plr_id, show_self) = {
+        let show_self = {
             let p = plr.read().await;
-            (p.id().to_string(), p.config.show_self_in_room)
+            p.config.show_self_in_room
         };
         for p in ppl_arcs {
-            let lock = p.read().await;
-            if lock.id() == plr_id && !show_self {
+            let is_self = Arc::ptr_eq(&plr, &p);
+            if is_self && !show_self {
                 continue;
+            } else if is_self {
+                output.push_str("  <c blue>[<c cyan>***</c>]</c>\n");
+            } else {
+                output.push_str(&format!("  <c blue>[<c cyan>{}</c>]</c>\n", p.read().await.title()));
             }
-            output.push_str(&format!("  <c blue>[<c cyan>{}</c>]</c>\n", lock.title()));
         }
-        // Exits:
-        output.push_str("\n<c green>Exits: </c>");
-        let exs = exits.iter().map(|(dir,_)| dir.to_string()).collect::<Vec<String>>().join(", ");
+        let exs = if !quick {
+            // Exits:
+            output.push_str("\n<c green>Exits: </c>");
+            exits.iter().map(|(dir,_)| dir.to_string()).collect::<Vec<String>>().join(", ")
+        } else { "".into() };
+
         tell_user!(ctx.writer, "{}{}\n\n", output, exs);
     }
 }
