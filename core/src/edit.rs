@@ -1,6 +1,6 @@
 //! Editor modes for those who need them.
 
-use crate::{identity::IdentityQuery, player::Player, string::styling::dirty_mark, util::uuid::StrUuid};
+use crate::{identity::IdentityQuery, player::Player, string::styling::dirty_mark, identity::uniq::StrUuid};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum EditorMode {

@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::IdentityQuery, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, string::Slugger, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, uniq::UuidValidator}, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, traits::Tickable, util::direction::Direction, world::World};
 
 pub mod locking;
 

@@ -7,7 +7,13 @@ use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mo
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::IdentityQuery, io::entity_entry_fp, item::{Item, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::{UNNAMED, as_id_with_uuid}, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable, util::uuid::StrUuid};
+use crate::{
+    combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::{IdentityQuery, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
+        Item,
+        container::variants::{ContainerVariant, ContainerVariantType},
+        weapon::{WeaponSize, str_based_dmg_mul}
+    }, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable
+};
 
 /// Generic [Entity] size categories
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -128,7 +134,7 @@ pub struct Entity {
 impl Default for Entity {
     fn default() -> Self {
         Self {
-            id: as_id_with_uuid("entity").unwrap(),
+            id: "entity".with_uuid(),
             name: UNNAMED.into(),
             hp: Stat::new(StatType::HP),
             mp: Stat::new(StatType::MP),
@@ -169,12 +175,6 @@ impl Display for EntityError {
 impl std::error::Error for EntityError {}
 
 impl Entity {
-    #[cfg(test)]
-    pub fn re_uuid(&mut self) {
-        use crate::{identity::{IdentityMut, IdentityQuery}, util::uuid::Uuid};
-        *self.id_mut() = self.id().re_uuid()
-    }
-
     pub async fn new(id: &str, out: &SignalSenderChannels) -> Result<Self, CgError> {
         if let Some(ent) = get_entity_blueprint(id, out).await {
             return Ok(Self {
@@ -257,7 +257,7 @@ impl Tickable for Entity {
 mod entity_tests {
     use std::io::Cursor;
 
-    use crate::{stabilize_threads, cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, mob::core::Entity, string::UNNAMED, util::uuid::UUID_RE, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery, uniq::{UUID_RE, Uuid}}, mob::core::Entity, stabilize_threads, string::UNNAMED, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;
@@ -276,7 +276,7 @@ mod entity_tests {
         log::debug!("re-UUID is heavy (Uuid::new_v4()), and it'd never be used in a loop like this in reality, but… hold the press until {LOOPS} x 100 ticks is done.:");
         for _ in 0..LOOPS {
             let old_id = e.id().to_string();
-            e.re_uuid();
+            *(e.id_mut()) = old_id.re_uuid();
             assert_ne!(old_id.as_str(), e.id());
             let mut next_val = 100.0;
             e.mp_mut().set_curr(next_val);

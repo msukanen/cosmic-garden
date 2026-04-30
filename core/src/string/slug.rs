@@ -2,37 +2,27 @@
 
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{r#const::HARDCODED_RESERVED, identity::{IdError, MAX_ID_LEN}, util::uuid::UuidCore};
+use crate::identity::{IdError, MAX_ID_LEN};
 
 /// A trait for all the slugs…
 pub trait Slugger {
     /// Overwrite all non-alphabet with underscores.
     fn slugify(&self) -> String;
-    /// Get representation as file/hash ready `id`, if possible…
-    fn as_id(&self) -> Result<String, IdError>;
-    /// Check if string is valid as ID without actually creating an ID out of it.
-    fn is_id(&self) -> Result<(), IdError>;
     /// Reduce repetitive non-alphanum to singular entries.
     fn reduce_noise(&self) -> Result<String, IdError>;
 }
 
 impl Slugger for String {
-    #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
-    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
     #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
     #[inline] fn slugify(&self) -> String { slugify(self) }
 }
 
 impl Slugger for &String {
-    #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
-    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
     #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
     #[inline] fn slugify(&self) -> String { slugify(self) }
 }
 
 impl Slugger for &str {
-    #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
-    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
     #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
     #[inline] fn slugify(&self) -> String { slugify(self) }
 }
@@ -49,81 +39,6 @@ fn slugify(input: &str) -> String {
             else {'_'}
         })
         .collect()
-}
-
-/// Get representation as file/hash ready `id`, if possible…
-/// 
-/// # Args
-/// - `input` to be sanitized.
-pub fn as_id(input: &str) -> Result<String, IdError> {
-    let mut out = String::new();
-    let mut last_was_junk = false;
-    let mut has_alnum = false;
-
-    for ch in input.trim().to_lowercase().nfd() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch);
-            last_was_junk = false;
-            has_alnum = true;
-            continue;
-        }
-
-        if !last_was_junk && !out.is_empty() {
-            out.push(match ch {
-                '-' => '-',
-                _ if ch.is_whitespace() => '-',
-                _ => '_'
-            });
-            last_was_junk = true;
-        }
-    }
-
-    if !has_alnum || out.is_empty() {
-        return Err(IdError::EmptyOrGarbage);
-    }
-
-    if out.len() > MAX_ID_LEN {
-        return Err(IdError::TooLong);
-    }
-
-    if HARDCODED_RESERVED.contains(out.as_str()) {
-        return Err(IdError::ReservedName(out.clone()));
-    }
-
-    Ok(out)
-}
-
-/// Check if string is valid as ID without actually creating an ID out of it.
-/// 
-/// Note: unlike [as_id], [is_id] doesn't check against hardcoded reserved words.
-pub fn is_id(input: &str) -> Result<(), IdError> {
-    let mut out = 0;
-    let mut last_was_junk = false;
-    let mut has_alnum = false;
-
-    for ch in input.trim().to_lowercase().nfd() {
-        if ch.is_ascii_alphanumeric() {
-            out += 1;
-            last_was_junk = false;
-            has_alnum = true;
-            continue;
-        }
-
-        if !last_was_junk && out != 0 {
-            out += 1;
-            last_was_junk = true;
-        }
-    }
-
-    if !has_alnum || out == 0 {
-        return Err(IdError::EmptyOrGarbage);
-    }
-
-    if out > MAX_ID_LEN {
-        return Err(IdError::TooLong);
-    }
-
-    Ok(())
 }
 
 /// Reduce repetitive non-alphanum to singular entries.
@@ -166,14 +81,9 @@ fn reduce_noise(input: &str) -> Result<String, IdError> {
     Ok(out)
 }
 
-pub fn as_id_with_uuid(value: &str) -> Result<String, IdError> {
-    let base_id = value.as_id()?;
-    Ok(base_id.with_uuid())
-}
-
 #[cfg(test)]
 mod slug_tests {
-    use crate::util::uuid::{Uuid, UUID_RE};
+    use crate::identity::uniq::{UUID_RE, Uuid, UuidCore, UuidValidator};
 
     use super::*;
 

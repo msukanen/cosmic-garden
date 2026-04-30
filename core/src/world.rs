@@ -5,7 +5,7 @@ use futures::{StreamExt, stream};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::CgError, identity::IdentityQuery, io::world_fp, item::Item, mob::core::Entity, player::Player, room::Room, string::{UNNAMED, as_id, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::{IdentityQuery, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
@@ -266,7 +266,7 @@ impl World {
             per_page = usize::MAX;
         }
         let needle = needle.to_lowercase();
-        let id_needle = as_id(&needle).unwrap_or("**garbage**".into());
+        let id_needle = needle.as_id().unwrap_or("**garbage**".into());
         let mut pages = if self.rooms.len() < NUM_ROOMS_FOR_PARALLEL_SHIFT {
             let mut res = Vec::new();
             for (id, r) in self.rooms.iter() {

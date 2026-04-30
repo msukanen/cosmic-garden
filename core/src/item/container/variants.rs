@@ -7,7 +7,7 @@ use tokio::sync::RwLock;
 
 use crate::{
     r#const::SIZE_BALANCE,
-    identity::{IdError, IdentityMut, IdentityQuery},
+    identity::{IdError, IdentityMut, IdentityQuery, uniq::Uuid},
     item::{
         Item, Itemized, ItemizedMut,
         StorageError, StorageQueryError,
@@ -20,7 +20,6 @@ use crate::{
     mob::core::Entity,
     string::{Describable, DescribableMut},
     traits::{Reflector, Tickable},
-    uuid::Uuid
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]

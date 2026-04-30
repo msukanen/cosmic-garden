@@ -1,6 +1,8 @@
 //! Everything has an identity, let's deal with that…
 use std::fmt::Display;
 
+pub mod uniq;
+
 pub const MAX_ID_LEN: usize = 255;
 
 /// Various ID related errors…
@@ -35,6 +37,13 @@ pub trait IdentityQuery {
     fn id<'a>(&'a self) -> &'a str;
     /// Get the title/name.
     fn title<'a>(&'a self) -> &'a str;
+}
+
+pub trait IdentityToMetal {
+    // Get the metal 
+    // fn metal_id<'a>(id: &'a str) -> Uuid {
+
+    // }
 }
 
 /// A trait for anything and everything with mutable "identity".

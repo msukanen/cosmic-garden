@@ -6,7 +6,7 @@ use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier, password_ha
 use serde::{Deserialize, Serialize};
 use tokio::fs;
 
-use crate::{error::CgError, identity::IdError, io::user_save_fp, password::{PasswordError, validate_passwd}, string::Slugger};
+use crate::{error::CgError, identity::{IdError, uniq::UuidValidator}, io::user_save_fp, password::{PasswordError, validate_passwd}};
 
 /// Generic user info.
 #[derive(Debug, Clone, Deserialize, Serialize)]

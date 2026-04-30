@@ -28,7 +28,7 @@ mod string;
 mod thread;
 mod traits;
 mod user;
-mod util; use util::uuid as uuid;
+mod util;
 mod world;
 
 /// Command line options…

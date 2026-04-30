@@ -7,7 +7,7 @@ use crate::{
     io::{blueprint_entry_fp, blueprint_lib_fp},
     item::Item,
     serial::string_vec_to_bool_map,
-    uuid::{StrUuid, Uuid}
+    identity::uniq::{StrUuid, Uuid}
 };
 
 use serde::{Deserialize, Serialize};

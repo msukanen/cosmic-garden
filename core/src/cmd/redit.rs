@@ -6,7 +6,7 @@ use async_trait::async_trait;
 
 include!(concat!(env!("OUT_DIR"), "/redit_registry.rs"));
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, player::ActivityType, show_help_if_needed, string::Slugger, tell_user, err_tell_user, translocate, util::access::Accessor, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, identity::{IdentityQuery, uniq::UuidValidator}, io::ClientState, player::ActivityType, show_help_if_needed, tell_user, translocate, util::access::Accessor, validate_access};
 
 pub struct ReditCommand;
 

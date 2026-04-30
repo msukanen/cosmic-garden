@@ -175,12 +175,9 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
                 impl crate::identity::IdentityMut for #name {
                     fn id_mut<'a>(&'a mut self) -> &'a mut String { &mut self.#f_id }
                     fn set_id(&mut self, a: &str) -> Result<(), crate::identity::IdError> {
-                        let pre_checked_id = crate::string::slug::as_id(a)?;
-                        let no_uuid = crate::util::uuid::remove_uuid(&pre_checked_id);
-                        if crate::r#const::HARDCODED_RESERVED.contains(no_uuid.as_str()) {
-                            return Err(crate::identity::IdError::ReservedName(no_uuid));
-                        }
-                        *self.id_mut() = pre_checked_id;
+                        use crate::identity::uniq::{Uuid, UuidValidator};
+                        let pre_checked_id = a.as_id()?;
+                        *self.id_mut() = pre_checked_id.re_uuid();
                         Ok(())
                     }
                     fn title_mut<'a>(&'a mut self) -> &'a mut String { &mut self.#title }
@@ -573,7 +570,7 @@ fn generate_ownedmut_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
                 // set_last_user
                 quote! {
-                    crate::string::slug::is_id(a)?;
+                    crate::identity::uniq::is_id(a)?;
                     if let Some(luid) = &mut self.last_user_id {
                         luid.push_front(a.to_string());
                     } else {

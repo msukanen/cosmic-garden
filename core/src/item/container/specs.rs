@@ -7,7 +7,7 @@ use cosmic_garden_pm::{IdentityMut, ItemizedMut, OwnedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::IdentityQuery, item::{Item, Itemized, StorageQueryError, container::{Storage, StorageError, StorageMut, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED}, traits::{Reflector, Tickable}, uuid::{Uuid, UuidCore}};
+use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, Itemized, StorageQueryError, container::{Storage, StorageError, StorageMut, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED}, traits::{Reflector, Tickable}};
 
 /// "Unit" of space and/or weight…
 pub type StorageSpace = u16;

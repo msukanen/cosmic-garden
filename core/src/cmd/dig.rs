@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, validate_access, room::Room, string::Slugger, tell_user, thread::SystemSignal, translocate, util::direction::Direction};
+use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, identity::uniq::UuidValidator, room::Room, tell_user, thread::SystemSignal, translocate, util::direction::Direction, validate_access};
 
 pub struct DigCommand;
 

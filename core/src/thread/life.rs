@@ -18,7 +18,7 @@ use crate::{
     translocate,
     util::approx::ApproxI32,
     world::World,
-    uuid::Uuid
+    identity::uniq::Uuid
 };
 
 #[cfg(test)]

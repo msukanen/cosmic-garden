@@ -9,7 +9,7 @@ use crate::{
     io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp},
     item::{BlueprintLibrary, Item},
     mob::{core::Entity, spawn_lib::EntityLibrary},
-    uuid::TryAttachUuid,
+    identity::uniq::TryAttachUuid,
     thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}},
     traits::Reflector,
     help::{HelpLibrary, HelpPage},
