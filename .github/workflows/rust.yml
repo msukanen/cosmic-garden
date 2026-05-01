@@ -19,4 +19,7 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Run tests
-      run: cargo test --verbose
+      run: cargo test -- --test-threads=1 --nocapture
+      env:
+        RUST_LOG: debug
+        RUST_BACKTRACE: 1
