@@ -94,7 +94,7 @@ pub trait CombatantMut : Combatant {
 mod combatant_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery, MachineIdentity}, io::{Broadcast, ClientState}, mob::core::Entity, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
 
     /// Simulate 100 players' "gank squad" vs 1 (tough) goblin.
     /// 
@@ -147,7 +147,7 @@ mod combatant_tests {
             let p2_id = p2.id().to_string();
             let p2 = std::sync::Arc::new(tokio::sync::RwLock::new(p2));
             w.write().await.players_by_id.insert(p2_id.clone(), p2.clone());
-            let Some(r) = w.read().await.rooms.get(&"r-1".as_m_id()).cloned() else { panic!("r-1 missing?!")};
+            let Some(r) = w.read().await.get_room_by_id(&"r-1").clone() else { panic!("r-1 missing?!")};
             r.write().await.who.insert(p2_id.clone(), std::sync::Arc::downgrade(&p2));
             p2.write().await.location = std::sync::Arc::downgrade(&r);
             let c = c.out.clone();

@@ -439,7 +439,10 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
 
                     let mut plr = who.write().await;
                     let origin_id = from.read().await.id().to_string();
-                    plr.last_goto = Some((via.into(), Arc::downgrade(&from)));
+                    match to.read().await.memory_fog() {
+                        None => plr.last_goto = Some((via.into(), Arc::downgrade(&from))),
+                        _ => plr.last_goto = None
+                    }
                     log::trace!("Last goto: {} from <{origin_id}>", plr.last_goto.as_ref().unwrap().0);
                     drop(plr);
 
@@ -551,7 +554,7 @@ async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &Roo
     match &what {
         SpawnType::Mob { id } => {
             let w = world.read().await;
-            if let Some(r_arc) = w.rooms.get(&room.id().await.as_m_id()) {
+            if let Some(r_arc) = w.get_room_by_m_id(room.id().await.as_m_id()) {
                 let r_arc = r_arc.clone();
                 drop(w);
                 direct_spawn_something(out, what, &r_arc, world).await
@@ -686,7 +689,7 @@ mod life_tests {
         stabilize_threads!(100);
         log::debug!("Stabilized…");
         let lock = w.read().await;
-        if let Some(r1) = lock.rooms.get(&"r-1".as_m_id()) {
+        if let Some(r1) = lock.get_room_by_id(&"r-1") {
             let r1 = r1.clone();
             drop(lock);
             log::debug!("Dropped world lock…");

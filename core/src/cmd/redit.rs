@@ -6,7 +6,7 @@ use async_trait::async_trait;
 
 include!(concat!(env!("OUT_DIR"), "/redit_registry.rs"));
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::ClientState, player::ActivityType, show_help_if_needed, tell_user, translocate, util::access::Accessor, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, identity::{IdentityQuery, uniq::UuidValidator}, io::ClientState, player::ActivityType, show_help_if_needed, tell_user, translocate, util::access::Accessor, validate_access};
 
 pub struct ReditCommand;
 
@@ -42,7 +42,7 @@ impl Command for ReditCommand {
                 };
                 // see if it's an existing room ID…
                 let wr = ctx.world.read().await;
-                if let Some(target_arc) = wr.rooms.get(&target_id.as_m_id()) {
+                if let Some(target_arc) = wr.get_room_by_id(&target_id) {
                     if let Some(ploc) = ploc {
                         if !Arc::ptr_eq(&target_arc, &ploc) {
                             if access.is_true_builder() {

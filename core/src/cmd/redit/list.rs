@@ -66,7 +66,7 @@ mod cmd_redit_list {
             let d = format!("This would be the room #{i}");
             let r = Room::new(&id, &t).await.ok().unwrap();
             r.write().await.desc = d;
-            lock.rooms.insert(id.as_m_id(), r);
+            lock.insert_room(r);
         }
         drop(lock);
         let _ = ctx!(state, ListCommand, "r-1 0", s,c.out,w,p, |out:&str| out.contains("Inciner"));

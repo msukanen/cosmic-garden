@@ -6,7 +6,7 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
@@ -34,7 +34,7 @@ pub struct World {
     pub players_by_id: HashMap<String, Arc<RwLock<Player>>>,
 
     #[serde(rename = "rooms", with = "room_id_sieve")]
-    pub rooms: HashMap<MachineId, Arc<RwLock<Room>>, BuildNoHashHasher<MachineId>>,
+    rooms: HashMap<MachineId, Arc<RwLock<Room>>, BuildNoHashHasher<MachineId>>,
     #[serde(default = "default_root_room_id")]
     pub root_room_id: String,
     #[serde(skip)]
@@ -241,8 +241,52 @@ impl World {
             log::error!("{msg}");
             panic!("{msg}");
         };
-            
+
         log::info!("Root room established as '{}'", self.root_room_id)
+    }
+
+    /// Try get `Arc` of a [Room] by `id`…
+    pub fn get_room_by_id(&self, id: &str) -> Option<Arc<RwLock<Room>>> {
+        self.get_room_by_m_id(id.as_m_id())
+    }
+
+    /// Try get `Arc` of a [Room] by [machine ID][MachineId].
+    pub fn get_room_by_m_id(&self, m_id: MachineId) -> Option<Arc<RwLock<Room>>> {
+        self.rooms.get(&m_id).cloned()
+    }
+
+    /// Try insert a new [Room].
+    /// 
+    /// # Args
+    /// - [`room`][Room] to insert.
+    /// # Returns
+    /// `Ok` or [IdError].
+    pub async fn insert_room(&mut self, room: Arc<RwLock<Room>>) -> Result<(), IdError> {
+        let id = room.read().await.id().to_string();
+        let m_id = id.as_m_id();
+        self.insert_room_by_m_id(m_id, id, room)
+    }
+
+    /// Try insert a new [Room].
+    /// 
+    /// Seldom used directly.
+    /// 
+    /// # Args
+    /// - `m_id` of the [Room].
+    /// - `id` of the [Room].
+    /// - [`room`][Room] to insert.
+    /// 
+    /// # Returns
+    /// `Ok` or [IdError].
+    pub fn insert_room_by_m_id(&mut self, m_id: MachineId, id: String, room: Arc<RwLock<Room>>) -> Result<(), IdError> {
+        if self.rooms.contains_key(&m_id) {
+            log::error!("Builder: Room ID '{id}' collision course detected. Refusing banging them against each other.");
+            return Err(IdError::ReservedName(id));
+        }
+
+        log::trace!("Room '{id}'({m_id}) registered");
+        self.rooms.insert(m_id, room);
+        Ok(())
     }
 }
 

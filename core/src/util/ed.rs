@@ -261,7 +261,7 @@ macro_rules! access_ed_entry {
 mod ed_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, desc::DescCommand}}, identity::MachineIdentity, string::{DescribableMut, newline::LineEndingExt, styling::MAX_DESCRIPTION_LINES}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, desc::DescCommand}}, string::{DescribableMut, newline::LineEndingExt, styling::MAX_DESCRIPTION_LINES}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[test]
     fn remove_nth_line() {
@@ -306,7 +306,7 @@ mod ed_tests {
             panic!("Hey!? Where's my error log for lno={lno} len={len}?");
         }
         // lets fool around with r-1's description…
-        let r1 = if let Some(r1) = w.read().await.rooms.get(&"r-1".as_m_id()) {
+        let r1 = if let Some(r1) = w.read().await.get_room_by_id(&"r-1") {
             r1.clone()
         } else { panic!("r-1 poofed?") };
         r1.write().await.set_desc(&l21);

@@ -6,9 +6,15 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, uniq::UuidValidator}, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, traits::Tickable, util::direction::Direction, world::World};
 
 pub mod locking;
+
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
+pub enum MemoryFog {
+    Jail,
+    Mystic,
+}
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -80,6 +86,9 @@ pub struct Room {
     // [Room] is the sole owner of an [Entity].
     #[serde(default, with = "arc_n_t_transform")]
     pub entities: HashMap<usize, Arc<RwLock<Entity>>>,
+
+    #[serde(default)]
+    pub memory_fog: Option<MemoryFog>,
 }
 
 fn empty_room_desc() -> String { "A room.".into() }
@@ -143,6 +152,7 @@ impl Room {
                 raw_exits: HashMap::new(),
                 contents: room_inventory(),
                 entities: HashMap::new(),
+                memory_fog: None,
             }
         });
 
@@ -163,14 +173,14 @@ impl Room {
         }
         // Find the target room, hopefully.
         let w = world.read().await;
-        let my_lock = if let Some(my_arc) = w.rooms.get(&self.id().as_m_id()) {
-            Arc::downgrade(my_arc)
+        let my_lock = if let Some(my_arc) = w.get_room_by_id(self.id()) {
+            Arc::downgrade(&my_arc)
         } else {
             log::error!("Wait what? Where did '{}' lock go?!", self.id());
             return Err(CgError::from(RoomError::NoSuchRoom(self.id().to_string())))
         };
-        if let Some(target_arc) = w.rooms.get(&target_id.as_m_id()) {
-            self.exits.insert(dir.clone(), Arc::downgrade(target_arc));
+        if let Some(target_arc) = w.get_room_by_id(&target_id) {
+            self.exits.insert(dir.clone(), Arc::downgrade(&target_arc));
             log::debug!("Real link established between '{}' and '{}'", self.id(), target_id);
             log::debug!("Attempting reverse…");
             if let Ok(opp_dir) = dir.opposite() {
@@ -200,6 +210,7 @@ impl Room {
             who: HashMap::new(),
             contents: room_inventory(),
             entities: HashMap::new(),
+            memory_fog: self.memory_fog.clone(),
         }
     }
 
@@ -209,6 +220,7 @@ impl Room {
         self.desc = source.desc;
         self.exits = source.exits;
         self.raw_exits = source.raw_exits;
+        self.memory_fog = source.memory_fog;
     }
 
     /// Convenience function to try insert `item` directly into the [Room]'s contents.
@@ -249,6 +261,11 @@ impl Room {
         }
 
         nearby.values().into_iter().map(|w| w.clone()).collect::<Vec<Weak<RwLock<Room>>>>()
+    }
+
+    /// Get the [Room]'s [memory fog][MemoryFog], if any.
+    pub fn memory_fog(&self) -> Option<MemoryFog> {
+        self.memory_fog.clone()
     }
 }
 
@@ -311,35 +328,26 @@ mod room_tests {
     async fn room_linking() {
         let (w_arc,_,_,_) = get_operational_mock_world().await;
         w_arc.write().await.link_rooms().await;
-        let rooms = w_arc.read().await.rooms.clone();
-        if let Some(r_arc) = rooms.get(&"r-1".as_m_id()) {
+        let r1_m_id = "r-1".as_m_id();
+        if let Some(r_arc) = w_arc.read().await.get_room_by_m_id(r1_m_id) {
             let mut r = r_arc.write().await;
             if let Err(e) = r.link_exit(w_arc.clone(), Direction::North, "r-2".into()).await {
                 panic!("Bummer… {e:?}");
             }
         }
-        for r in &rooms {
-            log::debug!("Room {r:?}")
-        }
         // this should fail symmetry check:
-        if let Some(r_arc) = rooms.get(&"r-1".as_m_id()) {
+        if let Some(r_arc) = w_arc.read().await.get_room_by_m_id(r1_m_id) {
             let mut r = r_arc.write().await;
             if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "r-2".into()).await {
                 panic!("Bummer… {e:?}");
             }
         }
-        for r in &rooms {
-            log::debug!("Room {r:?}")
-        }
         // this should create a "mirage" and override an old entry:
-        if let Some(r_arc) = rooms.get(&"r-1".as_m_id()) {
+        if let Some(r_arc) = w_arc.read().await.get_room_by_m_id(r1_m_id) {
             let mut r = r_arc.write().await;
             if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "r-3".into()).await {
                 log::error!("Bummer… {e:?}");
             }
-        }
-        for r in &rooms {
-            log::debug!("Room {r:?}")
         }
     }
 }

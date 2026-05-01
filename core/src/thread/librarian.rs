@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
 use crate::{
-    help::{HelpLibrary, HelpPage}, identity::{IdentityQuery, MachineIdentity, uniq::{StrUuid, TryAttachUuid}}, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::access::Access, world::World
+    help::{HelpLibrary, HelpPage}, identity::{IdentityQuery, uniq::{StrUuid, TryAttachUuid}}, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::access::Access, world::World
 };
 
 #[cfg(test)]
@@ -126,7 +126,7 @@ pub async fn librarian(
                     if let Some(found) = lib.bp.get(&id) {
                         let item = found.reflect();
                         let r_id = room.id().await;
-                        if let Some(dest) = world.read().await.rooms.get(&r_id.as_m_id()) {
+                        if let Some(dest) = world.read().await.get_room_by_id(&r_id).clone() {
                             let item_id = item.id().to_string();
                             let mut lock = dest.write().await;
                             if let Err(e) = lock.try_insert(item) {

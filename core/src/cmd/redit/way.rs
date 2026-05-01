@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::{IdentityQuery, MachineIdentity}, roomloc_or_bust, show_help_if_needed, tell_user, util::direction::Direction, validate_access};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, roomloc_or_bust, show_help_if_needed, tell_user, util::direction::Direction, validate_access};
 
 pub struct WayCommand;
 
@@ -25,11 +25,11 @@ impl Command for WayCommand {
         }
         let dest = {
             let w = ctx.world.read().await;
-            let Some(dest) = w.rooms.get(&args.as_m_id()) else {
+            let Some(dest) = w.get_room_by_id(args) else {
                 tell_user!(ctx.writer, "No such room exists. Check with <c yellow>list</c>…\n");
                 return ;
             };
-            dest.clone()
+            dest
         };
         let dir = Direction::from(dir);
         let opp = dir.opposite();

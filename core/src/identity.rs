@@ -12,7 +12,8 @@ pub enum IdError {
     EmptyOrGarbage,
     /// Input too long (for e.g. file system).
     TooLong,
-    /// Input contains forbidden/reserved (e.g. any of the hardcoded bootstrap) patterns.
+    /// Input contains forbidden/reserved (e.g. any of the hardcoded bootstrap)
+    /// patterns or is otherwise "unusable".
     ReservedName(String),
     /// Password mismatch…
     PasswordMismatch,

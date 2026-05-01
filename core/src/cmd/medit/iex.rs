@@ -52,9 +52,9 @@ impl Command for IexCommand {
 
 #[cfg(test)]
 mod medit_iex_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, iex::IexCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityQuery, MachineIdentity}, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, iex::IexCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn medit_iex_test() {
@@ -65,14 +65,14 @@ mod medit_iex_tests {
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        stabilize_threads!();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".to_string() }, room: "r-1".into(), reply: None }).ok();
-        tokio::time::sleep(Duration::from_millis(75)).await;
+        stabilize_threads!(25);
         let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         p.write().await.config.show_id = true;
         // we know r-1 exists…
-        let r1 = w.read().await.rooms.get(&"r-1".as_m_id()).unwrap().clone();
+        let r1 = w.read().await.get_room_by_id("r-1").unwrap().clone();// we do have r-1 …↑
         let id = {
             let r1l = r1.read().await;
             let mut ent = None;
