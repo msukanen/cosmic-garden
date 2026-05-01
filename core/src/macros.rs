@@ -62,17 +62,17 @@ macro_rules! err_iedit_buffer_inaccessible {
         }};
 
         // sup "spam"?
-        (sup $sup:literal, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident) => {{
+        (sup $sup:expr, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident) => {{
             crate::ctx!(abrt false sup $sup,$state,$cmd,$args,$mock_sock,$sigs,$world,$plr,|_|true)
         }};
 
         // sup "spam"?
-        (sup $sup:literal, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
+        (sup $sup:expr, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
             crate::ctx!(abrt false sup $sup,$state,$cmd,$args,$mock_sock,$sigs,$world,$plr,$assert)
         }};
 
         // abrt instead of panic? sup "spam"?
-        (abrt $abrt:literal sup $sup:literal, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
+        (abrt $abrt:literal sup $sup:expr, $state:ident, $cmd:ident, $args:expr, $mock_sock:ident, $sigs:expr, $world:ident, $plr:ident, $assert:expr) => {{
             let state = {
                 use crate::cmd::{Command,CommandCtx};
                 $mock_sock.get_mut().clear();

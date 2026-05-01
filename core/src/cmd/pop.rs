@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, combat::CombatantMut, identity::IdentityQuery, player_or_bust, roomloc_or_bust, tell_user, translocate};
+use crate::{cmd::{Command, CommandCtx}, combat::CombatantMut, identity::IdentityQuery, player_or_bust, roomloc_or_bust, tell_user, translocate, util::direction::Direction};
 
 pub struct PopCommand;
 
@@ -31,6 +31,10 @@ impl Command for PopCommand {
                                 p_lock.last_goto = None;
                                 p_lock.take_dmg(5.0);
                             }
+                            let mut d = dest.write().await;
+                            d.exits.retain(|dir,_| if let Direction::Custom(d) = dir {
+                                d != "balloon"
+                            } else {true});
                             return ;
                         }
                     }

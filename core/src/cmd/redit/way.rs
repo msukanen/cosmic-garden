@@ -86,7 +86,7 @@ mod cmd_redit_way {
                 ctx!(state, LookCommand, "", s,c.out,w,p,|out:&str| out.contains("south"))
             } else { state }} else { state };
         let state = ctx!(state, PopCommand, "balloon",s,c.out,w,p,|out:&str| out.contains("falling"));
-        let _ = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("north") && out.contains("balloon"));
+        let _ = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("north") && !out.contains("balloon"));
         c.out.shutdown().await;
         lt.await.ok();
     }
