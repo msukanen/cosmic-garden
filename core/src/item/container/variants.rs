@@ -76,12 +76,8 @@ pub struct CorpseSpec {
 }
 
 impl IdentityMut for CorpseSpec {
-    fn id_mut<'a>(&'a mut self) -> &'a mut String {
-        self.spec.id_mut()
-    }
-
-    fn set_id(&mut self, value: &str) -> Result<(), IdError> {
-        self.spec.set_id(value)
+    fn set_id(&mut self, value: &str, m_id: bool) -> Result<(), IdError> {
+        self.spec.set_id(value, m_id)
     }
 
     fn set_title(&mut self, value: &str) {

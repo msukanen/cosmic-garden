@@ -81,6 +81,15 @@ macro_rules! enum_setter {
     };
 }
 
+macro_rules! enum_setter_2 {
+    ($data:ident, $setter:ident) => {
+        $data.variants.iter().map(|v| {
+            let variant_name = &v.ident;
+            quote! { Self::#variant_name(inner) => inner.$setter(a,b) }
+        })
+    };
+}
+
 macro_rules! enum_setter_3 {
     ($data:ident, $setter:ident) => {
         $data.variants.iter().map(|v| {
@@ -155,14 +164,12 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
     let mut_impl =
     match &input.data {
         Data::Enum(data) => {
-            let id_mut = enum_getter!(data, id_mut);
-            let set_id = enum_setter!(data, set_id);
+            let set_id = enum_setter_2!(data, set_id);
             let title_mut = enum_getter!(data, title_mut);
             let set_title = enum_setter!(data, set_title);
             quote! {
                 impl crate::identity::IdentityMut for #name {
-                    fn id_mut<'a>(&'a mut self) -> &'a mut String { match self {#(#id_mut),*} }
-                    fn set_id(&mut self, a: &str) -> Result<(), crate::identity::IdError> { match self {#(#set_id),*} }
+                    fn set_id(&mut self, a: &str, b: bool) -> Result<(), crate::identity::IdError> { match self {#(#set_id),*} }
                     fn title_mut<'a>(&'a mut self) -> &'a mut String { match self {#(#title_mut),*} }
                     fn set_title(&mut self, a: &str) { match self {#(#set_title),*} }
                 }
@@ -173,11 +180,10 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
             let title = get_tagged_ident!(data, "identity", "title");
             quote! {
                 impl crate::identity::IdentityMut for #name {
-                    fn id_mut<'a>(&'a mut self) -> &'a mut String { &mut self.#f_id }
-                    fn set_id(&mut self, a: &str) -> Result<(), crate::identity::IdError> {
+                    fn set_id(&mut self, a: &str, b: bool) -> Result<(), crate::identity::IdError> {
                         use crate::identity::uniq::{Uuid, UuidValidator};
-                        let pre_checked_id = a.as_id()?;
-                        *self.id_mut() = pre_checked_id.re_uuid();
+                        let pre_checked_id = if !b {a.as_id()?} else {a.to_string()};
+                        self.#f_id = pre_checked_id.re_uuid();
                         Ok(())
                     }
                     fn title_mut<'a>(&'a mut self) -> &'a mut String { &mut self.#title }

@@ -7,7 +7,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke, look::LookCommand}, err_tell_user, identity::IdentityQuery, roomloc_or_bust, show_help, identity::uniq::StrUuid, tell_user, thread::{SystemSignal, librarian::shelve_entity_blueprint, signal::SpawnType}, validate_access, validate_editor_mode};
+use crate::{cmd::{Command, CommandCtx, cmd_alias::BufferNuke, look::LookCommand}, err_tell_user, identity::{IdentityQuery, MachineIdentity, uniq::StrUuid}, roomloc_or_bust, show_help, tell_user, thread::{SystemSignal, librarian::shelve_entity_blueprint, signal::SpawnType}, validate_access, validate_editor_mode};
 
 pub struct WeaveCommand;
 
@@ -27,7 +27,7 @@ impl Command for WeaveCommand {
         // "weave" w/o args
         if op.is_empty() {
             let w = ctx.world.read().await;
-            if let Some(ent) = w.entities.get(buf.id()) {
+            if let Some(ent) = w.entities.get(&buf.id().as_m_id()) {
                 if let Some(arc) = ent.upgrade() {
                     drop(w);
                     let mut lock = arc.write().await;
@@ -116,7 +116,7 @@ mod medit_tests {
         let state = ctx!(sup true, state, RenameCommand, "id hoblin" ,s,c,w,p,|out:&str| out.contains("re-ID'd"));
         let state = ctx!(sup true, state, WeaveCommand, "",s,c,w,p,|out:&str| out.contains("a no-op"));
         p.write().await.config.show_id = true;
-        let state = ctx!(sup true, state, WeaveCommand, "persist spawn",s,c,w,p,|out:&str| out.contains("(hoblin-"));
+        let state = ctx!(sup true, state, WeaveCommand, "persist spawn",s,c,w,p,|out:&str| out.contains("Hoblin!"));
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "hoblin".to_string() }, room: "r-1".into(), reply: None }).ok();
         tokio::time::sleep(Duration::from_millis(75)).await;
         let _ = ctx!(state, LookCommand,"",s,c,w,p);

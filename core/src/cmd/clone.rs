@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::{IdentityMut, IdentityQuery, uniq::Uuid}, item::{container::Storage, ownership::{ItemSource, OwnedMut}}, roomloc_or_bust, show_help_if_needed, tell_user, thread::add_item_to_lnf, traits::Reflector, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::{IdentityMut, IdentityQuery, MachineIdentity, uniq::Uuid}, item::{container::Storage, ownership::{ItemSource, OwnedMut}}, roomloc_or_bust, show_help_if_needed, tell_user, thread::add_item_to_lnf, traits::Reflector, validate_access};
 
 pub struct CloneCommand;
 
@@ -49,17 +49,17 @@ impl Command for CloneCommand {
         } else {
             if let Some(e_arc) = {
                 let r = loc.read().await;
-                if let Some(e_arc) = r.entities.get(ctx.args) {
+                if let Some(e_arc) = r.entities.get(&ctx.args.as_m_id()) {
                     e_arc.clone().into()
                 } else { None }
             } {
                 let o_id = e_arc.read().await.id().to_string();
                 let mut e = e_arc.read().await.shallow_clone();
-                *(e.id_mut()) = e.id().re_uuid();
+                e.set_id(&e.id().re_uuid(), true);
                 let e_id = e.id().to_string();
                 let e_arc = Arc::new(RwLock::new(e));
-                ctx.world.write().await.entities.insert(e_id.clone(), Arc::downgrade(&e_arc));
-                loc.write().await.entities.insert(e_id.clone(), e_arc);
+                ctx.world.write().await.entities.insert(e_id.as_m_id(), Arc::downgrade(&e_arc));
+                loc.write().await.entities.insert(e_id.as_m_id(), e_arc);
                 tell_user!(ctx.writer, "Clowning entity '{}' as '{}'…\n", o_id, e_id);
             } else {
                 err_tell_user!(ctx.writer, "No '{}' found…\n", ctx.args);
@@ -120,9 +120,10 @@ mod cmd_clone_tests {
         let state = ctx!(sup true, state, LookCommand, "", s,c,w,p,|out:&str| out.contains("A goblin"));
         // the gobbo's ID...
         let g= {
-            if let Some(r) = p.read().await.location.upgrade() {
-                let g_id = r.read().await.entities.keys().collect::<Vec<&String>>().iter().nth(0).unwrap().to_string();
-                g_id
+            if let Some(r_arc) = p.read().await.location.upgrade() {
+                let lock = r_arc.read().await;
+                let (_, ent_arc) = lock.entities.iter().nth(0).unwrap();
+                ent_arc.read().await.id().to_string()
             } else { panic!("Where did the room go?!") }
         };
         let state = ctx!(sup true, state, CloneCommand, g.as_str(), s,c,w,p,|out:&str| out.contains("ning entity"));

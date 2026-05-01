@@ -22,8 +22,9 @@ impl Command for ListCommand {
         let rooms = {
             let r = ctx.world.read().await;
             let rooms = r.paginated_room_entries(what, page, 10).await;
-            for (id,t) in &rooms.entries {
-                report.push_str(&format!("  <c yellow>{}</c> : <c cyan>{}</c>\n", id, t.read().await.title()));
+            for (m_id, arc) in &rooms.entries {
+                let lock = arc.read().await;
+                report.push_str(&format!("  <c yellow>{}</c> <c gray>:</c> {} <c gray>:</c> <c cyan>{}</c>\n", m_id, lock.id(), lock.title()));
             }
             rooms
         };
@@ -32,10 +33,10 @@ impl Command for ListCommand {
 }
 
 #[cfg(test)]
-mod cmd_iedit_list {
+mod cmd_redit_list {
     use dicebag::InclusiveRandomRange;
 
-    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, list::ListCommand}}, ctx, room::Room, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, list::ListCommand}}, ctx, identity::MachineIdentity, room::Room, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn exits_listing() {
@@ -57,7 +58,7 @@ mod cmd_iedit_list {
         let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, ReditCommand, "this", s, c.out, w, p);
-        let state = ctx!(state, ListCommand, "", s,c.out,w,p, |out:&str| out.contains("r-1") && out.contains("r-2") && !out.contains("r-3"));
+        let state = ctx!(state, ListCommand, "", s,c.out,w,p, |out:&str| out.contains("Waterfall") && out.contains("Incineration"));
         let mut lock = w.write().await;
         for i in 3..=1_000 {
             let id = format!("{}-{i}", ('a'..='z').random_of());
@@ -65,10 +66,10 @@ mod cmd_iedit_list {
             let d = format!("This would be the room #{i}");
             let r = Room::new(&id, &t).await.ok().unwrap();
             r.write().await.desc = d;
-            lock.rooms.insert(id.clone(), r);
+            lock.rooms.insert(id.as_m_id(), r);
         }
         drop(lock);
-        let _ = ctx!(state, ListCommand, "r- 0", s,c.out,w,p, |out:&str| out.contains("Waterf"));
+        let _ = ctx!(state, ListCommand, "r-1 0", s,c.out,w,p, |out:&str| out.contains("Inciner"));
     }
 
 }

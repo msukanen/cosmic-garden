@@ -32,7 +32,7 @@ impl Command for RenameCommand {
                         err_tell_user!(ctx.writer, "<c red>[ERR]</c> Re-ID requires admin privileges.\n");
                     }
                     let old_id = ent.id().to_string();
-                    if let Ok(_) = ent.set_id(args) {
+                    if let Ok(_) = ent.set_id(args, false) {
                         let ent_id = ent.id().to_string();
                         ctx.state.set_dirty(true);
                         drop(w);

@@ -121,7 +121,7 @@ impl ClientState {
                 if info.players.is_empty() {
                     // no players yet, make one
                     let mut p = Player::default();
-                    if let Err(e) = p.set_id(input) {
+                    if let Err(e) = p.set_id(input, false) {
                         log::warn!("IdError… {e:?}");
                         tell_user!(&mut writer, "{}: ", get_prompt!(world, PromptType::NamingViolation));
                         return self;
@@ -216,7 +216,7 @@ impl ClientState {
 
                 // brand new character, same procedure as further up:
                 let mut p = Player::default();
-                if let Err(e) = p.set_id(input) {
+                if let Err(e) = p.set_id(input, false) {
                     log::info!("Sloppy name writing… '{input}' does not function as an Id {e:?}");
                     tell_user!(&mut writer, "{}: ", get_prompt!(world, PromptType::NamingViolation));
                     return self;

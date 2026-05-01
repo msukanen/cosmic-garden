@@ -108,6 +108,11 @@ impl EntityLibrary {
         self.id_stem.insert(id.clone(), true);
         self.bps.insert(id, bp);
     }
+
+    /// Get a list of [Entity] ID keys.
+    pub fn keys(&self) -> Vec<String> {
+        self.id_stem.keys().cloned().collect()
+    }
 }
 
 impl Default for EntityLibrary {

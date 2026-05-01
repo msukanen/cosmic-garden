@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::RwLock, time};
 
-use crate::{Cli, identity::IdentityQuery, item::Item, player::Player, room::Room, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, world::World};
+use crate::{Cli, identity::{IdentityQuery, MachineIdentity}, item::Item, player::Player, room::Room, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, world::World};
 
 lazy_static! {
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
@@ -175,7 +175,7 @@ async fn lost_and_found(world: Arc<RwLock<World>>) {
     {
         let mut w = world.write().await;
         for i in items_to_save {
-            w.lost_and_found.insert(i.id().to_string(), i);
+            w.lost_and_found.insert(i.id().as_m_id(), i);
         }
     }
 

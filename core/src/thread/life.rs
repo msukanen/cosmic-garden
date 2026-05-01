@@ -7,7 +7,7 @@ use tokio::{sync::{RwLock, mpsc, oneshot}, time};
 
 use crate::{
     combat::{Battler, CombatantMut},
-    identity::{IdentityMut, IdentityQuery},
+    identity::{IdentityMut, IdentityQuery, MachineIdentity, uniq::Uuid},
     io::Broadcast,
     item::Item,
     mob::{StatValue, core::Entity},
@@ -17,8 +17,7 @@ use crate::{
     traits::Reflector,
     translocate,
     util::approx::ApproxI32,
-    world::World,
-    identity::uniq::Uuid
+    world::World
 };
 
 #[cfg(test)]
@@ -44,7 +43,7 @@ impl BattlerRec {
         let mut lock = self.combatant.write().await;
         if let Some(room) = lock.location().upgrade() {
             let mut c_inv = Item::Corpse(lock.inventory().deep_reflect());
-            let c_id = lock.id().to_string();
+            let c_id = lock.id().as_m_id();
             let c_title = lock.title().to_string();
             drop(lock);
             c_inv.set_desc(&format!("Corpse of '{}'", c_title));
@@ -182,6 +181,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
     let (reporter_out, mut reporter_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
     let battle_reporter = tokio::spawn({
         let out = out.broadcast.clone();
+        static RES_BOTH_DEAD_AV: &'static str = "You fall… flat on your face. R.I.P.";
         async move {
             while let Some(impact) = reporter_rx.recv().await {
                 match impact {
@@ -200,37 +200,47 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                         //          0.3 < C < 0.6 : "shatters", "crushes", "mutilates"?
                         //          C > 0.6 : "obliterates", "erases", "annihilates"?
                         //       ...something like that, depending on dmg deliver type...
-                        let message_atk = match resolution {
-                            Resolution::Inconclusive{atk_dmg, vct_dmg} => format!("You hit {} for {} dmg #vct_dmg({}).",
-                                vct.title,
-                                atk_dmg.approx_i32(),
-                                vct_dmg.approx_i32()
+                        let (message_atk, message_vct, message_other) = match resolution {
+                            Resolution::Inconclusive{atk_dmg, vct_dmg} => {
+                                let d_a = atk_dmg.approx_i32();
+                                let d_v = vct_dmg.approx_i32();
+                                (
+                                    format!("You hit {} for {d_a} dmg #vct_dmg({d_v}).", vct.title),
+                                    format!("{} hits you for {d_a} dmg #vct_dmg({d_v}).", atk.title),
+                                    format!("{} hits {}.", atk.title, vct.title),
+                                )
+                            },
+                            Resolution::AtkVictory{atk_dmg} => {
+                                let d_a = atk_dmg.approx_i32();
+                                (
+                                    format!("You're victorious against {} with last hit of {d_a} dmg!", vct.title),
+                                    format!("Ouch… {d_a} dmg in the face – *you faint*"),
+                                    format!("{} has slain {}!", atk.title, vct.title),
+                                )
+                            }
+                            Resolution::AtkRetreat => (
+                                "Better run while you can…".into(),
+                                format!("Hey, {} is running away! Yay?", atk.title),
+                                format!("{} runs away for their dear life…", atk.title),
                             ),
-                            Resolution::AtkVictory{atk_dmg} => format!("You're victorious against {} with last hit of {} dmg!", vct.title, atk_dmg.approx_i32()),
-                            Resolution::AtkRetreat => format!("Better run while you can…"),
-                            Resolution::VctRetreat => format!("Hey, {} is running away!", vct.title),
-                            Resolution::VctVictory{vct_dmg} => format!("Ouch… {} dmg in the face – *you faint*", vct_dmg.approx_i32()),
-                            Resolution::BothDead => format!("You fall… flat on your face. R.I.P."),
-                        };
-                        let message_other = match resolution {
-                            Resolution::Inconclusive{..} => format!("{} hits {}.", atk.title, vct.title),
-                            Resolution::AtkVictory{..} => format!("{} has slain {}!", atk.title, vct.title),
-                            Resolution::AtkRetreat => format!("{} runs away for their dear life…", atk.title),
-                            Resolution::VctRetreat => format!("Huh, {} is running away…", vct.title),
-                            Resolution::VctVictory{..} => format!("{} collapses due numerous, too numerous, wounds.", atk.title),
-                            Resolution::BothDead => format!("Unexpected… Both {} and {} fall over at the same time, either dead or exhausted.", atk.title, vct.title),
-                        };
-                        let message_vct = match resolution {
-                            Resolution::Inconclusive{atk_dmg, vct_dmg} => format!("{} hits you for {} dmg #vct_dmg({}).",
-                                atk.title,
-                                atk_dmg.approx_i32(),
-                                vct_dmg.approx_i32()
+                            Resolution::VctRetreat => (
+                                format!("Hey, {} is running away!", vct.title),
+                                "Better run while you can…".into(),
+                                format!("Huh, {} is running away…", vct.title),
                             ),
-                            Resolution::AtkVictory{atk_dmg} => format!("Ouch… {} dmg in the face – *you faint*", atk_dmg.approx_i32()),
-                            Resolution::AtkRetreat => format!("Hey, {} is running away! Yay?", atk.title),
-                            Resolution::VctRetreat => format!("Better run while you can…"),
-                            Resolution::BothDead => format!("You fall… flat on your face. R.I.P."),
-                            Resolution::VctVictory{vct_dmg} => format!("You're victorious against {} with last hit of {} dmg!", atk.title, vct_dmg.approx_i32()),
+                            Resolution::VctVictory{vct_dmg} => {
+                                let d_v = vct_dmg.approx_i32();
+                                (
+                                    format!("Ouch… {d_v} dmg in the face – *you faint*"),
+                                    format!("You're victorious against {} with last hit of {d_v} dmg!", atk.title),
+                                    format!("{} collapses due numerous, too numerous, wounds.", atk.title),
+                                )
+                            },
+                            Resolution::BothDead => (
+                                RES_BOTH_DEAD_AV.into(),
+                                RES_BOTH_DEAD_AV.into(),
+                                format!("Unexpected… Both {} and {} fall over at the same time, either dead or exhausted.", atk.title, vct.title),
+                            )
                         };
                         //-----------------
                         out.send(Broadcast::BattleMessage3 {
@@ -473,8 +483,12 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 LifeWorkerSignal::BattleOk { atk, vct, room } => {
                     let a_key = lock2key!(arc &atk.combatant);
                     let v_key = lock2key!(arc &vct.combatant);
-                    atk.combatant.write().await.alter_brain_freeze(true);
-                    vct.combatant.write().await.alter_brain_freeze(true);
+                    {
+                        let mut a_lock = atk.combatant.write().await;
+                        let mut v_lock = vct.combatant.write().await;
+                        a_lock.alter_brain_freeze(true);
+                        v_lock.alter_brain_freeze(true);
+                    }
                     bs.active.insert(a_key, (atk, room.clone()));
                     bs.active.insert(v_key, (vct, room.clone()));
                     if let Some(a) = bs.atk.get_mut(&a_key) {
@@ -499,8 +513,8 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 LifeWorkerSignal::BattleFail { atk, vct } => {
                     log::debug!("LifeworkerSignal::BattleFail");
                     // attempt purge, just in case.
-                    let a_key = Weak::as_ptr(&Arc::downgrade(&atk)) as *const() as BattlerKey;
-                    let v_key = Weak::as_ptr(&Arc::downgrade(&vct)) as *const() as BattlerKey;
+                    let a_key = lock2key!(arc atk);
+                    let v_key = lock2key!(arc vct);
                     bs.remove(a_key).await;
                     bs.remove(v_key).await;
                 }
@@ -527,7 +541,7 @@ async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &Roo
     match &what {
         SpawnType::Mob { id } => {
             let w = world.read().await;
-            if let Some(r_arc) = w.rooms.get(&room.id().await) {
+            if let Some(r_arc) = w.rooms.get(&room.id().await.as_m_id()) {
                 let r_arc = r_arc.clone();
                 drop(w);
                 direct_spawn_something(out, what, &r_arc, world).await
@@ -555,16 +569,16 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_a
             if let Ok(_) = out.librarian.send(SystemSignal::EntityBlueprintReq { id: id.clone(), out: oneshot }) {
                 if let Ok(reply) = recv.await {
                     if let Some(mut mob) = reply {
-                        *(mob.id_mut()) = mob.id().re_uuid();
+                        mob.set_id(&mob.id().re_uuid(), true).ok();
                         let mob_id = mob.id().to_string();
                         mob.set_location(&r_arc);
                         let mob_arc = Arc::new(RwLock::new(mob));
                         {
                             let mut w = world.write().await;
                             // tell the world 1st…
-                            w.entities.insert(mob_id.clone(), Arc::downgrade(&mob_arc));
+                            w.entities.insert(mob_id.as_m_id(), Arc::downgrade(&mob_arc));
                             // …then the room itself.
-                            r_arc.write().await.entities.insert(mob_id.clone(), mob_arc);
+                            r_arc.write().await.entities.insert(mob_id.as_m_id(), mob_arc);
                         }// drop 'w' now…
                         log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
                         return true;
@@ -623,7 +637,7 @@ async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resoluti
 mod life_tests {
     use std::{io::Cursor, sync::Arc};
 
-    use crate::{stabilize_threads, cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn goblin_ocean() {
@@ -662,19 +676,20 @@ mod life_tests {
         stabilize_threads!(100);
         log::debug!("Stabilized…");
         let lock = w.read().await;
-        if let Some(r1) = lock.rooms.get("r-1") {
+        if let Some(r1) = lock.rooms.get(&"r-1".as_m_id()) {
             let r1 = r1.clone();
             drop(lock);
             log::debug!("Dropped world lock…");
             let lock = r1.read().await;
-            let mut e_id = String::new();
-            for k in lock.entities.keys() {
-                if k.starts_with("goblin") {
-                    e_id = k.clone();
+            let mut e_id = 0;
+            for k in lock.entities.values() {
+                let lock = k.read().await;
+                if lock.id().starts_with("goblin") {
+                    e_id = lock.id().as_m_id();
                     break;
                 }
             }
-            if e_id.is_empty() {
+            if e_id == 0 {
                 panic!("Oi! No lil gobbo found!");
             }
             log::debug!("Found lil gobbo…");

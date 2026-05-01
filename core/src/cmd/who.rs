@@ -1,5 +1,7 @@
 //! Who's online?
 
+use std::sync::Arc;
+
 use async_trait::async_trait;
 
 use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player_or_bust, string::styling::RULER_LINE_PLAIN, util::access::Accessor, tell_user};
@@ -19,10 +21,12 @@ impl Command for WhoCommand {
             output.push_str(&format!("{}\n", RULER_LINE_PLAIN));
         }
 
+        let mut seen = 0;
         let world = ctx.world.read().await;
         for (id, p_arc) in &world.players_by_id {
             let p = p_arc.read().await;
-            let title = p.title();
+            if p.config.is_ghost && !is_staff { continue; }
+            let title = if Arc::ptr_eq(&plr, &p_arc) { "<you>" } else { p.title() };
             let loc_id = p.location_id.clone();
             
             if is_staff {
@@ -30,9 +34,13 @@ impl Command for WhoCommand {
             } else {
                 output.push_str(&format!(" <c blue>*</c> {}\n", title));
             }
+            seen += 1;
         }
         
-        output.push_str(&format!("{}\nTotal Souls: {}\n", RULER_LINE_PLAIN, world.players_by_id.len()));
+        output.push_str(&format!("{}\nTotal Souls: {}\n",
+            RULER_LINE_PLAIN,
+            if is_staff { world.players_by_id.len() } else { seen }
+        ));
         tell_user!(ctx.writer, "{}", output);
     }
 }

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, identity::uniq::UuidValidator, room::Room, tell_user, thread::SystemSignal, translocate, util::direction::Direction, validate_access};
+use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, identity::{MachineIdentity, uniq::UuidValidator}, room::Room, tell_user, thread::SystemSignal, translocate, util::direction::Direction, validate_access};
 
 pub struct DigCommand;
 
@@ -27,7 +27,7 @@ impl Command for DigCommand {
         // does the world already have `dest_id`?
         let dest_room = {
             let w = ctx.world.read().await;
-            w.rooms.get(&dest_id).cloned()
+            w.rooms.get(&dest_id.as_m_id()).cloned()
         };
 
         let target_arc = if let Some(existing) = dest_room {
@@ -38,7 +38,7 @@ impl Command for DigCommand {
             match Room::new(&dest_id, &new_title).await {
                 Ok(r) => {
                     let mut w = ctx.world.write().await;
-                    w.rooms.insert(dest_id.clone(), r.clone());
+                    w.rooms.insert(dest_id.as_m_id(), r.clone());
                     let _ = r.read().await.save();
                     r
                 },

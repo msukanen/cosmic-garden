@@ -23,7 +23,7 @@ pub trait Owned {
 pub trait OwnedMut: Owned {
     /// Change the [Item][crate::item::Item] owner.
     fn change_owner(&mut self, new_id: &str);
-    /// Change last user of [Item][crate::item::Item].
+    /// Last user of [Item][crate::item::Item].
     fn set_last_user(&mut self, new_id: &str) -> Result<(), IdError>;
     /// Set [ItemSource] of [Item][crate::item::Item].
     fn set_source(&mut self, of: &str, by: &str, new_source: &ItemSource) -> Result<(), ItemSourceError>;

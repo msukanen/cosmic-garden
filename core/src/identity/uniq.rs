@@ -107,7 +107,7 @@ impl TryAttachUuid<Item> for Option<Item> {
         match self {
             Some(item) => {
                 let mut new = item.clone();
-                *(new.id_mut()) = item.id().re_uuid();
+                new.set_id(&item.id().re_uuid(), true).ok();
                 Some(new)
             }
             None => None
@@ -142,6 +142,8 @@ pub fn as_id(input: &str) -> Result<String, IdError> {
         }
     }
 
+    let out = out.trim_end_matches(|c| c == '-' || c == '_');
+
     if !has_alnum || out.is_empty() {
         return Err(IdError::EmptyOrGarbage);
     }
@@ -150,11 +152,11 @@ pub fn as_id(input: &str) -> Result<String, IdError> {
         return Err(IdError::TooLong);
     }
 
-    if crate::r#const::HARDCODED_RESERVED.contains(out.as_str()) {
-        return Err(IdError::ReservedName(out.clone()));
+    if crate::r#const::HARDCODED_RESERVED.contains(out) {
+        return Err(IdError::ReservedName(out.to_string()));
     }
 
-    Ok(out)
+    Ok(out.to_string())
 }
 
 /// Check if string is valid as ID without actually creating an ID out of it.
@@ -188,16 +190,4 @@ pub fn is_id(input: &str) -> Result<(), IdError> {
     }
 
     Ok(())
-}
-
-/// `as_id`, but with UUID attached (if not present already).
-/// 
-/// # Args
-/// - `value` with or without UUID.
-/// 
-/// # Returns
-/// Either UUID'ed `value` (or near so) or [`IdError`][IdError].
-pub fn as_id_with_uuid(value: &str) -> Result<String, IdError> {
-    let base_id = value.as_id()?;
-    Ok(base_id.with_uuid())
 }

@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, roomloc_or_bust, show_help_if_needed, tell_user, util::direction::Direction, validate_access};
+use crate::{cmd::{Command, CommandCtx}, identity::{IdentityQuery, MachineIdentity}, roomloc_or_bust, show_help_if_needed, tell_user, util::direction::Direction, validate_access};
 
 pub struct WayCommand;
 
@@ -17,15 +17,15 @@ impl Command for WayCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
         let r = roomloc_or_bust!(plr);
-        show_help_if_needed!(ctx, "redit-way");
+        show_help_if_needed!(ctx, "way");
 
         let (dir, args) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
         if args.is_empty() {
-            show_help_if_needed!(ctx, "redit-way");
+            show_help_if_needed!(ctx, "way");
         }
         let dest = {
             let w = ctx.world.read().await;
-            let Some(dest) = w.rooms.get(args) else {
+            let Some(dest) = w.rooms.get(&args.as_m_id()) else {
                 tell_user!(ctx.writer, "No such room exists. Check with <c yellow>list</c>…\n");
                 return ;
             };
@@ -51,17 +51,17 @@ impl Command for WayCommand {
 
 #[cfg(test)]
 mod cmd_redit_way {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, io::Broadcast, thread::life, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, get_operational_mock_life, io::Broadcast, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn way_creation_r1r2() {
         let mut buf: Vec<u8> = Vec::new();
         let mut s = Cursor::new(&mut buf);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
-        let lt = tokio::spawn(life((c.out.clone(), c.recv.life), w.clone()));
-        tokio::time::sleep(Duration::from_secs(2)).await; // let life() stabilize
+        let lt = get_operational_mock_life!(c,w);
+        stabilize_threads!(100);
         let state = ctx!(state, LookCommand, "", s,c.out,w,p);
         let state = ctx!(state, WayCommand, "east r-3",s,c.out,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;

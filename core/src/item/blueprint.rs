@@ -27,6 +27,11 @@ impl BlueprintLibrary {
         self.items.get(id.show_uuid(false)).cloned()
     }
 
+    /// Get all the existing item ID keys.
+    pub fn keys(&self) -> Vec<String> {
+        self.items.keys().cloned().collect::<Vec<String>>()
+    }
+
     /// Shelve a (possibly new) blueprint, maybe `replace` old version while at it.
     /// 
     /// # Args
@@ -43,7 +48,7 @@ impl BlueprintLibrary {
         }
 
         let mut bp_item = item.clone();
-        *(bp_item.id_mut()) = id.clone();
+        bp_item.set_id(&id.clone(), true).ok();
         self.items.insert(id.clone(), bp_item);
         let existed = self.id_stem.insert(id.clone(), true);
 

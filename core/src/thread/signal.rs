@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use tokio::sync::{RwLock, broadcast, mpsc};
 
-use crate::{combat::Battler, io::Broadcast, item::Item, mob::core::Entity, player::Player, room::{Room, RoomPayload}, thread::life::TickType, util::{access::Access, direction::Direction}, help::HelpPage};
+use crate::{combat::Battler, help::HelpPage, io::Broadcast, item::Item, mob::core::Entity, player::Player, room::{Room, RoomPayload}, thread::{librarian::BlueprintType, life::TickType}, util::{access::Access, direction::Direction}};
 
 pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
 pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
@@ -30,33 +30,39 @@ pub enum SystemSignal {
     /// New help entry.
     NewHelpEntry {
         entry: HelpPage,
-        out: tokio::sync::oneshot::Sender<bool>
+        out: tokio::sync::oneshot::Sender<bool>,
     },
     /// New blueprint entry, from e.g. builders.
     NewBlueprintEntry {
         entry: Item,
-        out: tokio::sync::oneshot::Sender<bool>
+        out: tokio::sync::oneshot::Sender<bool>,
     },
     /// New entity blueprint entry, from e.g. builders.
     NewEntityEntry {
-        entry: Entity
+        entry: Entity,
     },
     /// Request a help page.
     HelpRequest {
         page_id: String,
         access: Access,
         bypass: bool,
-        out: tokio::sync::oneshot::Sender<Option<HelpPage>>
+        out: tokio::sync::oneshot::Sender<Option<HelpPage>>,
     },
     /// Request [Entity] blueprint.
     EntityBlueprintReq {
         id: String,
-        out: tokio::sync::oneshot::Sender<Option<Entity>>
+        out: tokio::sync::oneshot::Sender<Option<Entity>>,
     },
     /// Request [Item] blueprint.
     ItemBlueprintReq {
         id: String,
-        out: tokio::sync::oneshot::Sender<Option<Item>>
+        out: tokio::sync::oneshot::Sender<Option<Item>>,
+    },
+    /// Request [BlueprintType] blueprint list.
+    ListBlueprintReq {
+        kind: BlueprintType,
+        term: Option<String>,
+        out: tokio::sync::oneshot::Sender<Vec<String>>,
     },
 
     //

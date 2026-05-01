@@ -2,10 +2,11 @@
 use std::{collections::HashMap, net::SocketAddr, sync::{Arc, Weak}, usize};
 
 use futures::{StreamExt, stream};
+use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::CgError, identity::{IdentityQuery, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
@@ -33,16 +34,16 @@ pub struct World {
     pub players_by_id: HashMap<String, Arc<RwLock<Player>>>,
 
     #[serde(rename = "rooms", with = "room_id_sieve")]
-    pub rooms: HashMap<String, Arc<RwLock<Room>>>,
+    pub rooms: HashMap<MachineId, Arc<RwLock<Room>>, BuildNoHashHasher<MachineId>>,
     #[serde(default = "default_root_room_id")]
     pub root_room_id: String,
     #[serde(skip)]
     pub root_room: Option<Arc<RwLock<Room>>>,
     #[serde(default, skip)]
-    pub entities: HashMap<String, Weak<RwLock<Entity>>>,
+    pub entities: HashMap<MachineId, Weak<RwLock<Entity>>, BuildNoHashHasher<MachineId>>,
 
     #[serde(default)]
-    pub lost_and_found: HashMap<String, Item>,
+    pub lost_and_found: HashMap<MachineId, Item>,
     #[serde(skip)]
     pub channels: Option<SignalSenderChannels>,
 }
@@ -60,14 +61,16 @@ impl World {
             players_by_sockaddr: HashMap::new(),
             players_by_id: HashMap::new(),
             root_room_id: "r-1".into(),
-            rooms: {let mut m = HashMap::new();
-                m.insert("r-1".to_string(), root_room.clone().unwrap());
-                m.insert("r-2".to_string(), room_2.clone().unwrap());
+            rooms: {
+                use crate::identity::MachineIdentity;
+                let mut m = HashMap::default();
+                m.insert("r-1".as_m_id(), root_room.clone().unwrap());
+                m.insert("r-2".as_m_id(), room_2.clone().unwrap());
                 m},
                 root_room,
             lost_and_found: HashMap::new(),
             channels: None,
-            entities: HashMap::new(),
+            entities: HashMap::default(),
         }
     }
 }
@@ -77,7 +80,7 @@ mod room_id_sieve {
     use serde::{Serializer, Deserializer, Deserialize, ser::SerializeSeq};
 
     /// HashMap → list of IDs.
-    pub fn serialize<S>(rooms: &HashMap<String, Arc<RwLock<Room>>>, s: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(rooms: &HashMap<MachineId, Arc<RwLock<Room>>, BuildNoHashHasher<MachineId>>, s: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let mut seq = s.serialize_seq(Some(rooms.len()))?;
         for id in rooms.keys() {
@@ -87,15 +90,15 @@ mod room_id_sieve {
     }
 
     /// Take the list of IDs and materialize the [Room]s from disk.
-    pub fn deserialize<'de, D>(d: D) -> Result<HashMap<String, Arc<RwLock<Room>>>, D::Error>
+    pub fn deserialize<'de, D>(d: D) -> Result<HashMap<MachineId, Arc<RwLock<Room>>, BuildNoHashHasher<MachineId>>, D::Error>
     where D: Deserializer<'de> {
         let ids = Vec::<String>::deserialize(d)?;
-        let mut rooms = HashMap::new();
+        let mut rooms = HashMap::default();
 
         for id in ids {
             // Using a blocking load because this happens during [World::load_or_bootstrap].
             let room = Room::load_sync(&id).map_err(serde::de::Error::custom)?;
-            rooms.insert(id, Arc::new(RwLock::new(room)));
+            rooms.insert(id.as_m_id(), Arc::new(RwLock::new(room)));
         }
         Ok(rooms)
     }
@@ -125,15 +128,15 @@ impl World {
                     root_room_id: default_root_room_id(),
                     root_room: None,
                     rooms: {
-                        let mut rooms = HashMap::new();
+                        let mut rooms = HashMap::default();
                         
                         let r1 = Room::new(default_root_room_id().as_str(), "Room #1").await?;
                         let r1_id = r1.read().await.id().to_string();
-                        rooms.insert(r1_id.clone(), r1.clone());
+                        rooms.insert(r1_id.as_m_id(), r1.clone());
 
                         let r2 = Room::new("room 2!", "Room #2").await?;
                         let r2_id = r2.read().await.id().to_string();
-                        rooms.insert(r2_id.clone(), r2.clone());
+                        rooms.insert(r2_id.as_m_id(), r2.clone());
                         
                         {
                             let mut l1 = r1.write().await;
@@ -148,7 +151,7 @@ impl World {
                     },
                     lost_and_found: HashMap::new(),
                     channels: None,
-                    entities: HashMap::new(),
+                    entities: HashMap::default(),
                 };
                 w.save(true).await?;
                 log::info!("World '{}' bootstrapped successfully.", w.name);
@@ -191,7 +194,7 @@ impl World {
         let target_id = if current_loc == UNNAMED { &root_id} else { &current_loc };
         let room_to_place_in = {
             let w = world.read().await;
-            w.rooms.get(target_id).cloned()
+            w.rooms.get(&target_id.as_m_id()).cloned()
         };
         let Some(room) = room_to_place_in else {
             log::warn!("Cannot place '{p_id}' where they wanted to go; room '{target_id}' does not exist.");
@@ -224,7 +227,7 @@ impl World {
             }
             let mut linked = HashMap::new();
             for (dir, target_id) in &room.raw_exits {
-                if let Some(target_arc) = self.rooms.get(target_id) {
+                if let Some(target_arc) = self.rooms.get(&target_id.as_m_id()) {
                     linked.insert(dir.clone(), Arc::downgrade(target_arc));
                 } else {
                     log::warn!("Broken bridge… {} -> {} ({})", room.id(), target_id, dir);
@@ -246,7 +249,7 @@ impl World {
 /// Room pagination result type.
 pub struct RoomPaginateResult {
     /// ID/Arc
-    pub entries: Vec<(String, Arc<RwLock<Room>>)>,
+    pub entries: Vec<(MachineId, Arc<RwLock<Room>>)>,
     /// Total num of search matches.
     pub total_found: usize,
     /// Total pages (relative to `per_page` of the search).
@@ -270,15 +273,16 @@ impl World {
         let mut pages = if self.rooms.len() < NUM_ROOMS_FOR_PARALLEL_SHIFT {
             let mut res = Vec::new();
             for (id, r) in self.rooms.iter() {
-                let title = r.read().await.title().to_lowercase();
+                let lock = r.read().await;
+                let title = lock.title().to_lowercase();
                 log::debug!("{id} @ {title}");
-                if id.contains(&id_needle) || title.contains(&needle) {
-                    res.push((id.clone(), r.clone()));
+                if lock.id().contains(&id_needle) || title.contains(&needle) {
+                    res.push((*id, r.clone()));
                 }
             }
             res
         } else {
-            let room_clones: Vec<(String,Arc<RwLock<Room>>)> = self.rooms.iter().map(|(id,r)|(id.clone(),r.clone())).collect();
+            let room_clones: Vec<(MachineId,Arc<RwLock<Room>>)> = self.rooms.iter().map(|(id,r)|(id.clone(),r.clone())).collect();
             stream::iter(room_clones)
                 .map(|(id,r)| {
                     let id_needle = id_needle.clone();
@@ -286,8 +290,9 @@ impl World {
                     let id = id.clone();
                     let r = r.clone();
                     async move {
-                        let title = r.read().await.title().to_lowercase();
-                        let matches = id.contains(&id_needle) || title.contains(&needle);
+                        let lock = r.read().await;
+                        let title = lock.title().to_lowercase();
+                        let matches = lock.id().contains(&id_needle) || title.contains(&needle);
                         (id,r.clone(),matches)
                     }
                 })
@@ -304,11 +309,22 @@ impl World {
             entries, total_found, total_pages: (total_found + per_page - 1) / per_page // saturating_add would be safer, but anywhere close to usize::MAX rooms, really?
         }
     }
+
+    fn room_list(&self, term: Option<String>, out: tokio::sync::oneshot::Sender<Vec<MachineId>>) {
+        let list: Vec<MachineId> = self.rooms.keys().cloned().collect();
+        tokio::spawn(async move { (list, term, out) });
+    }
+}
+
+pub async fn room_list(world: Arc<RwLock<World>>, term: Option<String>) -> Vec<MachineId> {
+    let (out, recv) = tokio::sync::oneshot::channel::<Vec<MachineId>>();
+    world.read().await.room_list(term, out);
+    recv.await.unwrap_or_default()
 }
 
 #[cfg(test)]
 pub(crate) mod world_tests {
-    use crate::{cformat, identity::IdentityMut};
+    use crate::{cformat, identity::{IdentityMut, MachineIdentity}};
 
     pub(crate) async fn get_operational_mock_world() -> (
         std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
@@ -342,7 +358,7 @@ pub(crate) mod world_tests {
         let _ = crate::WORLD.get_or_init(|| "crash-test-dummy".to_string());
         use crate::identity::IdentityQuery;
         let mut plr = crate::player::Player::default();
-        *(plr.id_mut()) = "test-player-1".into();
+        plr.set_id("test-player-1", true).ok();
         let plr_id = plr.id().to_string();
         let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
         let mut world = crate::world::World::dummy().await;
@@ -350,7 +366,7 @@ pub(crate) mod world_tests {
         let sigs = crate::SignalChannels::default();
         world.channels = sigs.out.clone().into();
 
-        let Some(r) = world.rooms.get("r-1") else { panic!("r-1 missing?!")};
+        let Some(r) = world.rooms.get(&"r-1".as_m_id()) else { panic!("r-1 missing?!")};
         r.write().await.who.insert(plr_id.clone(), std::sync::Arc::downgrade(&plr));
         plr.write().await.location = std::sync::Arc::downgrade(&r);
         let (dtx,drx) = tokio::sync::oneshot::channel::<()>();

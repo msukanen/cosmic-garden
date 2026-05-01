@@ -1,20 +1,11 @@
-//! Persistent item blueprint library.
+//! Librarian! She's cute, but does some heavy lifting if needed.
 
 use std::{sync::Arc, time::Duration};
 
 use tokio::sync::RwLock;
 
 use crate::{
-    identity::IdentityQuery,
-    io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp},
-    item::{BlueprintLibrary, Item},
-    mob::{core::Entity, spawn_lib::EntityLibrary},
-    identity::uniq::TryAttachUuid,
-    thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}},
-    traits::Reflector,
-    help::{HelpLibrary, HelpPage},
-    util::access::Access,
-    world::World
+    help::{HelpLibrary, HelpPage}, identity::{IdentityQuery, MachineIdentity, uniq::{StrUuid, TryAttachUuid}}, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::access::Access, world::World
 };
 
 #[cfg(test)]
@@ -23,6 +14,12 @@ macro_rules! get_operational_mock_librarian {
     ($ch:ident, $w:ident) => {
         tokio::spawn( crate::thread::librarian(($ch.out.clone(), $ch.recv.librarian), $w.clone()))
     };
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum BlueprintType {
+    Item,
+    Mob,
 }
 
 struct Library {
@@ -37,8 +34,8 @@ struct Library {
 /// This thread keeps the world's documents nice and tidy.
 /// 
 pub async fn librarian(
-        (out, mut incoming): (SignalSenderChannels, SigReceiver),
-        world: Arc<RwLock<World>>,
+    (out, mut incoming): (SignalSenderChannels, SigReceiver),
+    world: Arc<RwLock<World>>,
 ) {
     // Bootstrap/load blueprints.
     log::info!("Library establishing… blueprints @ '{}'", blueprint_lib_fp().display());
@@ -129,7 +126,7 @@ pub async fn librarian(
                     if let Some(found) = lib.bp.get(&id) {
                         let item = found.reflect();
                         let r_id = room.id().await;
-                        if let Some(dest) = world.read().await.rooms.get(&r_id) {
+                        if let Some(dest) = world.read().await.rooms.get(&r_id.as_m_id()) {
                             let item_id = item.id().to_string();
                             let mut lock = dest.write().await;
                             if let Err(e) = lock.try_insert(item) {
@@ -165,6 +162,17 @@ pub async fn librarian(
                 SystemSignal::ItemBlueprintReq { id, out } => {
                     out.send(lib.bp.get(&id).maybe_with_uuid()).ok();
                 }
+
+                // BP list request…
+                SystemSignal::ListBlueprintReq { kind, term, out } => {
+                    let keys = match kind {
+                        BlueprintType::Item => lib.bp.keys(),
+                        BlueprintType::Mob => lib.entity.keys(),
+                    };
+
+                    tokio::spawn(async move { search_coworker(keys, term, out) });
+                }
+
                 _ => ()
             }
         }
@@ -266,4 +274,21 @@ pub async fn shelve_help_page(entry: &HelpPage, out: &SignalSenderChannels) -> b
         }
     }
     false
+}
+
+/// Blueprint search coworker.
+pub(crate) async fn search_coworker(list: Vec<String>, term: Option<String>, out: tokio::sync::oneshot::Sender<Vec<String>>) {
+    let mut results: Vec<String> = if let Some(t) = term {
+        let t = t.to_lowercase();
+        list.into_iter()
+            .filter(|id| {
+                id.show_uuid(false).contains(&t)
+            })
+            .collect()
+    } else {
+        list
+    };
+
+    results.sort_unstable();
+    out.send(results).ok();
 }

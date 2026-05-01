@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, identity::IdentityQuery, io::ClientState, mob::core::Entity, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::get_entity_blueprint, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, err_tell_user, identity::{IdentityQuery, MachineIdentity}, io::ClientState, mob::core::Entity, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::get_entity_blueprint, validate_access};
 
 include!(concat!(env!("OUT_DIR"), "/medit_registry.rs"));
 
@@ -19,12 +19,13 @@ impl Command for MeditCommand {
         show_help_if_needed!(ctx, "medit");
 
         let mut found: Option<Entity> = None;
+        let m_id = ctx.args.as_m_id();
         // try find with direct ID in room
-        if let Some(ent) = loc.read().await.entities.get(ctx.args) {
+        if let Some(ent) = loc.read().await.entities.get(&m_id) {
             found = ent.read().await.shallow_clone().into();
         }
         // …or world, if not in room…
-        else if let Some(ent) = ctx.world.read().await.entities.get(ctx.args) {
+        else if let Some(ent) = ctx.world.read().await.entities.get(&m_id) {
             if let Some(arc) = ent.upgrade() {
                 found = arc.read().await.shallow_clone().into();
             }

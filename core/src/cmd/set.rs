@@ -121,6 +121,6 @@ mod cmd_set_tests {
         stabilize_threads!(100);
         let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("A goblin is here"));
         let state = ctx!(state, SetCommand, "config id 5", s,c,w,p,|out:&str| out.contains("true"));
-        let _ = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("goblin-"));
+        let _ = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("(") && out.contains(")"));
     }
 }

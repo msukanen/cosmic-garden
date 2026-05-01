@@ -276,7 +276,7 @@ mod entity_tests {
         log::debug!("re-UUID is heavy (Uuid::new_v4()), and it'd never be used in a loop like this in reality, but… hold the press until {LOOPS} x 100 ticks is done.:");
         for _ in 0..LOOPS {
             let old_id = e.id().to_string();
-            *(e.id_mut()) = old_id.re_uuid();
+            _ = e.set_id(&old_id.re_uuid(), true);
             assert_ne!(old_id.as_str(), e.id());
             let mut next_val = 100.0;
             e.mp_mut().set_curr(next_val);
@@ -312,6 +312,6 @@ mod entity_tests {
         let state = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("goblin is here"));
         p.write().await.config.show_id = true;
         p.write().await.access = Access::Builder;
-        let _ = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("goblin-"));
+        let _ = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("(") && out.contains(")"));
     }
 }

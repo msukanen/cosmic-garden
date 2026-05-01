@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use either::Either;
 use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx, look::LookCommand}, identity::IdentityQuery, io::Broadcast, player::Player, player_or_bust, room::Room, tell_user, tell_user_unk, translocate, util::access::Accessor, world::World};
+use crate::{cmd::{Command, CommandCtx, look::LookCommand}, identity::{IdentityQuery, MachineIdentity}, io::Broadcast, player::Player, player_or_bust, room::Room, tell_user, tell_user_unk, translocate, util::access::Accessor, world::World};
 
 pub struct TeleportCommand;
 
@@ -41,7 +41,7 @@ impl Command for TeleportCommand {
                     return;
                 }
                 let w = ctx.world.read().await;
-                let target_arc = match w.rooms.get(args.1) {
+                let target_arc = match w.rooms.get(&args.1.as_m_id()) {
                     Some(target_arc) => target_arc.clone(),
                     _ => match w.players_by_id.get(args.1) {
                         Some(pl_arc) => {
@@ -148,7 +148,7 @@ impl Command for TeleportCommand {
 async fn try_resolve_to_something(id: &str, world: Arc<RwLock<World>>) -> Option<Either<Arc<RwLock<Room>>, Arc<RwLock<Player>>>> {
     let w = world.read().await;
 
-    if let Some(room) = w.rooms.get(id) {
+    if let Some(room) = w.rooms.get(&id.as_m_id()) {
         return Some(Either::Left(room.clone()));
     }
 

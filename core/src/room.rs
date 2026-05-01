@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::{IdentityQuery, uniq::UuidValidator}, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, traits::Tickable, util::direction::Direction, world::World};
 
 pub mod locking;
 
@@ -79,7 +79,7 @@ pub struct Room {
     /// NPC [entities][Entity] in the [Room].
     // [Room] is the sole owner of an [Entity].
     #[serde(default, with = "arc_n_t_transform")]
-    pub entities: HashMap<String, Arc<RwLock<Entity>>>,
+    pub entities: HashMap<usize, Arc<RwLock<Entity>>>,
 }
 
 fn empty_room_desc() -> String { "A room.".into() }
@@ -91,9 +91,9 @@ mod arc_n_t_transform {
     use serde::{Deserialize, Deserializer, Serializer, ser::SerializeMap};
     use tokio::sync::RwLock;
 
-    use crate::mob::core::Entity;
+    use crate::{identity::MachineId, mob::core::Entity};
 
-    pub fn serialize<S>(what: &HashMap<String, Arc<RwLock<Entity>>>, s:S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(what: &HashMap<MachineId, Arc<RwLock<Entity>>>, s:S) -> Result<S::Ok, S::Error>
     where S: Serializer
     {
         let mut map = s.serialize_map(Some(what.len()))?;
@@ -109,10 +109,10 @@ mod arc_n_t_transform {
         map.end()
     }
 
-    pub fn deserialize<'de, D>(d: D) -> Result< HashMap<String, Arc<RwLock<Entity>>>, D::Error>
+    pub fn deserialize<'de, D>(d: D) -> Result< HashMap<MachineId, Arc<RwLock<Entity>>>, D::Error>
     where D: Deserializer<'de>
     {
-        let raw: HashMap<String, Entity> = HashMap::deserialize(d)?;
+        let raw: HashMap<MachineId, Entity> = HashMap::deserialize(d)?;
         let mut arced = HashMap::with_capacity(raw.len());
         for (id, ent) in raw {
             arced.insert(id, Arc::new(RwLock::new(ent)));
@@ -163,13 +163,13 @@ impl Room {
         }
         // Find the target room, hopefully.
         let w = world.read().await;
-        let my_lock = if let Some(my_arc) = w.rooms.get(self.id()) {
+        let my_lock = if let Some(my_arc) = w.rooms.get(&self.id().as_m_id()) {
             Arc::downgrade(my_arc)
         } else {
             log::error!("Wait what? Where did '{}' lock go?!", self.id());
             return Err(CgError::from(RoomError::NoSuchRoom(self.id().to_string())))
         };
-        if let Some(target_arc) = w.rooms.get(target_id) {
+        if let Some(target_arc) = w.rooms.get(&target_id.as_m_id()) {
             self.exits.insert(dir.clone(), Arc::downgrade(target_arc));
             log::debug!("Real link established between '{}' and '{}'", self.id(), target_id);
             log::debug!("Attempting reverse…");
@@ -305,14 +305,14 @@ impl Room {
 
 #[cfg(test)]
 mod room_tests {
-    use crate::{util::direction::Direction, world::world_tests::get_operational_mock_world};
+    use crate::{identity::MachineIdentity, util::direction::Direction, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn room_linking() {
         let (w_arc,_,_,_) = get_operational_mock_world().await;
         w_arc.write().await.link_rooms().await;
         let rooms = w_arc.read().await.rooms.clone();
-        if let Some(r_arc) = rooms.get("r-1") {
+        if let Some(r_arc) = rooms.get(&"r-1".as_m_id()) {
             let mut r = r_arc.write().await;
             if let Err(e) = r.link_exit(w_arc.clone(), Direction::North, "r-2".into()).await {
                 panic!("Bummer… {e:?}");
@@ -322,7 +322,7 @@ mod room_tests {
             log::debug!("Room {r:?}")
         }
         // this should fail symmetry check:
-        if let Some(r_arc) = rooms.get("r-1") {
+        if let Some(r_arc) = rooms.get(&"r-1".as_m_id()) {
             let mut r = r_arc.write().await;
             if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "r-2".into()).await {
                 panic!("Bummer… {e:?}");
@@ -332,7 +332,7 @@ mod room_tests {
             log::debug!("Room {r:?}")
         }
         // this should create a "mirage" and override an old entry:
-        if let Some(r_arc) = rooms.get("r-1") {
+        if let Some(r_arc) = rooms.get(&"r-1".as_m_id()) {
             let mut r = r_arc.write().await;
             if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "r-3".into()).await {
                 log::error!("Bummer… {e:?}");
