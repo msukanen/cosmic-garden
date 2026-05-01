@@ -15,6 +15,7 @@ pub enum LockingError {
     AlreadyOpen,
     AlreadyClosed,  
     AlreadyLocked,  Locked, NotLocked,
+    RoomNotFound,
 }
 
 /// [Room] exit variants.
@@ -34,6 +35,7 @@ pub enum Exit {
 }
 
 impl Exit {
+    /// Get the destination `Weak` [Room].
     pub fn as_weak(&self) -> Weak<RwLock<Room>> {
         match self {
             Self::Free { room }        |
@@ -45,6 +47,7 @@ impl Exit {
         }
     }
 
+    /// Try upgrade destination `Weak` [Room] to `Arc`.
     pub fn as_arc(&self) -> Option<Arc<RwLock<Room>>> {
         match self {
             Self::Free { room }        |
@@ -56,6 +59,19 @@ impl Exit {
         }
     }
 
+    /// Connect the [Exit] to the given [Room].
+    pub fn reroute(&mut self, dest: Arc<RwLock<Room>>) {
+        match self {
+            Self::Free { room }        |
+            Self::Closed { room,.. }   |
+            Self::Locked { room,.. }   |
+            Self::LockedAL { room,.. } |
+            Self::Open { room,.. }     |
+            Self::OpenAL { room,.. }   => *room = Arc::downgrade(&dest)
+        }
+    }
+
+    /// Try lock the [Exit].
     pub fn try_lock(&mut self, key: &Item) -> Result<(), LockingError> {
         match &self {
             Self::Free { .. }               |
@@ -85,6 +101,10 @@ impl Exit {
         }
     }
 
+    /// Try open the [Exit].
+    /// 
+    /// Opening a [free exit][Exit::Free] exit isn't a hard error,
+    /// but will be notified as optional payload for `Ok()`.
     pub fn try_open(&mut self, key: Option<&Item>, unlock_only: bool) -> Result<Option<LockingError>, LockingError> {
         match self {
             Self::Free { .. }   => Ok(Some(LockingError::Free)),
@@ -119,6 +139,7 @@ impl Exit {
         }
     }
 
+    /// Try close the [Exit].
     pub fn try_close(&mut self) -> Result<(), LockingError> {
         match self {
             Self::Free { .. } => Err(LockingError::Free),
@@ -137,6 +158,7 @@ impl Exit {
         }
     }
 
+    /// Attempt to change the [Exit]'s key.
     pub fn rekey(&mut self, key_id: String) -> Result<(), LockingError> {
         match self {
             Self::Free { .. } => Err(LockingError::NoLock),
@@ -154,6 +176,10 @@ impl Exit {
         }
     }
 
+    /// Remove locking entirely.
+    /// 
+    /// It's not a hard error to try remove lock from [free exit][Exit::Free] exit,
+    /// but it'll be notified about as an optional [LockingError].
     pub fn remove_lock(&mut self) -> Option<LockingError> {
         match self {
             Self::Free { .. } => Some(LockingError::Free),
