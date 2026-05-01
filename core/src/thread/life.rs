@@ -1,9 +1,9 @@
 //! Life-thread keeps the world ticking.
 
-use std::{collections::HashMap, sync::{Arc, Weak}, time::Duration};
+use std::{collections::HashMap, sync::{Arc, Weak}};
 
 use nohash_hasher::BuildNoHashHasher;
-use tokio::{sync::{RwLock, mpsc, oneshot}, time};
+use tokio::{sync::{RwLock, mpsc, oneshot}, time::{Duration, Instant, MissedTickBehavior, interval}};
 
 use crate::{
     combat::{Battler, CombatantMut},
@@ -173,9 +173,10 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
     let mut tick_interval_hz: u64 = 100;
     let mut battle_interval_hz: u64 = 50;
 
-    let mut tick_interval = time::interval(Duration::from_millis(1000/ tick_interval_hz));
-    let mut battle_interval = time::interval(Duration::from_millis(1000 / battle_interval_hz));
-    let mut tick = 0;
+    let mut tick_interval = interval(Duration::from_millis(1000/ tick_interval_hz));
+            tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    let mut battle_interval = interval(Duration::from_millis(1000 / battle_interval_hz));
+            battle_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut bs = BattleStage::default();
     let (worker_out, mut worker_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
     let (reporter_out, mut reporter_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
@@ -266,19 +267,28 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
     #[cfg(all(test, feature = "stresstest"))]
     let mut spawn_out: Option<tokio::sync::oneshot::Sender<()>> = None;
 
+    let mut tick = 0;
+    let start_time = Instant::now();
     loop {
         tokio::select! {
             //
             // The "World Clock".
             //
-            _ = tick_interval.tick() => {
+            ci = tick_interval.tick() => {
+                let tick_start = Instant::now();
                 {
                     let mut w = world.write().await;
                     w.tick().await;
                 }
                 tick += 1;
+                let elapsed = tick_start.elapsed();
+                let drift = Instant::now().duration_since(ci);
+                if elapsed > Duration::from_millis(10) {
+                    log::warn!("Slow tick: {tick} took {elapsed:?}?!");
+                }
                 if tick % 1000 == 0 {
-                    log::debug!("{tick} ticks…");
+                    let total_elapsed = start_time.elapsed().as_secs_f64();
+                    log::debug!("{tick} ticks… {total_elapsed:.2}s | drift {drift:?} | expected {}s", tick / 100);
                 }
             }
 
@@ -455,13 +465,13 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                         TickType::Core => {
                             tick_interval_hz = (1.0 / duration.as_secs_f32()) as u64;
                             tick_interval = tokio::time::interval(duration);
-                            tick_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+                            tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
                         }
 
                         TickType::Battle => {
                             battle_interval_hz = (1.0 / duration.as_secs_f32()) as u64;
                             battle_interval = tokio::time::interval(duration);
-                            battle_interval.set_missed_tick_behavior(time::MissedTickBehavior::Delay);
+                            battle_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
                         }
                     }
                 }
