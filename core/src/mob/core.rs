@@ -310,9 +310,9 @@ mod entity_tests {
         }
         let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None });
         stabilize_threads!(100);
-        let state = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("goblin is here"));
+        let state = ctx!(state, LookCommand, "",s,c.out,w,|out:&str| out.contains("goblin is here"));
         p.write().await.config.show_id = true;
         p.write().await.access = Access::Builder;
-        let _ = ctx!(state, LookCommand, "",s,c.out,w,p,|out:&str| out.contains("(") && out.contains(")"));
+        let _ = ctx!(state, LookCommand, "",s,c.out,w,|out:&str| out.contains("(") && out.contains(")"));
     }
 }

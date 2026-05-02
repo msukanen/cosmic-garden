@@ -337,39 +337,39 @@ mod cmd_iedit_set_tests {
         let (w,c,(state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_librarian!(c,w);
         stabilize_threads!();
-        let state = ctx!(state, IeditCommand, "apple", s, c.out, w, p, |out:&str| out.contains("Huh?"));
+        let state = ctx!(state, IeditCommand, "apple", s, c.out, w, |out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, IeditCommand, "apple", s, c.out, w, p);
-        let state = ctx!(state, IexCommand, "", s, c.out, w, p);
-        let state = ctx!(state, SetCommand, "pot cons", s, c.out, w, p);
-        let state = ctx!(state, SetCommand, "nut inedible", s, c.out, w, p);
-        let state = ctx!(state, SetCommand, "nut heal hp 10.0", s, c.out, w, p);
-        let state = ctx!(state, DescCommand, "=It's not soup anymore. It's ...", s, c.out, w, p);
-        let state = ctx!(state, DescCommand, "+3 ...", s, c.out, w, p);
-        let state = ctx!(state, DescCommand, "+5 ... an apple!", s, c.out, w, p);
-        let state = ctx!(state, IexCommand, "", s, c.out, w, p);
-        let _ = ctx!(state, DescCommand, "", s, c.out, w, p);
+        let state = ctx!(state, IeditCommand, "apple", s, c.out, w);
+        let state = ctx!(state, IexCommand, "", s, c.out, w);
+        let state = ctx!(state, SetCommand, "pot cons", s, c.out, w);
+        let state = ctx!(state, SetCommand, "nut inedible", s, c.out, w);
+        let state = ctx!(state, SetCommand, "nut heal hp 10.0", s, c.out, w);
+        let state = ctx!(state, DescCommand, "=It's not soup anymore. It's ...", s, c.out, w);
+        let state = ctx!(state, DescCommand, "+3 ...", s, c.out, w);
+        let state = ctx!(state, DescCommand, "+5 ... an apple!", s, c.out, w);
+        let state = ctx!(state, IexCommand, "", s, c.out, w);
+        let _ = ctx!(state, DescCommand, "", s, c.out, w);
     }
 
     #[tokio::test]
     async fn iedit_crank_something_on_primordial() {
         let mut buffer: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut buffer);
-        let (w,c,(state, plr),_) = get_operational_mock_world().await;
+        let (w,c,(state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_librarian!(c,w);
         stabilize_threads!();
-        let state = ctx!(state, IeditCommand, "apple", s, c.out, w, plr,|out:&str| out.contains("Huh?"));
-        plr.write().await.access = Access::Builder;
-        let state = ctx!(state, IeditCommand, "apple", s, c.out, w, plr);
-        let state = ctx!(state, IexCommand, "", s, c.out, w, plr);
-        let state = ctx!(state, SetCommand, "pot cons", s, c.out, w, plr);
-        let state = ctx!(state, SetCommand, "nut inedible", s, c.out, w, plr);
-        let state = ctx!(state, SetCommand, "nut heal hp 10.0", s, c.out, w, plr);
-        let state = ctx!(state, DescCommand, "=It's not soup anymore. It's ...", s, c.out, w, plr);
-        let state = ctx!(state, DescCommand, "+3 ...", s, c.out, w, plr);
-        let state = ctx!(state, DescCommand, "+5 ... an apple!", s, c.out, w, plr);
-        let state = ctx!(state, IexCommand, "", s, c.out, w, plr);
-        let _ = ctx!(state, DescCommand, "", s, c.out, w, plr);
+        let state = ctx!(state, IeditCommand, "apple", s, c.out, w,|out:&str| out.contains("Huh?"));
+        p.write().await.access = Access::Builder;
+        let state = ctx!(state, IeditCommand, "apple", s, c.out, w);
+        let state = ctx!(state, IexCommand, "", s, c.out, w);
+        let state = ctx!(state, SetCommand, "pot cons", s, c.out, w);
+        let state = ctx!(state, SetCommand, "nut inedible", s, c.out, w);
+        let state = ctx!(state, SetCommand, "nut heal hp 10.0", s, c.out, w);
+        let state = ctx!(state, DescCommand, "=It's not soup anymore. It's ...", s, c.out, w);
+        let state = ctx!(state, DescCommand, "+3 ...", s, c.out, w);
+        let state = ctx!(state, DescCommand, "+5 ... an apple!", s, c.out, w);
+        let state = ctx!(state, IexCommand, "", s, c.out, w);
+        let _ = ctx!(state, DescCommand, "", s, c.out, w);
     }
 
     #[tokio::test]
@@ -379,31 +379,31 @@ mod cmd_iedit_set_tests {
         let (w,c,(state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_librarian!(c,w);
         stabilize_threads!();
-        let state = ctx!(state, IeditCommand, "apple", s,c.out,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, IeditCommand, "apple", s,c.out,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, IeditCommand, "apple", s,c.out,w,p,|out:&str| out.contains("new"));
-        let state = ctx!(state, IexCommand, "", s, c.out, w, p);
-        let state = ctx!(state, SetCommand, "nut heal", s,c.out,w,p,|out:&str| out.contains("value is"));   // fail state
-        let state = ctx!(state, SetCommand, "nut heal 5", s,c.out,w,p,|out:&str| out.contains("Usage"));           // fail state
-        let state = ctx!(state, IexCommand, "", s, c.out, w, p,|out:&str| out.contains("Heal(HP"));               // ok
-        let state = ctx!(state, SetCommand, "nut heal 1.0",s,c.out,w,p,|out:&str| out.contains("Usage:"));        // fail state
-        let state = ctx!(state, SetCommand, "nut heal hp", s,c.out,w,p,|out:&str| out.contains("has to be"));     // fail state
-        let state = ctx!(state, SetCommand, "nut heal hp 0", s,c.out,w,p,|out:&str| out.contains("edibl"));       // back in inedbile
-        let state = ctx!(state, IexCommand, "", s, c.out, w, p,|out:&str| out.contains("type: <n/a>"));
-        let state = ctx!(state, SetCommand, "nut heal hp 1", s,c.out,w,p,|out:&str| out.contains(": Heal"));       // ok
-        let state = ctx!(state, SetCommand, "nut heal sn -0.5", s,c.out,w,p,|out:&str| out.contains(": Multi"));
-        let state = ctx!(state, IexCommand, "",s, c.out, w, p,|out:&str| out.contains("SN -0.50") && out.contains("HP +"));
-        let state = ctx!(state, SetCommand, "nut heal rm",s,c.out,w,p,|out:&str| out.contains("HP, MP"));         // fail state
-        let state = ctx!(state, SetCommand, "nut heal rm hp",s,c.out,w,p,|out:&str| out.contains("Heal(SN -0.50)"));  // ok - fall back to Heal{..}
-        let state = ctx!(state, SetCommand, "nut heal sn 0.25", s,c.out,w,p,|out:&str| out.contains("Heal(SN +0.25)"));  // ok
-        let state = ctx!(state, SetCommand, "nut heal hp 1",s,c.out,w,p,|out:&str| out.contains("SN +0.25") && out.contains("HP +1.0"));//ok
-        let state = ctx!(state, WeaveCommand, "",s, c.out, w, p,|out:&str| out.contains("created something"));
-        let state = ctx!(state, IeditCommand, "apple", s,c.out,w,p,|out:&str| out.contains("what it's"));
-        let state = ctx!(state, IexCommand, "",s, c.out, w, p,|out:&str| out.contains("PrimordialItem"));         // aw poo, "forgot" to set cons
-        let state = ctx!(state, SetCommand, "pot cons",s,c.out,w,p);
-        let state = ctx!(state, WeaveCommand, "",s, c.out, w, p,|out:&str| out.contains("created something"));
-        let state = ctx!(state, IeditCommand, "apple", s,c.out,w,p,|out:&str| out.contains("what it's"));
-        let _ = ctx!(state, IexCommand, "",s, c.out, w, p,|out:&str| out.contains("Consumable"));             // yay, an edible apple, sort of.
+        let state = ctx!(state, IeditCommand, "apple", s,c.out,w,|out:&str| out.contains("new"));
+        let state = ctx!(state, IexCommand, "", s, c.out, w);
+        let state = ctx!(state, SetCommand, "nut heal", s,c.out,w,|out:&str| out.contains("value is"));   // fail state
+        let state = ctx!(state, SetCommand, "nut heal 5", s,c.out,w,|out:&str| out.contains("Usage"));           // fail state
+        let state = ctx!(state, IexCommand, "", s, c.out, w,|out:&str| out.contains("Heal(HP"));               // ok
+        let state = ctx!(state, SetCommand, "nut heal 1.0",s,c.out,w,|out:&str| out.contains("Usage:"));        // fail state
+        let state = ctx!(state, SetCommand, "nut heal hp", s,c.out,w,|out:&str| out.contains("has to be"));     // fail state
+        let state = ctx!(state, SetCommand, "nut heal hp 0", s,c.out,w,|out:&str| out.contains("edibl"));       // back in inedbile
+        let state = ctx!(state, IexCommand, "", s, c.out, w,|out:&str| out.contains("type: <n/a>"));
+        let state = ctx!(state, SetCommand, "nut heal hp 1", s,c.out,w,|out:&str| out.contains(": Heal"));       // ok
+        let state = ctx!(state, SetCommand, "nut heal sn -0.5", s,c.out,w,|out:&str| out.contains(": Multi"));
+        let state = ctx!(state, IexCommand, "",s, c.out, w,|out:&str| out.contains("SN -0.50") && out.contains("HP +"));
+        let state = ctx!(state, SetCommand, "nut heal rm",s,c.out,w,|out:&str| out.contains("HP, MP"));         // fail state
+        let state = ctx!(state, SetCommand, "nut heal rm hp",s,c.out,w,|out:&str| out.contains("Heal(SN -0.50)"));  // ok - fall back to Heal{..}
+        let state = ctx!(state, SetCommand, "nut heal sn 0.25", s,c.out,w,|out:&str| out.contains("Heal(SN +0.25)"));  // ok
+        let state = ctx!(state, SetCommand, "nut heal hp 1",s,c.out,w,|out:&str| out.contains("SN +0.25") && out.contains("HP +1.0"));//ok
+        let state = ctx!(state, WeaveCommand, "",s, c.out, w,|out:&str| out.contains("created something"));
+        let state = ctx!(state, IeditCommand, "apple", s,c.out,w,|out:&str| out.contains("what it's"));
+        let state = ctx!(state, IexCommand, "",s, c.out, w,|out:&str| out.contains("PrimordialItem"));         // aw poo, "forgot" to set cons
+        let state = ctx!(state, SetCommand, "pot cons",s,c.out,w);
+        let state = ctx!(state, WeaveCommand, "",s, c.out, w,|out:&str| out.contains("created something"));
+        let state = ctx!(state, IeditCommand, "apple", s,c.out,w,|out:&str| out.contains("what it's"));
+        let _ = ctx!(state, IexCommand, "",s, c.out, w,|out:&str| out.contains("Consumable"));             // yay, an edible apple, sort of.
     }
 
     #[tokio::test]
@@ -416,24 +416,24 @@ mod cmd_iedit_set_tests {
         let ht = get_operational_mock_librarian!(c,w);
         stabilize_threads!();
         let b = c.out.clone();
-        let state = ctx!(state, IeditCommand, "knife", s,b,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, IeditCommand, "knife", s,b,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, IeditCommand, "knife", s,b,w,p);
-        let state = ctx!(state, IexCommand, "", s,b,w,p);
-        let state = ctx!(state, SetCommand, "pot cons", s,b,w,p);
-        let state = ctx!(state, SetCommand, "dmg 2.0", s,b,w,p,|out:&str| out.contains("set pot wpn"));
-        let state = ctx!(state, SetCommand, "pot wpn", s,b,w,p);
-        let state = ctx!(state, SetCommand, "dmg 2.0", s,b,w,p,|out:&str| out.contains("Base damage"));
-        let state = ctx!(state, DescCommand, "=It's a knife. A <c red>big</c> knife…", s,b,w,p);
-        let state = ctx!(state, TitleCommand, "A <c red>BIG</c> knife!", s,b,w,p);
-        let state = ctx!(state, DescCommand, "v+3 …or not so big…", s,b,w,p);
-        let state = ctx!(state, SetCommand, "wpn a", s,b,w,p,|out:&str| out.contains("No such"));
-        let state = ctx!(state, SetCommand, "size wpn a", s,b,w,p,|out:&str| out.contains("Usage"));
-        let state = ctx!(state, SetCommand, "size wpn s", s,b,w,p,|out:&str| out.contains("small"));
-        let state = ctx!(state, IexCommand, "", s,b,w,p);
-        let state = ctx!(state, WeaveCommand, "persist", s,b,w,p);
+        let state = ctx!(state, IeditCommand, "knife", s,b,w);
+        let state = ctx!(state, IexCommand, "", s,b,w);
+        let state = ctx!(state, SetCommand, "pot cons", s,b,w);
+        let state = ctx!(state, SetCommand, "dmg 2.0", s,b,w,|out:&str| out.contains("set pot wpn"));
+        let state = ctx!(state, SetCommand, "pot wpn", s,b,w);
+        let state = ctx!(state, SetCommand, "dmg 2.0", s,b,w,|out:&str| out.contains("Base damage"));
+        let state = ctx!(state, DescCommand, "=It's a knife. A <c red>big</c> knife…", s,b,w);
+        let state = ctx!(state, TitleCommand, "A <c red>BIG</c> knife!", s,b,w);
+        let state = ctx!(state, DescCommand, "v+3 …or not so big…", s,b,w);
+        let state = ctx!(state, SetCommand, "wpn a", s,b,w,|out:&str| out.contains("No such"));
+        let state = ctx!(state, SetCommand, "size wpn a", s,b,w,|out:&str| out.contains("Usage"));
+        let state = ctx!(state, SetCommand, "size wpn s", s,b,w,|out:&str| out.contains("small"));
+        let state = ctx!(state, IexCommand, "", s,b,w);
+        let state = ctx!(state, WeaveCommand, "persist", s,b,w);
         p.write().await.access = Access::Admin;
-        let _ = ctx!(state, ShutdownCommand, "", s,b,w,p);
+        let _ = ctx!(state, ShutdownCommand, "", s,b,w);
         let _ = d.1.await;
         lt.await.ok();
         ht.await.ok();

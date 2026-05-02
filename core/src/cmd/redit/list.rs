@@ -43,11 +43,11 @@ mod cmd_redit_list {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
-        let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, ReditCommand, "this", s, c.out, w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, ReditCommand, "this", s, c.out, w, p);
-        let state = ctx!(state, LookCommand, "", s,c.out,w,p, |out:&str| out.contains("***"));
-        let _ = ctx!(state, ListCommand, "", s,c.out,w,p, |out:&str| out.contains("r-1") && out.contains("r-2"));
+        let state = ctx!(state, ReditCommand, "this", s, c.out, w);
+        let state = ctx!(state, LookCommand, "", s,c.out,w, |out:&str| out.contains("***"));
+        let _ = ctx!(state, ListCommand, "", s,c.out,w, |out:&str| out.contains("r-1") && out.contains("r-2"));
     }
 
     #[tokio::test]
@@ -55,10 +55,10 @@ mod cmd_redit_list {
         let mut b: Vec<u8> = Vec::new();
         let mut s = std::io::Cursor::new(&mut b);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
-        let state = ctx!(state, ReditCommand, "this", s, c.out, w, p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, ReditCommand, "this", s, c.out, w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, ReditCommand, "this", s, c.out, w, p);
-        let state = ctx!(state, ListCommand, "", s,c.out,w,p, |out:&str| out.contains("Waterfall") && out.contains("Incineration"));
+        let state = ctx!(state, ReditCommand, "this", s, c.out, w);
+        let state = ctx!(state, ListCommand, "", s,c.out,w, |out:&str| out.contains("Waterfall") && out.contains("Incineration"));
         let mut lock = w.write().await;
         for i in 3..=1_000 {
             let id = format!("{}-{i}", ('a'..='z').random_of());
@@ -69,7 +69,7 @@ mod cmd_redit_list {
             lock.insert_room(r).await.ok();
         }
         drop(lock);
-        let _ = ctx!(state, ListCommand, "r-1 0", s,c.out,w,p, |out:&str| out.contains("Inciner"));
+        let _ = ctx!(state, ListCommand, "r-1 0", s,c.out,w, |out:&str| out.contains("Inciner"));
     }
 
 }

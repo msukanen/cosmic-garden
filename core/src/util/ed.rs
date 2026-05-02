@@ -311,12 +311,12 @@ mod ed_tests {
         } else { panic!("r-1 poofed?") };
         r1.write().await.set_desc(&l21);
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, LookCommand, "", s,c,w,p,|out:&str| out.contains("01234"));
-        let state = ctx!(state, ReditCommand, "here", s,c,w,p);
-        let state = ctx!(state, DescCommand, "Maybe...",s,c,w,p,|out:&str| out.contains("ERR"));
-        let state = ctx!(state, DescCommand, "v+21 Maybe...",s,c,w,p,|out:&str| out.contains("too many lines"));
-        let state = ctx!(state, DescCommand, "vr21 Maybe...",s,c,w,p,|out:&str| out.contains("Maybe..."));
-        let state = ctx!(state, DescCommand, &format!("vr22 {}", l79),s,c,w,p,|out:&str| out.contains("Maximum help"));
-        let _ = ctx!(state, DescCommand, &format!("vr21 {}", l79),s,c,w,p,|out:&str| !out.contains("Maybe"));
+        let state = ctx!(state, LookCommand, "", s,c,w,|out:&str| out.contains("01234"));
+        let state = ctx!(state, ReditCommand, "here", s,c,w);
+        let state = ctx!(state, DescCommand, "Maybe...",s,c,w,|out:&str| out.contains("ERR"));
+        let state = ctx!(state, DescCommand, "v+21 Maybe...",s,c,w,|out:&str| out.contains("too many lines"));
+        let state = ctx!(state, DescCommand, "vr21 Maybe...",s,c,w,|out:&str| out.contains("Maybe..."));
+        let state = ctx!(state, DescCommand, &format!("vr22 {}", l79),s,c,w,|out:&str| out.contains("Maximum help"));
+        let _ = ctx!(state, DescCommand, &format!("vr21 {}", l79),s,c,w,|out:&str| !out.contains("Maybe"));
     }
 }

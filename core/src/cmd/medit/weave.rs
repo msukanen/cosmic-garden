@@ -102,23 +102,23 @@ mod medit_tests {
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
         stabilize_threads!(250);
-        let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
-        let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup true, state, MeditCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
         assert!(p.read().await.medit_buffer.is_none());
         p.write().await.access = Access::Builder;
-        let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,p,|out:&str| out.contains("MEdit first"));
-        let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Invokes"));
-        let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,p);
+        let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,|out:&str| out.contains("MEdit first"));
+        let state = ctx!(sup true, state, MeditCommand, "", s,c,w,|out:&str| out.contains("Invokes"));
+        let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w);
         assert!(matches!(state, ClientState::Editing { mode: EditorMode::Medit { .. },.. }));
-        let state = ctx!(sup true, state, RenameCommand, "Hoblin! the mighty, and stuff!", s,c,w,p);
-        let state = ctx!(sup true, state, RenameCommand, "id hoblin" ,s,c,w,p,|out:&str| out.contains("Re-ID"));
+        let state = ctx!(sup true, state, RenameCommand, "Hoblin! the mighty, and stuff!", s,c,w);
+        let state = ctx!(sup true, state, RenameCommand, "id hoblin" ,s,c,w,|out:&str| out.contains("Re-ID"));
         p.write().await.access = Access::Admin;
-        let state = ctx!(sup true, state, RenameCommand, "id hoblin" ,s,c,w,p,|out:&str| out.contains("re-ID'd"));
-        let state = ctx!(sup true, state, WeaveCommand, "",s,c,w,p,|out:&str| out.contains("a no-op"));
+        let state = ctx!(sup true, state, RenameCommand, "id hoblin" ,s,c,w,|out:&str| out.contains("re-ID'd"));
+        let state = ctx!(sup true, state, WeaveCommand, "",s,c,w,|out:&str| out.contains("a no-op"));
         p.write().await.config.show_id = true;
-        let state = ctx!(sup true, state, WeaveCommand, "persist spawn",s,c,w,p,|out:&str| out.contains("Hoblin!"));
+        let state = ctx!(sup true, state, WeaveCommand, "persist spawn",s,c,w,|out:&str| out.contains("Hoblin!"));
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "hoblin".to_string() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(25);
-        let _ = ctx!(state, LookCommand,"",s,c,w,p);
+        let _ = ctx!(state, LookCommand,"",s,c,w);
     }
 }

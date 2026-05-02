@@ -731,7 +731,7 @@ mod life_tests {
                     title: Arc::from(lock.title().to_string()),
                 };
                 drop(lock);
-                state = ctx!(state, LookCommand, "", s,c,w,p);
+                state = ctx!(state, LookCommand, "", s,c,w);
                 log::debug!("Lootage…?");
                 erec.loot_pinata(&w).await;
                 log::debug!("Got loots…!");
@@ -744,7 +744,7 @@ mod life_tests {
         stabilize_threads!(100);
         p.write().await.access = Access::Builder;
         p.write().await.config.show_id = true;
-        let _ = ctx!(state, LookCommand, "", s,c,w,p);
+        let _ = ctx!(state, LookCommand, "", s,c,w);
         log::debug!("--terminated--");
     }
 }

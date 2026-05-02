@@ -28,11 +28,11 @@ mod medit_desc_tests {
         let sup = false;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         tokio::time::sleep(Duration::from_millis(75)).await;
-        let state = ctx!(sup sup, state, MeditCommand, "goblin", s,c,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup sup, state, MeditCommand, "goblin", s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(sup sup, state, MeditCommand, "goblin", s,c,w,p,|out:&str| out.contains("nvoked"));
-        let state = ctx!(sup sup, state, RenameCommand, "Morg-Gluglug",s,c,w,p,|out:&str| out.contains("renamed"));
-        let state = ctx!(state, DescCommand, "v=The little googolplex goblin!",s,c,w,p);
-        let _ = ctx!(state, IexCommand, "",s,c,w,p);
+        let state = ctx!(sup sup, state, MeditCommand, "goblin", s,c,w,|out:&str| out.contains("nvoked"));
+        let state = ctx!(sup sup, state, RenameCommand, "Morg-Gluglug",s,c,w,|out:&str| out.contains("renamed"));
+        let state = ctx!(state, DescCommand, "v=The little googolplex goblin!",s,c,w);
+        let _ = ctx!(state, IexCommand, "",s,c,w);
     }
 }

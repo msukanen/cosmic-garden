@@ -114,12 +114,12 @@ mod cmd_spawn_tests {
         let _ = get_operational_mock_librarian!(c,w);
         stabilize_threads!();
         let c = c.out;
-        state = ctx!(state, SpawnCommand, "knife",s,c,w,p,|out:&str| out.contains("Huh?"));
+        state = ctx!(state, SpawnCommand, "knife",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        state = ctx!(state, SpawnCommand, "knif",s,c,w,p,|out:&str| out.contains("materialize"));
-        state = ctx!(state, SpawnCommand, "f knif",s,c,w,p,|out:&str| out.contains("selector"));
-        state = ctx!(state, SpawnCommand, "idemy knif",s,c,w,p,|out:&str| out.contains("no item blueprint"));
-        _ = ctx!(state, SpawnCommand, "it knife",s,c,w,p,|out:&str| out.contains("carrying"));
+        state = ctx!(state, SpawnCommand, "knif",s,c,w,|out:&str| out.contains("materialize"));
+        state = ctx!(state, SpawnCommand, "f knif",s,c,w,|out:&str| out.contains("selector"));
+        state = ctx!(state, SpawnCommand, "idemy knif",s,c,w,|out:&str| out.contains("no item blueprint"));
+        _ = ctx!(state, SpawnCommand, "it knife",s,c,w,|out:&str| out.contains("carrying"));
     }
 
     #[tokio::test]
@@ -132,12 +132,12 @@ mod cmd_spawn_tests {
         let _ = get_operational_mock_life!(c,w);
         stabilize_threads!();
         let c = c.out;
-        state = ctx!(state, SpawnCommand, "gobl",s,c,w,p,|out:&str| out.contains("Huh?"));
+        state = ctx!(state, SpawnCommand, "gobl",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        state = ctx!(state, SpawnCommand, "gobl",s,c,w,p);//,|out:&str| out.contains("Entity or Item"));
-        state = ctx!(state, SpawnCommand, "f gobl",s,c,w,p,|out:&str| out.contains("selector"));
-        state = ctx!(state, SpawnCommand, "ent gobl",s,c,w,p,|out:&str| out.contains("try some other"));
-        state = ctx!(state, LookCommand, "",s,c,w,p);
-        _ = ctx!(state, SpawnCommand, "ent goblin",s,c,w,p,|out:&str| out.contains("manifested"));
+        state = ctx!(state, SpawnCommand, "gobl",s,c,w);//,|out:&str| out.contains("Entity or Item"));
+        state = ctx!(state, SpawnCommand, "f gobl",s,c,w,|out:&str| out.contains("selector"));
+        state = ctx!(state, SpawnCommand, "ent gobl",s,c,w,|out:&str| out.contains("try some other"));
+        state = ctx!(state, LookCommand, "",s,c,w);
+        _ = ctx!(state, SpawnCommand, "ent goblin",s,c,w,|out:&str| out.contains("manifested"));
     }
 }

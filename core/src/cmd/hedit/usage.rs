@@ -61,17 +61,17 @@ mod hedit_usage_tests {
         let (w,c,(state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_librarian!(c,w);
         stabilize_threads!();
-        let state = ctx!(state, HeditCommand, "dummy",s,c.out,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, HeditCommand, "dummy",s,c.out,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, HeditCommand, "dummy",s,c.out,w,p,|out:&str| out.contains("no such topic"));
-        let state = ctx!(state, HeditCommand, "new dummy",s,c.out,w,p,|out:&str| out.contains("DUMMY"));
-        let state = ctx!(state, UsageCommand, "",s,c.out,w,p,|out:&str| out.contains("Usage:"));
-        let state = ctx!(state, UsageCommand, "dummy <stuff>",s,c.out,w,p,|out:&str| out.contains("updated"));
-        let state = ctx!(state, UsageCommand, "dummy bar <foo> <baz>",s,c.out,w,p,|out:&str| out.contains("updated"));
-        let state = ctx!(state, UsageCommand, "",s,c.out,w,p,|out:&str| out.contains("Usage:") && out.contains("<stuff>") && out.contains("<baz>"));
-        let state = ctx!(state, UsageCommand, "-1",s,c.out,w,p,|out:&str| !out.contains("<stuff>"));
-        let state = ctx!(state, UsageCommand, "+7 dummy baz <bar>",s,c.out,w,p);
-        let state = ctx!(state, UsageCommand, "",s,c.out,w,p,|out:&str| out.contains("Usage:") && out.contains("<foo>") && out.contains("<bar>"));
-        let _ = ctx!(state, HelpCommand, "",s,c.out,w,p);
+        let state = ctx!(state, HeditCommand, "dummy",s,c.out,w,|out:&str| out.contains("no such topic"));
+        let state = ctx!(state, HeditCommand, "new dummy",s,c.out,w,|out:&str| out.contains("DUMMY"));
+        let state = ctx!(state, UsageCommand, "",s,c.out,w,|out:&str| out.contains("Usage:"));
+        let state = ctx!(state, UsageCommand, "dummy <stuff>",s,c.out,w,|out:&str| out.contains("updated"));
+        let state = ctx!(state, UsageCommand, "dummy bar <foo> <baz>",s,c.out,w,|out:&str| out.contains("updated"));
+        let state = ctx!(state, UsageCommand, "",s,c.out,w,|out:&str| out.contains("Usage:") && out.contains("<stuff>") && out.contains("<baz>"));
+        let state = ctx!(state, UsageCommand, "-1",s,c.out,w,|out:&str| !out.contains("<stuff>"));
+        let state = ctx!(state, UsageCommand, "+7 dummy baz <bar>",s,c.out,w);
+        let state = ctx!(state, UsageCommand, "",s,c.out,w,|out:&str| out.contains("Usage:") && out.contains("<foo>") && out.contains("<bar>"));
+        let _ = ctx!(state, HelpCommand, "",s,c.out,w);
     }
 }

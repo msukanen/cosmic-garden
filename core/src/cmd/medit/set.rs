@@ -122,34 +122,34 @@ mod medit_set_tests {
         let c = c.out;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(25);
-        let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,p,|out:&str| out.contains("nvoked"));
-        let state = ctx!(sup true, state, RenameCommand, "Morg-Gluglug",s,c,w,p,|out:&str| out.contains("renamed"));
-        //let state = ctx!(state, IexCommand, "",s,c,w,p);
-        let state = ctx!(sup true, state, SetCommand, "h", s,c,w,p,|out:&str| out.contains("various aspects"));
+        let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,|out:&str| out.contains("nvoked"));
+        let state = ctx!(sup true, state, RenameCommand, "Morg-Gluglug",s,c,w,|out:&str| out.contains("renamed"));
+        //let state = ctx!(state, IexCommand, "",s,c,w);
+        let state = ctx!(sup true, state, SetCommand, "h", s,c,w,|out:&str| out.contains("various aspects"));
         // set size ..
-        let state = ctx!(sup true, state, SetCommand, "s u", s,c,w,p,|out:&str| out.contains("Uh…"));
-        let state = ctx!(sup true, state, SetCommand, "s v", s,c,w,p,|out:&str| out.contains("Size set"));
-        let state = ctx!(sup true, state, SetCommand, "s t", s,c,w,p,|out:&str| out.contains("Size set"));
-        let state = ctx!(sup true, state, SetCommand, "s m", s,c,w,p,|out:&str| out.contains("Size set"));
-        let state = ctx!(sup true, state, SetCommand, "s L", s,c,w,p,|out:&str| out.contains("Size set"));
-        let state = ctx!(sup true, state, SetCommand, "s Googolplex", s,c,w,p,|out:&str| out.contains("Size set"));
-        let state = ctx!(sup true, state, SetCommand, "s Sm0l", s,c,w,p,|out:&str| out.contains("Size set"));
+        let state = ctx!(sup true, state, SetCommand, "s u", s,c,w,|out:&str| out.contains("Uh…"));
+        let state = ctx!(sup true, state, SetCommand, "s v", s,c,w,|out:&str| out.contains("Size set"));
+        let state = ctx!(sup true, state, SetCommand, "s t", s,c,w,|out:&str| out.contains("Size set"));
+        let state = ctx!(sup true, state, SetCommand, "s m", s,c,w,|out:&str| out.contains("Size set"));
+        let state = ctx!(sup true, state, SetCommand, "s L", s,c,w,|out:&str| out.contains("Size set"));
+        let state = ctx!(sup true, state, SetCommand, "s Googolplex", s,c,w,|out:&str| out.contains("Size set"));
+        let state = ctx!(sup true, state, SetCommand, "s Sm0l", s,c,w,|out:&str| out.contains("Size set"));
         // weapon size ..
-        let state = ctx!(sup true, state, SetCommand, "w u", s,c,w,p,|out:&str| out.contains("Uh…"));
-        let state = ctx!(sup true, state, SetCommand, "w v", s,c,w,p,|out:&str| out.contains("not recognized"));
-        let state = ctx!(sup true, state, SetCommand, "w t", s,c,w,p,|out:&str| out.contains("eapon size set"));
-        let state = ctx!(sup true, state, SetCommand, "w m", s,c,w,p,|out:&str| out.contains("eapon size set"));
-        let state = ctx!(sup true, state, SetCommand, "w L", s,c,w,p,|out:&str| out.contains("eapon size set"));
-        let state = ctx!(sup true, state, SetCommand, "w Googolplex", s,c,w,p,|out:&str| out.contains("not recognized"));
-        let state = ctx!(sup true, state, SetCommand, "w Sm0l", s,c,w,p,|out:&str| out.contains("pon size set"));
+        let state = ctx!(sup true, state, SetCommand, "w u", s,c,w,|out:&str| out.contains("Uh…"));
+        let state = ctx!(sup true, state, SetCommand, "w v", s,c,w,|out:&str| out.contains("not recognized"));
+        let state = ctx!(sup true, state, SetCommand, "w t", s,c,w,|out:&str| out.contains("eapon size set"));
+        let state = ctx!(sup true, state, SetCommand, "w m", s,c,w,|out:&str| out.contains("eapon size set"));
+        let state = ctx!(sup true, state, SetCommand, "w L", s,c,w,|out:&str| out.contains("eapon size set"));
+        let state = ctx!(sup true, state, SetCommand, "w Googolplex", s,c,w,|out:&str| out.contains("not recognized"));
+        let state = ctx!(sup true, state, SetCommand, "w Sm0l", s,c,w,|out:&str| out.contains("pon size set"));
         // faction ..
-        let state = ctx!(sup true, state, SetCommand, "f u", s,c,w,p,|out:&str| out.contains("Uh…"));
-        let state = ctx!(sup true, state, SetCommand, "f p", s,c,w,p,|out:&str| out.contains("Uh…"));
-        let state = ctx!(sup true, state, SetCommand, "f h", s,c,w,p,|out:&str| out.contains("hostile"));
-        let state = ctx!(sup true, state, SetCommand, "f f", s,c,w,p,|out:&str| out.contains("friendly"));
-        let state = ctx!(sup true, state, SetCommand, "f Googolplex", s,c,w,p,|out:&str| out.contains("guard"));
-        let _ = ctx!(sup true, state, SetCommand, "f n", s,c,w,p,|out:&str| out.contains("neutral"));
+        let state = ctx!(sup true, state, SetCommand, "f u", s,c,w,|out:&str| out.contains("Uh…"));
+        let state = ctx!(sup true, state, SetCommand, "f p", s,c,w,|out:&str| out.contains("Uh…"));
+        let state = ctx!(sup true, state, SetCommand, "f h", s,c,w,|out:&str| out.contains("hostile"));
+        let state = ctx!(sup true, state, SetCommand, "f f", s,c,w,|out:&str| out.contains("friendly"));
+        let state = ctx!(sup true, state, SetCommand, "f Googolplex", s,c,w,|out:&str| out.contains("guard"));
+        let _ = ctx!(sup true, state, SetCommand, "f n", s,c,w,|out:&str| out.contains("neutral"));
     }
 }

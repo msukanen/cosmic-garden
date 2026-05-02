@@ -77,12 +77,12 @@ mod cmd_wield_tests {
         log::debug!("Sending…");
         c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(100);
-        let state = ctx!(state, LookCommand, "", s,c,w,p);
-        let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));
+        let state = ctx!(state, LookCommand, "", s,c,w);
+        let state = ctx!(state, GetCommand, "knife", s,c,w,|out:&str| out.contains("nab"));
         log::debug!("Got the knife!");
-        let state = ctx!(state, WieldCommand, "knife", s,c,w,p,|out:&str| out.contains("wield"));
+        let state = ctx!(state, WieldCommand, "knife", s,c,w,|out:&str| out.contains("wield"));
         p.write().await.access = Access::Admin;
-        let _ = ctx!(state, ShutdownCommand, "", s,c,w,p);
+        let _ = ctx!(state, ShutdownCommand, "", s,c,w);
         _ = d.1.await;
     }
 }

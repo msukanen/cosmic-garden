@@ -78,14 +78,14 @@ mod medit_rename_tests {
         let _ = get_operational_mock_librarian!(c,w);
         tokio::time::sleep(Duration::from_secs(1)).await;// let the thread(s) stabilize…
         let c = c.out;
-        let state = ctx!(state, MeditCommand, "goblin",s,c,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, MeditCommand, "goblin",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, MeditCommand, "goblin",s,c,w,p);
-        let state = ctx!(state, RenameCommand, "",s,c,w,p);
-        let state = ctx!(state, RenameCommand, "Hoblin",s,c,w,p,|out:&str| out.contains("Hoblin"));
-        let state = ctx!(state, RenameCommand, "ixd hoblin",s,c,w,p,|out:&str| out.contains("rename <name>"));
-        let state = ctx!(state, RenameCommand, "id hoblin",s,c,w,p,|out:&str| out.contains("Re-ID requires"));
+        let state = ctx!(state, MeditCommand, "goblin",s,c,w);
+        let state = ctx!(state, RenameCommand, "",s,c,w);
+        let state = ctx!(state, RenameCommand, "Hoblin",s,c,w,|out:&str| out.contains("Hoblin"));
+        let state = ctx!(state, RenameCommand, "ixd hoblin",s,c,w,|out:&str| out.contains("rename <name>"));
+        let state = ctx!(state, RenameCommand, "id hoblin",s,c,w,|out:&str| out.contains("Re-ID requires"));
         p.write().await.access = Access::Admin;
-        let _ = ctx!(state, RenameCommand, "id hoblin",s,c,w,p,|out:&str| out.contains("re-ID"));
+        let _ = ctx!(state, RenameCommand, "id hoblin",s,c,w,|out:&str| out.contains("re-ID"));
     }
 }

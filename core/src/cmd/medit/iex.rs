@@ -68,7 +68,7 @@ mod medit_iex_tests {
         stabilize_threads!();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".to_string() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(25);
-        let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup true, state, MeditCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         p.write().await.config.show_id = true;
         // we know r-1 exists…
@@ -88,12 +88,12 @@ mod medit_iex_tests {
             };
             e
         };
-        let state = ctx!(sup true, state, MeditCommand, &id, s,c,w,p,|out:&str| out.contains("MEdit invoked"));
-        let state = ctx!(sup true, state, RenameCommand, "Morg-Gluglug", s,c,w,p,|out:&str| out.contains("renamed"));
-        let state = ctx!(sup true, state, LookCommand,"",s,c,w,p,|out:&str| out.contains("goblin"));
-        let state = ctx!(sup true, state, WeaveCommand, "",s,c,w,p);
-        let state = ctx!(sup true, state, LookCommand,"",s,c,w,p,|out:&str| out.contains("Morg-Glug"));
-        let state = ctx!(sup true, state, MeditCommand, &id, s,c,w,p,|out:&str| out.contains("MEdit invoked"));
-        let _ = ctx!(state, IexCommand, "", s,c,w,p,|out:&str| out.contains("Faction"));
+        let state = ctx!(sup true, state, MeditCommand, &id, s,c,w,|out:&str| out.contains("MEdit invoked"));
+        let state = ctx!(sup true, state, RenameCommand, "Morg-Gluglug", s,c,w,|out:&str| out.contains("renamed"));
+        let state = ctx!(sup true, state, LookCommand,"",s,c,w,|out:&str| out.contains("goblin"));
+        let state = ctx!(sup true, state, WeaveCommand, "",s,c,w);
+        let state = ctx!(sup true, state, LookCommand,"",s,c,w,|out:&str| out.contains("Morg-Glug"));
+        let state = ctx!(sup true, state, MeditCommand, &id, s,c,w,|out:&str| out.contains("MEdit invoked"));
+        let _ = ctx!(state, IexCommand, "", s,c,w,|out:&str| out.contains("Faction"));
     }
 }

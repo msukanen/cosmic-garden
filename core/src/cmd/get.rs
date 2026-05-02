@@ -1,11 +1,8 @@
 //! Get something from ground…
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::IdentityQuery, item::{Item, container::Storage}, player::Player, player_or_bust, room::Room, roomloc_or_bust, show_help_if_needed, tell_user, thread::add_item_to_lnf, util::activity::ActionWeight};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::IdentityQuery, item::{Item, container::{Storage, variants::bulk_transfer}}, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user, thread::add_item_to_lnf, util::activity::ActionWeight};
 
 pub struct GetCommand;
 
@@ -72,47 +69,6 @@ impl Command for GetCommand {
     }
 }
 
-/// Bulk transfer everything within `from` to `plr` inventory who is at `room`.
-async fn bulk_transfer(ctx: &mut CommandCtx<'_>, plr: Arc<RwLock<Player>>, room: Arc<RwLock<Room>>, from: &str) {
-    if let Some(src) = room.write().await.peek_at_mut(from) {
-        if !matches!(*src, Item::Container(_)|Item::Corpse{..}) {
-            err_tell_user!(ctx.writer, "'{}' doesn't contain anything. Did you mean to pick it insted?\n", from)
-        }
-        let Some(items) = src.eject_all() else {
-            err_tell_user!(ctx.writer, "Bummer, '{}' seems to be empty!\n", from)
-        };
-        let mut not_taken = vec![];
-        let mut taken_names = vec![];
-        // Shove the things into player's inventory, if we can.
-        {
-            let mut p = plr.write().await;
-            for item in items {
-                let name = item.title().to_string();
-                if let Err(e) = p.inventory.try_insert(item) {
-                    not_taken.push(e.extract_item());
-                    continue;
-                }
-                taken_names.push(name);
-            }
-        }
-        let ntl = not_taken.len();
-        for item in not_taken {
-            if let Err(e) = src.try_insert(item) {
-                log::error!("Something fishy with {src:?} - cannot insert - {e:?}");
-                add_item_to_lnf(e).await;
-            }
-        }
-        
-        if taken_names.is_empty() {
-            let (a,s,ait) = match ntl {
-                1 => ("a ","",""),
-                _ => ("", "s", "any of ")
-            };
-            err_tell_user!(ctx.writer, "There's {}thing{}, but you don't seem to be able to carry {}it…\n", a,s,ait);
-        }
-    }
-}
-
 #[cfg(test)]
 mod cmd_get_tests {
     use std::io::Cursor;
@@ -130,9 +86,9 @@ mod cmd_get_tests {
         let c = c.out;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: RoomPayload::Id("r-1".into()), reply: None }).ok();
         stabilize_threads!(25);
-        state = ctx!(sup true, state, AttackCommand, "goblin",s,c,w,p);
+        state = ctx!(sup true, state, AttackCommand, "goblin",s,c,w);
         // let combat roll a moment…
         stabilize_threads!(2000);
-        state = ctx!(state, LookCommand,"",s,c,w,p);
+        state = ctx!(state, LookCommand,"",s,c,w);
     }
 }

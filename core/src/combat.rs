@@ -134,10 +134,10 @@ mod combatant_tests {
                 let mut b: Vec<u8> = vec![];
                 let mut s = Cursor::new(&mut b);
                 let state = ClientState::Playing { player: p.clone() };
-                let state = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
-                let state = ctx!(state, AttackCommand, "goblin",s,c,w,p);
+                let state = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("goblin is here"));
+                let state = ctx!(state, AttackCommand, "goblin",s,c,w);
                 stabilize_threads!();
-                let _ = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("corpse"));
+                let _ = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("corpse"));
             });
         }
         for x in 2..=100 {
@@ -156,7 +156,7 @@ mod combatant_tests {
                 let mut b: Vec<u8> = vec![];
                 let mut s = Cursor::new(&mut b);
                 let state = ClientState::Playing { player: p2.clone() };
-                let _ = ctx!(state, AttackCommand, "goblin",s,c,w,p2);
+                let _ = ctx!(state, AttackCommand, "goblin",s,c,w);
             });
         }}
         stabilize_threads!(2000);
@@ -199,14 +199,14 @@ mod combatant_tests {
                 let mut b: Vec<u8> = vec![];
                 let mut s = Cursor::new(&mut b);
                 let state = ClientState::Playing { player: p.clone() };
-                let state = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
-                let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));
-                let state = ctx!(state, WieldCommand, "knife", s,c,w,p,|out:&str| out.contains("wield"));
-                let state = ctx!(state, AttackCommand, "goblin",s,c,w,p);
+                let state = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("goblin is here"));
+                let state = ctx!(state, GetCommand, "knife", s,c,w,|out:&str| out.contains("nab"));
+                let state = ctx!(state, WieldCommand, "knife", s,c,w,|out:&str| out.contains("wield"));
+                let state = ctx!(state, AttackCommand, "goblin",s,c,w);
                 static STAB_TIME: u64 = 5000;
                 log::debug!("AttackCommand fired. Waiting {STAB_TIME}ms (or less) of combat to pass…");
                 stabilize_threads!(STAB_TIME);
-                let _ = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("corpse-inventory"));
+                let _ = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("corpse-inventory"));
                 c.shutdown().await;
             }});
         }
@@ -246,11 +246,11 @@ mod combatant_tests {
             let mut b: Vec<u8> = vec![];
             let mut s = Cursor::new(&mut b);
             log::debug!("1st LookCommand warming up...");
-            let state = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
-            let state = ctx!(state, GetCommand, "knife", s,c,w,p,|out:&str| out.contains("nab"));
-            let state = ctx!(state, WieldCommand, "knife", s,c,w,p,|out:&str| out.contains("wield"));
+            let state = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("goblin is here"));
+            let state = ctx!(state, GetCommand, "knife", s,c,w,|out:&str| out.contains("nab"));
+            let state = ctx!(state, WieldCommand, "knife", s,c,w,|out:&str| out.contains("wield"));
             log::debug!("AttackCommand warming up...");
-            let _ = ctx!(state, AttackCommand, "goblin",s,c,w,p);
+            let _ = ctx!(state, AttackCommand, "goblin",s,c,w);
             log::debug!("AttackCommand fired.");
             stabilize_threads!(250);
             c.shutdown().await;
