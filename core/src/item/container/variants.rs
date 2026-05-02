@@ -130,6 +130,7 @@ impl Storage for CorpseSpec {
         0
     }
     fn peek_at(&self, id: &str) -> Option<&Item> { self.spec.peek_at(id) }
+    fn peek_at_mut(&mut self, id: &str) -> Option<&mut Item> { self.spec.peek_at_mut(id) }
     fn required_space(&self) -> StorageSpace { self.spec.required_space() }
     /// Corpses reject items…
     fn space(&self) -> StorageSpace {

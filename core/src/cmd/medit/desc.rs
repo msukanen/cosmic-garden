@@ -23,7 +23,7 @@ mod medit_desc_tests {
         let (w,c,(state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
-        stabilize_threads!(250);
+        stabilize_threads!(150);
         let c = c.out;
         let sup = false;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();

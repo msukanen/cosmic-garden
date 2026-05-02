@@ -298,6 +298,7 @@ mod entity_tests {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
+        stabilize_threads!(25);
         get_operational_mock_librarian!(c,w);
         get_operational_mock_life!(c,w);
         stabilize_threads!();

@@ -14,8 +14,11 @@ pub struct ReditCommand;
 impl Command for ReditCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, builder);
-        if ctx.state.is_editing() {
-            err_tell_user!(ctx.writer, "You're already in one or other editor. Finish work there first.\n");
+        // bypass editstate check if coming via 'dig' command.
+        if ctx.args != "--dig" {
+            if ctx.state.is_editing() {
+                err_tell_user!(ctx.writer, "You're already in one or other editor. Finish work there first.\n");
+            }
         }
         let (access, p_id, ploc) = {
             let p = plr.read().await;
@@ -26,6 +29,7 @@ impl Command for ReditCommand {
         // a bit of shortcuts:
         let lc = ctx.args.to_lowercase();
         let room = match lc.as_str() {
+            "--dig"|
             "here" |
             "this" => {
                     let Some(ploc) = ploc else {

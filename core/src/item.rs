@@ -70,7 +70,7 @@ pub enum Item {
     Key(TemporaryStructToAppeaseAnalyzerDuringWIP),
     Consumable(ConsumableMatter),
     Primordial(PrimordialItem),
-    Corpse(ContainerVariant),
+    Corpse { size: StorageSpace, loot: ContainerVariant },
 }
 
 impl PartialEq<str> for Item {
@@ -85,7 +85,7 @@ impl Item {
         match self {
             // Primordial and Corpses don't devolve…
             Self::Primordial(_) => (),
-            Self::Corpse(_) => (),
+            Self::Corpse {..} => (),
             // …while everything else does.
             Self::Consumable(_) => *self = PrimordialItem::atomize(self),
             Self::Container(_) => *self = PrimordialItem::atomize(self),
@@ -100,7 +100,7 @@ impl Reflector for Item {
     fn reflect(&self) -> Self {
         match self {
             Self::Container(c) => Self::Container(c.reflect()),
-            Self::Corpse(c) => Self::Corpse(c.reflect()),
+            Self::Corpse { loot, size } => Self::Corpse { loot: loot.reflect(), size: *size },
             Self::Key(k) => Self::Key(k.reflect()),
             Self::Tool(t) => Self::Tool(t.reflect()),
             Self::Weapon(w) => Self::Weapon(w.reflect()),
@@ -111,7 +111,7 @@ impl Reflector for Item {
     fn deep_reflect(&self) -> Self {
         match self {
             Self::Container(c) => Self::Container(c.deep_reflect()),
-            Self::Corpse(c) => Self::Corpse(c.deep_reflect()),
+            Self::Corpse { size, loot } => Self::Corpse { size: *size, loot: loot.deep_reflect() },
             Self::Key(k) => Self::Key(k.deep_reflect()),
             Self::Tool(t) => Self::Tool(t.deep_reflect()),
             Self::Weapon(w) => Self::Weapon(w.deep_reflect()),
@@ -124,13 +124,14 @@ impl Reflector for Item {
 impl Storage for Item {
     fn can_hold(&self, item: &Item) -> Result<(), StorageQueryError> {
         match self {
-            Self::Container(c) => {
+            Self::Container(loot) |
+            Self::Corpse { loot,.. }    => {
                 if let Item::Container(other) = item {
-                    if c.rank() < other.rank() {
+                    if loot.rank() < other.rank() {
                         return Err(StorageQueryError::InvalidHierarchy);
                     }
                 }
-                c.can_hold(item)
+                loot.can_hold(item)
             }
             _ => Err(StorageQueryError::NotContainer)
         }
@@ -138,7 +139,8 @@ impl Storage for Item {
 
     fn max_space(&self) -> StorageSpace {
         match self {
-            Self::Container(c) => c.max_space(),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.max_space(),
             _ => 0
         }
     }
@@ -146,62 +148,79 @@ impl Storage for Item {
     fn required_space(&self) -> StorageSpace {
         match self {
             Self::Container(c) => c.required_space(),
+            Self::Corpse { size, loot } => size + loot.required_space(),
             _ => self.size()
         }
     }
 
     fn space(&self) -> StorageSpace {
         match self {
-            Self::Container(c) => c.space(),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.space(),
             _ => 0
         }
     }
 
     fn try_insert(&mut self, item: Item) -> Result<(), container::StorageError> {
         match self {
-            Self::Container(c) => c.try_insert(item),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.try_insert(item),
             _ => Err(container::StorageError::NotContainer(item))
         }
     }
 
     fn contains(&self, id: &str) -> bool {
         match self {
-            Self::Container(c) => c.contains(id),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.contains(id),
             _ => false
         }
     }
 
     fn peek_at(&self, id: &str) -> Option<&Item> {
         match self {
-            Self::Container(c) => c.peek_at(id),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.peek_at(id),
+            _ => None
+        }
+    }
+
+    fn peek_at_mut(&mut self, id: &str) -> Option<&mut Item> {
+        match self {
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.peek_at_mut(id),
             _ => None
         }
     }
 
     fn take(&mut self, id: &str) -> Option<Item> {
         match self {
-            Self::Container(c) => c.take(id),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.take(id),
             _ => None
         }
     }
 
     fn take_by_name(&mut self, id: &str) -> Option<Item> {
         match self {
-            Self::Container(c) => c.take_by_name(id),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.take_by_name(id),
             _ => None,
         }
     }
 
     fn find_id_by_name(&self, name: &str) -> Option<String> {
         match self {
-            Self::Container(c) => c.find_id_by_name(name),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.find_id_by_name(name),
             _ => None
         }
     }
 
     fn eject_all(&mut self) -> Option<Vec<Item>> {
         match self {
-            Self::Container(v) => v.eject_all(),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.eject_all(),
             _ => None
         }
     }
@@ -210,8 +229,8 @@ impl Storage for Item {
 impl Describable for Item {
     fn desc<'a>(&'a self) -> &'a str {
         match self {
-            Self::Container(v) |
-            Self::Corpse(v)    => v.desc(),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.desc(),
             Self::Key(v) => v.desc(),
             Self::Primordial(v) => v.desc(),
             Self::Tool(v) => v.desc(),
@@ -224,8 +243,8 @@ impl Describable for Item {
 impl DescribableMut for Item {
     fn set_desc(&mut self, text: &str) -> bool {
         match self {
-            Self::Corpse(v)    |
-            Self::Container(v) => v.set_desc(text),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.set_desc(text),
             Self::Key(v) => v.set_desc(text),
             Self::Primordial(v) => v.set_desc(text),
             Self::Tool(v) => v.set_desc(text),
@@ -239,8 +258,8 @@ impl Itemized for Item {
     fn size(&self) -> StorageSpace {
         match self {
             Self::Consumable(v) => v.size(),
-            Self::Container(v) |
-            Self::Corpse(v)    => v.size(),
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.size(),
             Self::Key(v) => v.size(),
             Self::Primordial(v) => v.size(),
             Self::Tool(v) => v.size(),
@@ -258,7 +277,7 @@ impl ItemizedMut for Item {
             Self::Primordial(v) => v.set_size(sz),
             Self::Tool(v) => v.set_size(sz),
             Self::Weapon(v) => v.set_size(sz),
-            Self::Corpse(_) => false,
+            Self::Corpse{..} => false,
         }
     }
 }
@@ -287,8 +306,8 @@ impl Tickable for Item {
     async fn tick(&mut self) -> bool {
         match self {
             Self::Consumable(c) => c.tick().await,
-            Self::Container(c)  |
-            Self::Corpse(c)     => c.tick().await,
+            Self::Container(loot) |
+            Self::Corpse { loot,..} => loot.tick().await,
             Self::Primordial(c)   => c.tick().await,
             _ => false
         }

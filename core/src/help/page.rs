@@ -111,7 +111,7 @@ impl HelpPage {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct HelpLibrary {
     world_id: String,
     #[serde(with = "string_vec_to_bool_map")]

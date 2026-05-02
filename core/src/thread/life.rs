@@ -42,8 +42,12 @@ impl BattlerRec {
     async fn loot_pinata(&self, world: &Arc<RwLock<World>>) {
         let mut lock = self.combatant.write().await;
         if let Some(room) = lock.location().upgrade() {
-            let mut c_inv = Item::Corpse(lock.inventory().deep_reflect());
+            let mut c_inv = Item::Corpse { loot: lock.inventory().deep_reflect(), size: 50 };
             let c_id = lock.id().as_m_id();
+            if !world.read().await.entities.contains_key(&c_id) {
+                // alerady looted, bail.
+                return ;
+            }
             let c_title = lock.title().to_string();
             drop(lock);
             c_inv.set_desc(&format!("Corpse of '{}'", c_title));
@@ -724,7 +728,7 @@ mod life_tests {
                 log::debug!("Gobbo has a stabber nao!");
                 let erec = BattlerRec {
                     combatant: e.clone() as Battler,
-                    title: Arc::from(lock.title().to_string())
+                    title: Arc::from(lock.title().to_string()),
                 };
                 drop(lock);
                 state = ctx!(state, LookCommand, "", s,c,w,p);

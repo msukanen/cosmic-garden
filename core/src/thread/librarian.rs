@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::sync::RwLock;
 
 use crate::{
-    help::{HelpLibrary, HelpPage}, identity::{IdentityQuery, uniq::{StrUuid, TryAttachUuid}}, io::{blueprint_lib_fp, entity_lib_fp, help_lib_fp}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::access::Access, world::World
+    help::{HelpLibrary, HelpPage}, identity::{IdentityQuery, uniq::{StrUuid, TryAttachUuid}}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::access::Access, world::World
 };
 
 #[cfg(test)]
@@ -28,6 +28,15 @@ struct Library {
     bp: BlueprintLibrary,
 }
 
+#[cfg(test)]
+mod librarian_test_cache {
+    use std::sync::Arc;
+    use tokio::sync::OnceCell;
+    use crate::{help::HelpLibrary, item::BlueprintLibrary, mob::spawn_lib::EntityLibrary};
+
+    pub static LIB_DATA_CACHE: OnceCell<Arc<(BlueprintLibrary, EntityLibrary, HelpLibrary)>> = OnceCell::const_new();
+}
+
 /// 
 /// Librarian wake up.
 /// 
@@ -37,38 +46,66 @@ pub async fn librarian(
     (out, mut incoming): (SignalSenderChannels, SigReceiver),
     world: Arc<RwLock<World>>,
 ) {
-    // Bootstrap/load blueprints.
-    log::info!("Library establishing… blueprints @ '{}'", blueprint_lib_fp().display());
-    let bp = BlueprintLibrary::load_or_bootstrap().await;
-    if let Err(e) = bp {
-        // Halt the printing press!!!
-        log::error!("FAIL: Library in fire!!! {e:?}");
-        return ;
-    }
-
-    // Bootstrap/load help files.
-    log::info!("Library establishing… helpful documents @ '{}'", help_lib_fp().display());
-    let help = HelpLibrary::load_or_bootstrap().await;
-    if let Err(e) = help {
-        // Shucks! The documents are in fire!
-        log::error!("Help! The help system is in distress! {e:?}");
-        return ;
-    }
-
-    // Bootstrap/load entity blueprints.
-    log::info!("Library establishing… biology @ '{}'", entity_lib_fp().display());
-    let entity = EntityLibrary::load_or_bootstrap().await;
-    if let Err(e) = entity {
-        // Aaah! The zoo is escaping!
-        log::error!("Uwah! The zoo is in chaos! {e:?}");
-        return ;
-    }
+    #[cfg(test)]
+    let shared_data = {
+        librarian_test_cache::LIB_DATA_CACHE.get_or_init(|| async {
+            let b = BlueprintLibrary::load_or_bootstrap().await.expect("Blueprint library in fire!");
+            let h = HelpLibrary::load_or_bootstrap().await.expect("Help! Help in distress!");
+            let e = EntityLibrary::load_or_bootstrap().await.expect("Zoo in chaos!");
+            Arc::new((b,e,h))
+        }).await.clone()
+    };
 
     let mut lib = Library {
-        bp: bp.unwrap(),
-        help: help.unwrap(),
-        entity: entity.unwrap(),
+        #[cfg(test)]
+        bp: shared_data.0.clone(),
+        #[cfg(not(test))]
+        bp: {
+            // Bootstrap/load blueprints.
+            use crate::io::blueprint_lib_fp;
+            log::info!("Library establishing… blueprints @ '{}'", blueprint_lib_fp().display());
+            match BlueprintLibrary::load_or_bootstrap().await {
+                Err(e) => {
+                    log::error!("FAIL: Library in fire!!! {e:?}");
+                    return;
+                }
+                Ok(bp) => bp
+            }
+        },
+
+        #[cfg(test)]
+        help: shared_data.2.clone(),
+        #[cfg(not(test))]
+        help: {
+            // Bootstrap/load help files.
+            use crate::io::help_lib_fp;
+            log::info!("Library establishing… helpful documents @ '{}'", help_lib_fp().display());
+            match HelpLibrary::load_or_bootstrap().await {
+                Err(e) => {
+                    log::error!("Help! The help system is in distress! {e:?}");
+                    return;
+                }
+                Ok(help) => help
+            }
+        },
+
+        #[cfg(test)]
+        entity: shared_data.1.clone(),
+        #[cfg(not(test))]
+        entity: {
+            // Bootstrap/load entity blueprints.
+            use crate::io::entity_lib_fp;
+            log::info!("Library establishing… biology @ '{}'", entity_lib_fp().display());
+            match EntityLibrary::load_or_bootstrap().await {
+                Err(e) => {
+                    log::error!("Uwah! The zoo is in chaos! {e:?}");
+                    return;
+                }
+                Ok(entity) => entity
+            }
+        }
     };
+
     log::info!("Library didn't catch fire, yay.");
     let mut dusting_shelves_interval = tokio::time::interval(Duration::from_mins(10));
     let mut dusting_documents_interval = tokio::time::interval(Duration::from_mins(10));

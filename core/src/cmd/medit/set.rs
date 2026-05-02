@@ -107,9 +107,9 @@ fn set_size(ent_sz: &mut EntitySize, args: &str) -> Result<(), EntitySizeError> 
 
 #[cfg(test)]
 mod medit_set_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand, set::SetCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand, set::SetCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn set_test() {
@@ -118,10 +118,10 @@ mod medit_set_tests {
         let (w,c,(state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
-        tokio::time::sleep(Duration::from_secs(1)).await;
+        stabilize_threads!();
         let c = c.out;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
-        tokio::time::sleep(Duration::from_millis(75)).await;
+        stabilize_threads!(25);
         let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(sup true, state, MeditCommand, "goblin", s,c,w,p,|out:&str| out.contains("nvoked"));

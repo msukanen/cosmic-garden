@@ -55,7 +55,7 @@ impl Command for CloneCommand {
             } {
                 let o_id = e_arc.read().await.id().to_string();
                 let mut e = e_arc.read().await.shallow_clone();
-                e.set_id(&e.id().re_uuid(), true);
+                e.set_id(&e.id().re_uuid(), true).ok();
                 let e_id = e.id().to_string();
                 let e_arc = Arc::new(RwLock::new(e));
                 ctx.world.write().await.entities.insert(e_id.as_m_id(), Arc::downgrade(&e_arc));

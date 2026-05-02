@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 /// Directions
 #[derive(Debug, Clone, Hash, Serialize, Deserialize, PartialEq, Eq)]
 pub enum Direction {
+    // Cardinals and cardinal-likes:
     Up, Down,
     North, South, West, East,
     NW, NE, SW, SE,
@@ -15,6 +16,7 @@ pub enum Direction {
 }
 
 /// Direction related error(s).
+#[derive(Debug)]
 pub enum DirectionError {
     NotCardinal
 }

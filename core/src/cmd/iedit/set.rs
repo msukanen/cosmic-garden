@@ -328,8 +328,6 @@ async fn do_dmg(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
 
 #[cfg(test)]
 mod cmd_iedit_set_tests {
-    use std::time::Duration;
-
     use crate::{cmd::{iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, title::TitleCommand, weave::WeaveCommand}, shutdown::ShutdownCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
     
     #[tokio::test]
@@ -418,7 +416,6 @@ mod cmd_iedit_set_tests {
         let ht = get_operational_mock_librarian!(c,w);
         stabilize_threads!();
         let b = c.out.clone();
-        tokio::time::sleep(Duration::from_secs(6)).await;
         let state = ctx!(state, IeditCommand, "knife", s,b,w,p,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, IeditCommand, "knife", s,b,w,p);

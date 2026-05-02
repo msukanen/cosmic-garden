@@ -2,9 +2,10 @@
 
 use std::sync::{Arc, Weak};
 
+use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::{identity::{IdentityQuery, uniq::StrUuid}, item::Item, room::Room};
+use crate::{identity::{IdentityQuery, uniq::StrUuid}, item::Item, room::{ExitLike, Room}};
 
 #[derive(Debug, PartialEq)]
 pub enum LockingError {
@@ -18,7 +19,14 @@ pub enum LockingError {
     RoomNotFound,
 }
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub enum ExitState {
+    Free, Open, Closed, Locked,
+          OpenAL,       LockedAL
+}
+
 /// [Room] exit variants.
+#[derive(Debug, Clone)]
 pub enum Exit {
     /// No distinct "door" or alike to deal with.
     Free { room: Weak<RwLock<Room>> },
@@ -196,6 +204,36 @@ impl Exit {
                 *self = Self::Open { key_bp: None, room: room.clone() };
                 None
             }
+        }
+    }
+
+    /// NOTE: **Bootstrap phase** raw exit transformer.
+    pub fn from_arc(exl: ExitLike, room_arc: Arc<RwLock<Room>>) -> Self {
+        Self::from(exl, Arc::downgrade(&room_arc))
+    }
+    pub fn from(exl: ExitLike, room_weak: Weak<RwLock<Room>>) -> Self {
+        match exl.state {
+            ExitState::Closed => Self::Closed { key_bp: exl.key_bp, room: room_weak },
+            ExitState::Free => Self::Free { room: room_weak },
+            ExitState::Locked => Self::Locked { key_bp: {
+                let Some(key_bp) = exl.key_bp else {
+                    panic!("[ERR] key_bp None for Locked state! {room_weak:?}");
+                };
+                key_bp
+            }, room: room_weak },
+            ExitState::LockedAL => Self::LockedAL { key_bp: {
+                let Some(key_bp) = exl.key_bp else {
+                    panic!("[ERR] key_bp None for LockedAL state! {room_weak:?}");
+                };
+                key_bp
+            }, room: room_weak },
+            ExitState::Open => Self::Open { key_bp: exl.key_bp, room: room_weak },
+            ExitState::OpenAL => Self::OpenAL { key_bp: {
+                let Some(key_bp) = exl.key_bp else {
+                    panic!("[ERR] key_bp None for OpenAL state! {room_weak:?}");
+                };
+                key_bp
+            }, room: room_weak }
         }
     }
 }

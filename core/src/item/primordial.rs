@@ -214,36 +214,29 @@ impl StorageMut for PrimordialItem {
 /// most of these impls are just stubs, or report "no can do".
 impl Storage for PrimordialItem {
     /// Always `Err`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn can_hold(&self, _item: &Item) -> Result<(), StorageQueryError> {
-        Err(StorageQueryError::NotContainer)
-    }
+    #[inline] fn can_hold(&self, _item: &Item) -> Result<(), StorageQueryError> { Err(StorageQueryError::NotContainer) }
     /// Always `false`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn contains(&self, _: &str) -> bool { false }
+    #[inline] fn contains(&self, _: &str) -> bool { false }
     /// Always `None`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn eject_all(&mut self) -> Option<Vec<Item>> { None }
+    #[inline] fn eject_all(&mut self) -> Option<Vec<Item>> { None }
     /// Always `None`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn find_id_by_name(&self, _: &str) -> Option<String> { None }
+    #[inline] fn find_id_by_name(&self, _: &str) -> Option<String> { None }
     fn max_space(&self) -> StorageSpace { self.max_space }
     /// Always `None`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn peek_at(&self, _: &str) -> Option<&Item> { None }
+    #[inline] fn peek_at(&self, _: &str) -> Option<&Item> { None }
+    /// Always `None`; [PrimordialItem] is never a true container.
+    #[inline] fn peek_at_mut(&mut self, _: &str) -> Option<&mut Item> { None }
+
     fn required_space(&self) -> StorageSpace { self.size }
+    
     /// Always `0`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn space(&self) -> StorageSpace { 0 }
+    #[inline] fn space(&self) -> StorageSpace { 0 }
     /// Always `None`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn take(&mut self, _: &str) -> Option<Item> { None }
+    #[inline] fn take(&mut self, _: &str) -> Option<Item> { None }
     /// Always `None`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn take_by_name(&mut self, _: &str) -> Option<Item> { None }
+    #[inline] fn take_by_name(&mut self, _: &str) -> Option<Item> { None }
     /// Always `Err(item)`; [PrimordialItem] is never a true container.
-    #[inline]
-    fn try_insert(&mut self, item: Item) -> Result<(), StorageError> { Err(StorageError::NotContainer(item)) }
+    #[inline] fn try_insert(&mut self, item: Item) -> Result<(), StorageError> { Err(StorageError::NotContainer(item)) }
 }
 
 pub trait Metamorphize {

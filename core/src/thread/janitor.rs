@@ -57,13 +57,18 @@ pub(crate) async fn janitor(
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::Shutdown => break,
 
-                SystemSignal::SaveWorld => {save_the_whales(world.clone(), true).await;},
+                SystemSignal::SaveWorld => {save_the_whales(world.clone(), true).await;}
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
                 SystemSignal::PlayerNeedsSaving(lock) => {
                     let p_id = lock.read().await.id().to_string();
                     save_player_now(lock, &p_id).await;
                     #[cfg(test)]{log::trace!("Janitor books '{p_id}' as \"processed\".");}
                 }
+                SystemSignal::SaveRoom { arc } => {tokio::spawn(async move {
+                    log::trace!("Saving '{}'…", arc.read().await.id());
+                    arc.write().await.save().await.ok();
+                });}
+
                 _ => ()
             }
         }
@@ -80,6 +85,12 @@ pub(crate) async fn janitor(
     log::info!("Janitor checking out.");
 }
 
+#[cfg(test)]
+// stub for #[cfg(test)].
+async fn save_player_now(_: Arc<RwLock<Player>>, _: &str) {
+    log::debug!("[STUB] save_player_now() disabled in #[cfg(test)].");
+}
+#[cfg(not(test))]
 /// Save player ASAP.
 async fn save_player_now(plr: Arc<RwLock<Player>>, p_id: &str) {
     let p = plr.read().await.clone();
@@ -109,12 +120,8 @@ async fn autosave_queue(world: Arc<RwLock<World>>) {
         true
     } else {false};
     for p in players_to_save.iter_mut() {
-        let mut lock = p.write().await;
-        if let Err(e) = lock.save().await {
-            log::error!("Failed to save player '{}': {e:?}", lock.id());
-        } else {
-            lock.actions_taken = 0;
-        }
+        let p_id = p.read().await.id().to_string();
+        save_player_now(p.clone(), &p_id).await;
     }
     if any_saved {
         log::info!("Player autosave cycle complete.");

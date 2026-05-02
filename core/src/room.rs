@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::{IdentityQuery, uniq::UuidValidator}, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, StorageError, StorageQueryError, container::{Storage, StorageMut, specs::StorageSpace, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, room::locking::{Exit, ExitState}, traits::Tickable, util::direction::Direction, world::World};
 
 pub mod locking;
 
@@ -27,6 +27,14 @@ impl Display for RoomError {
             Self::NoSuchRoom(id) => write!(f, "No such room (yet) in existence as {}", id)
         }
     }
+}
+
+macro_rules! option_room_id_from_weak {
+    ($r:expr) => {
+        if let Some(arc) = $r.upgrade() {
+            arc.read().await.id().to_string().into()
+        } else { None }
+    };
 }
 
 impl std::error::Error for RoomError {}
@@ -64,6 +72,9 @@ impl RoomPayload {
     }
 }
 
+fn empty_room_desc() -> String { "A room.".into() }
+fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
+
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct Room {
     id: String,
@@ -74,10 +85,10 @@ pub struct Room {
     pub who: HashMap<String, Weak<RwLock<Player>>>,
 
     #[serde(default, skip)]
-    pub exits: HashMap<Direction, Weak<RwLock<Room>>>,
+    pub exits: HashMap<Direction, Exit>,
     
     #[serde(default)]
-    pub raw_exits: HashMap<Direction, String>,
+    raw_exits: HashMap<Direction, ExitLike>,
 
     #[serde(default = "room_inventory")]
     contents: ContainerVariant,
@@ -91,8 +102,52 @@ pub struct Room {
     pub memory_fog: Option<MemoryFog>,
 }
 
-fn empty_room_desc() -> String { "A room.".into() }
-fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ExitLike {
+    #[serde(default)]
+    pub room_id: Option<String>,
+    #[serde(default)]
+    pub key_bp: Option<String>,
+    pub state: ExitState,
+}
+
+impl ExitLike {
+    pub async fn from(ex: &Exit) -> Self {
+        match ex {
+            Exit::Closed { key_bp, room } =>
+                Self {
+                    room_id: option_room_id_from_weak!(room),
+                    key_bp: key_bp.clone(),
+                    state: ExitState::Closed
+                },
+            Exit::Free { room } =>
+                Self { room_id: option_room_id_from_weak!(room),
+                    key_bp: None,
+                    state: ExitState::Free
+                },
+            Exit::Locked { key_bp, room } =>
+                Self { room_id: option_room_id_from_weak!(room),
+                    key_bp: key_bp.clone().into(),
+                    state: ExitState::Locked
+                },
+            Exit::LockedAL { key_bp, room } =>
+                Self { room_id: option_room_id_from_weak!(room),
+                    key_bp: key_bp.clone().into(),
+                    state: ExitState::LockedAL
+                },
+            Exit::Open { key_bp, room } =>
+                Self { room_id: option_room_id_from_weak!(room),
+                    key_bp: key_bp.clone(),
+                    state: ExitState::Open
+                },
+            Exit::OpenAL { key_bp, room } =>
+                Self { room_id: option_room_id_from_weak!(room),
+                    key_bp: key_bp.clone().into(),
+                    state: ExitState::OpenAL
+                },
+        }
+    }
+}
 
 mod arc_n_t_transform {
     use std::{collections::HashMap, sync::Arc};
@@ -132,16 +187,25 @@ mod arc_n_t_transform {
 }
 
 impl Room {
+    /// Attempt to load a room.
+    /// 
+    /// # Args
+    /// - `id` of the [Room].
     pub fn load_sync(id: &str) -> Result<Self, CgError> {
-        let room: Room = serde_json::from_str(
-            &sync_fs::read_to_string(room_fp(id))?
-        )?;
-        Ok(room)
+        Ok(serde_json::from_str(&sync_fs::read_to_string(room_fp(id))?)?)
     }
 
+    /// Create a new room (or load one if corresponding file exists for `id`).
+    /// 
+    /// # Args
+    /// - `id` of the new (or loaded) [Room].
+    /// - *[[potential]]* `title` of the new [Room]. This is ignored if [Room] gets loaded.
     pub async fn new(id: &str, title: &str) -> Result<Arc<RwLock<Self>>, CgError> {
         // check if there is pre-existing file...
-        let room = Room::load_sync(id).unwrap_or({
+        let loaded = Room::load_sync(id);
+        let room = match loaded {
+            Ok(room) => room,
+            _ => {
             log::info!("No archælogy possible, thus creating new room '{}'", id);
             Self {
                 id: id.as_id()?,
@@ -154,11 +218,13 @@ impl Room {
                 entities: HashMap::new(),
                 memory_fog: None,
             }
-        });
+            }
+        };
 
         Ok(Arc::new(RwLock::new(room)))
     }
 
+    /// Save the [Room].
     pub async fn save(&self) -> Result<(), CgError> {
         let path = room_fp(&self.id);
         log::debug!("Saving '{}'…", path.display());
@@ -166,39 +232,39 @@ impl Room {
         Ok(())
     }
 
-    pub async fn link_exit(&mut self, world: Arc<RwLock<World>>, dir: Direction, target_id: &str) -> Result<(), CgError> {
-        log::debug!("Linking '{}'({dir}) to '{target_id}'…", self.id());
-        if let Some(_) = self.raw_exits.insert(dir.clone(), target_id.into()) {
-            log::warn!("Overriding already existing '{dir}'.");
-        }
-        // Find the target room, hopefully.
-        let w = world.read().await;
-        let my_lock = if let Some(my_arc) = w.get_room_by_id(self.id()) {
-            Arc::downgrade(&my_arc)
-        } else {
-            log::error!("Wait what? Where did '{}' lock go?!", self.id());
-            return Err(CgError::from(RoomError::NoSuchRoom(self.id().to_string())))
-        };
-        if let Some(target_arc) = w.get_room_by_id(&target_id) {
-            self.exits.insert(dir.clone(), Arc::downgrade(&target_arc));
-            log::debug!("Real link established between '{}' and '{}'", self.id(), target_id);
-            log::debug!("Attempting reverse…");
-            if let Ok(opp_dir) = dir.opposite() {
-                let mut tgt_lock = target_arc.write().await;
-                tgt_lock.exits.insert(opp_dir.clone(), my_lock);
-                tgt_lock.raw_exits.insert(opp_dir.clone(), self.id().into());
-                log::debug!("Symmetry check OK {dir} ↔ {opp_dir}");
+    /// Bootstrap phase exits linker.
+    pub fn bootstrap_exits(&mut self, world: &World) {
+        for (dir, exl) in self.raw_exits.drain() {
+            let room_weak = if let Some(ref room_id) = exl.room_id {
+                let Some(room_arc) = world.get_room_by_m_id(room_id.as_m_id()) else {
+                    log::warn!("No target Room found: {dir} @ {exl:?}");
+                    continue;
+                };
+                Arc::downgrade(&room_arc)
             } else {
-                log::warn!("One-way grit: Direction {dir:?} is non-reversible. Good luck, traveller!");
+                Weak::new()
+            };
+            if let Some(ref r_id) = exl.room_id {
+                log::trace!("Linked {}:{dir} to {r_id:?}", self.id);
+            } else {
+                log::trace!("Mirage exit {}:{dir}", self.id);
             }
-            return Ok(())
+            self.exits.insert(dir.clone(), Exit::from(exl.clone(), room_weak));
         }
-
-        // Exits are allowed to point to non-existing ways… Mirage entrances, etc.
-        self.exits.insert(dir.clone(), Weak::new());
-        Err(CgError::from(RoomError::NoSuchRoom(target_id.into())))
     }
 
+    /// Assign an [Exit]. Existing [`dir`][Direction] will be overwritten.
+    pub async fn assign_exit(&mut self, dir: Direction, exit: Exit) {
+        self.raw_exits.insert(dir.clone(), ExitLike::from(&exit).await);
+        self.exits.insert(dir, exit);
+    }
+
+    /// Eradicate exit at `dir` if exists.
+    pub fn remove_exit(&mut self, dir: &Direction) {
+        self.exits.remove(dir);
+    }
+
+    /// Generate a shallow clone of self.
     pub fn shallow_clone(&self) -> Self {
         Self {
             id: self.id.clone(),
@@ -214,7 +280,8 @@ impl Room {
         }
     }
 
-    pub fn copyback(&mut self, source: Self) {
+    /// Extract specific internals of `source`.
+    pub fn scavenge(&mut self, source: Self) {
         self.id = source.id;
         self.title = source.title;
         self.desc = source.desc;
@@ -230,7 +297,7 @@ impl Room {
 
     /// List adjacent [rooms][Room], if any.
     pub fn list_adjacent(&self) -> Vec<Weak<RwLock<Room>>> {
-        self.exits.iter().map(|(_,r)| r.clone()).collect::<Vec<Weak<RwLock<Room>>>>()
+        self.exits.iter().map(|(_,r)| r.as_weak()).collect::<Vec<Weak<RwLock<Room>>>>()
     }
 
     /// List adjacent [rooms][Room], if any, using BFS.
@@ -250,11 +317,11 @@ impl Room {
             
             if let Some(r) = r_weak.upgrade() {
                 let lock = r.read().await;
-                for (_, x_weak) in &lock.exits {
-                    let key = lock2key!(weak x_weak);
+                for (_, ex) in &lock.exits {
+                    let key = lock2key!(weak &ex.as_weak());
                     if !visited.contains(&key) {
                         visited.insert(key);
-                        queue.push_back((x_weak.clone(), dist + 1));
+                        queue.push_back((ex.as_weak().clone(), dist + 1));
                     }
                 }
             }
@@ -266,6 +333,11 @@ impl Room {
     /// Get the [Room]'s [memory fog][MemoryFog], if any.
     pub fn memory_fog(&self) -> Option<MemoryFog> {
         self.memory_fog.clone()
+    }
+
+    /// Check if we have an [Exit] at [`dir`][Direction].
+    pub fn contains_exit(&self, dir: &Direction) -> bool {
+        self.exits.contains_key(dir)
     }
 }
 
@@ -285,6 +357,7 @@ impl Storage for Room {
     fn find_id_by_name(&self, name: &str) -> Option<String> { self.contents.find_id_by_name(name) }
     fn max_space(&self) -> StorageSpace { self.contents.max_space() }
     fn peek_at(&self, id: &str) -> Option<&Item> { self.contents.peek_at(id) }
+    fn peek_at_mut(&mut self, id: &str) -> Option<&mut Item> { self.contents.peek_at_mut(id) }
     fn required_space(&self) -> StorageSpace { StorageSpace::MAX }
     fn space(&self) -> StorageSpace { self.contents.space() }
     fn take(&mut self, id: &str) -> Option<Item> { self.contents.take(id) }
@@ -316,38 +389,6 @@ impl Room {
         let _ = self.contents.tick().await;
         #[cfg(all(debug_assertions,feature = "stresstest"))]{
             log::debug!("Room '{}' ticked.", self.id);
-        }
-    }
-}
-
-#[cfg(test)]
-mod room_tests {
-    use crate::{identity::MachineIdentity, util::direction::Direction, world::world_tests::get_operational_mock_world};
-
-    #[tokio::test]
-    async fn room_linking() {
-        let (w_arc,_,_,_) = get_operational_mock_world().await;
-        w_arc.write().await.link_rooms().await;
-        let r1_m_id = "r-1".as_m_id();
-        if let Some(r_arc) = w_arc.read().await.get_room_by_m_id(r1_m_id) {
-            let mut r = r_arc.write().await;
-            if let Err(e) = r.link_exit(w_arc.clone(), Direction::North, "r-2".into()).await {
-                panic!("Bummer… {e:?}");
-            }
-        }
-        // this should fail symmetry check:
-        if let Some(r_arc) = w_arc.read().await.get_room_by_m_id(r1_m_id) {
-            let mut r = r_arc.write().await;
-            if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "r-2".into()).await {
-                panic!("Bummer… {e:?}");
-            }
-        }
-        // this should create a "mirage" and override an old entry:
-        if let Some(r_arc) = w_arc.read().await.get_room_by_m_id(r1_m_id) {
-            let mut r = r_arc.write().await;
-            if let Err(e) = r.link_exit(w_arc.clone(), Direction::Custom("trampoline".into()), "r-3".into()).await {
-                log::error!("Bummer… {e:?}");
-            }
         }
     }
 }

@@ -23,6 +23,8 @@ pub enum SystemSignal {
     SaveWorld,
     /// Item tucked into L'n'F.
     LostAndFound,
+    /// Save a [Room].
+    SaveRoom { arc: Arc<RwLock<Room>> },
 
     //
     //--- Librarian ---

@@ -35,7 +35,7 @@ impl Command for GotoCommand {
 
         let target_arc = {
             let r_lock = origin.read().await;
-            r_lock.exits.get(&dir).and_then(|e| e.upgrade())
+            r_lock.exits.get(&dir).and_then(|e| e.as_arc())
         };
 
         let Some(target) = target_arc else {

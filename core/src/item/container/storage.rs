@@ -93,6 +93,8 @@ pub trait Storage {
     fn contains(&self, id: &str) -> bool;
     /// Eyeball an [Item] of `id`, if it happens to be contained.
     fn peek_at(&self, id: &str) -> Option<&Item>;
+    /// Eyeball an [Item] of `id`, if it happens to be contained.
+    fn peek_at_mut(&mut self, id: &str) -> Option<&mut Item>;
     /// Very literally yank out `id`, if present.
     #[must_use = "Item taken out will require handling"]
     fn take(&mut self, id: &str) -> Option<Item>;

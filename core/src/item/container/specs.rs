@@ -274,6 +274,17 @@ impl Storage for ContainerSpec {
         None
     }
 
+    fn peek_at_mut(&mut self, id: &str) -> Option<&mut Item> {
+        if self.max_space < 1 { return None; }
+        for c in self.contents.values_mut() {
+            if c.id() == id { return Some(c) }
+            if let Some(item) = c.peek_at_mut(id) {
+                return Some(item);
+            }
+        }
+        None
+    }
+
     fn take(&mut self, id: &str) -> Option<Item> {
         if self.max_space < 1 { return None; }
         if let Some(item) = self.contents.remove(id) {

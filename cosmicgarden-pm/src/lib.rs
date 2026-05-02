@@ -1,7 +1,7 @@
 //! Garden's proc-macro(s)…
 use proc_macro::TokenStream;
-use quote::quote;
-use syn::{Attribute, Data, DeriveInput, parse_macro_input};
+use quote::{format_ident, quote};
+use syn::{Attribute, Data, DataEnum, DeriveInput, Fields, Ident, parse_macro_input};
 
 fn is_tagged_attr(attr: &Attribute, what: &str, goal: &str) -> bool {
     if attr.path().is_ident(what) {
@@ -16,6 +16,34 @@ fn is_tagged_attr(attr: &Attribute, what: &str, goal: &str) -> bool {
     }
 
     false
+}
+
+fn gen_match(data: &DataEnum, method: &Ident, num_arg: u32) -> Vec<proc_macro2::TokenStream> {
+    data.variants.iter().map(|variant| {
+        let arg = match num_arg {
+            0 => quote!(),
+            1 => quote!(a),
+            2 => quote!(a,b),
+            3 => quote!(a,b,c),
+            _ => quote!(a,b,c,d),
+        };
+        let var_ident = &variant.ident;
+        match &variant.fields {
+            Fields::Unnamed(_) => {
+                quote! {
+                    Self::#var_ident(inner) => inner.#method(#arg)
+                }
+            }
+
+            Fields::Named(_) => {
+                quote! {
+                    Self::#var_ident { loot, ..} => loot.#method(#arg)
+                }
+            }
+
+            Fields::Unit => { quote! { Self::#var_ident => panic!("No Storage for weird stuff!") }}
+        }
+    }).collect()
 }
 
 macro_rules! get_tagged_ident {
@@ -45,67 +73,13 @@ macro_rules! maybe_field {
     };
 }
 
-macro_rules! enum_getter {
-    ($data:ident, $getter:ident) => {
-        $data.variants.iter().map(|v| {
-            let variant_name = &v.ident;
-            quote! { Self::#variant_name(inner) => inner.$getter() }
-        })
-    };
-}
-
-macro_rules! enum_getter_w_arg {
-    ($data:ident, $getter:ident) => {
-        $data.variants.iter().map(|v| {
-            let variant_name = &v.ident;
-            quote! { Self::#variant_name(inner) => inner.$getter(a) }
-        })
-    };
-}
-
-macro_rules! enum_defaulter {
-    ($data:ident, $defr:ident) => {
-        $data.variants.iter().map(|v| {
-            let variant_name = &v.ident;
-            quote! { Self::#variant_name(inner) => inner.$defr() }
-        })
-    };
-}
-
-macro_rules! enum_setter {
-    ($data:ident, $setter:ident) => {
-        $data.variants.iter().map(|v| {
-            let variant_name = &v.ident;
-            quote! { Self::#variant_name(inner) => inner.$setter(a) }
-        })
-    };
-}
-
-macro_rules! enum_setter_2 {
-    ($data:ident, $setter:ident) => {
-        $data.variants.iter().map(|v| {
-            let variant_name = &v.ident;
-            quote! { Self::#variant_name(inner) => inner.$setter(a,b) }
-        })
-    };
-}
-
-macro_rules! enum_setter_3 {
-    ($data:ident, $setter:ident) => {
-        $data.variants.iter().map(|v| {
-            let variant_name = &v.ident;
-            quote! { Self::#variant_name(inner) => inner.$setter(a,b,c) }
-        })
-    };
-}
-
 /// Generate read-only [IdentityQuery] variant's internals.
 fn generate_identity_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
         Data::Enum(data) => {
-            let ids = enum_getter!(data, id);
-            let titles = enum_getter!(data, title);
+            let ids = gen_match(&data, &format_ident!("id"), 0);
+            let titles = gen_match(&data, &format_ident!("title"), 0);
             
             quote! {
                 impl crate::identity::IdentityQuery for #name {
@@ -164,9 +138,9 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
     let mut_impl =
     match &input.data {
         Data::Enum(data) => {
-            let set_id = enum_setter_2!(data, set_id);
-            let title_mut = enum_getter!(data, title_mut);
-            let set_title = enum_setter!(data, set_title);
+            let set_id = gen_match(&data, &format_ident!("set_id"), 2);
+            let title_mut = gen_match(&data, &format_ident!("title_mut"), 0);
+            let set_title = gen_match(&data, &format_ident!("set_title"), 1);
             quote! {
                 impl crate::identity::IdentityMut for #name {
                     fn set_id(&mut self, a: &str, b: bool) -> Result<(), crate::identity::IdError> { match self {#(#set_id),*} }
@@ -272,7 +246,7 @@ fn generate_itemized_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
         Data::Enum(data) => {
-            let sizes = enum_getter!(data, size);
+            let sizes = gen_match(&data, &format_ident!("size"), 0);
             quote! {
                 impl crate::item::Itemized for #name {
                     fn size(&self) -> crate::item::StorageSpace { match self {#(#sizes),*}}
@@ -309,7 +283,7 @@ pub fn itemized_mut_derive(input: TokenStream) -> TokenStream {
     let mut_impl = match &input.data
     {
         Data::Enum(data) => {
-            let set_sizes = enum_setter!(data, set_size);
+            let set_sizes = gen_match(&data, &format_ident!("set_size"), 1);
 
             quote! {
                 impl crate::item::ItemizedMut for #name {
@@ -345,29 +319,29 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
     let name = input.ident;
 
     if let Data::Enum(data) = input.data {
-        let can_holds = enum_getter_w_arg!(data, can_hold);
-        let max_spaces = enum_getter!(data, max_space);
-        let req_spaces = enum_getter!(data, required_space);
-        let spaces = enum_getter!(data, space);
-        let try_inserts = enum_getter_w_arg!(data, try_insert);
-        let contains = enum_getter_w_arg!(data, contains);
-        let peek_ats = enum_getter_w_arg!(data, peek_at);
-        let takes = enum_getter_w_arg!(data, take);
-        let take_bys = enum_getter_w_arg!(data, take_by_name);
-        let find_id_by_names = enum_getter_w_arg!(data, find_id_by_name);
-        let ejects = enum_getter!(data, eject_all);
+        let can_holds = gen_match(&data, &format_ident!("can_hold"), 1);
+        let max_spaces = gen_match(&data, &format_ident!("max_space"), 0);
+        let req_spaces = gen_match(&data, &format_ident!("required_space"), 0);
+        let spaces = gen_match(&data, &format_ident!("space"), 0);
+        let try_inserts = gen_match(&data, &format_ident!("try_insert"), 1);
+        let contains = gen_match(&data, &format_ident!("contains"), 1);
+        let peek_ats = gen_match(&data, &format_ident!("peek_at"), 1);
+        let peek_at_muts = gen_match(&data, &format_ident!("peek_at_mut"), 1);
+        let takes = gen_match(&data, &format_ident!("take"), 1);
+        let take_bys = gen_match(&data, &format_ident!("take_by_name"), 1);
+        let find_id_by_names = gen_match(&data, &format_ident!("find_id_by_name"), 1);
+        let ejects = gen_match(&data, &format_ident!("eject_all"), 0);
 
         TokenStream::from(quote! {
             impl crate::item::container::Storage for #name {
-                fn can_hold(&self, a: &crate::item::Item) -> Result<(), crate::item::StorageQueryError>
-                    { match self {#(#can_holds),*}}
+                fn can_hold(&self, a: &crate::item::Item) -> Result<(), crate::item::StorageQueryError> { match self {#(#can_holds),*}}
                 fn max_space(&self) -> crate::item::StorageSpace { match self {#(#max_spaces),*}}
                 fn required_space(&self) -> crate::item::StorageSpace { match self {#(#req_spaces),*}}
                 fn space(&self) -> crate::item::StorageSpace { match self {#(#spaces),*}}
-                fn try_insert(&mut self, a: crate::item::Item) -> Result<(), crate::item::StorageError>
-                    { match self {#(#try_inserts),*}}
+                fn try_insert(&mut self, a: crate::item::Item) -> Result<(), crate::item::StorageError> { match self {#(#try_inserts),*}}
                 fn contains(&self, a: &str) -> bool { match self {#(#contains),*}}
                 fn peek_at(&self, a: &str) -> Option<&Item> { match self {#(#peek_ats),*}}
+                fn peek_at_mut(&mut self, a: &str) -> Option<&mut Item> { match self {#(#peek_at_muts),*}}
                 fn take(&mut self, a: &str) -> Option<Item> { match self {#(#takes),*}}
                 fn take_by_name(&mut self, a: &str) -> Option<Item> { match self {#(#take_bys),*}}
                 fn find_id_by_name(&self, a: &str) -> Option<String> { match self {#(#find_id_by_names),*}}
@@ -386,7 +360,7 @@ fn generate_describable_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
         Data::Enum(data) => {
-            let descs = enum_getter!(data, desc);
+            let descs = gen_match(&data, &format_ident!("desc"), 0);
             quote! {
                 impl crate::string::description::Describable for #name {
                     fn desc<'a>(&'a self) -> &'a str { match self {#(#descs),*}}
@@ -427,7 +401,7 @@ pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
     let mut_impl = match &input.data
     {
         Data::Enum(data) => {
-            let set_descs = enum_setter!(data, set_desc);
+            let set_descs = gen_match(&data, &format_ident!("set_desc"), 1);
             quote! {
                 impl crate::string::description::DescribableMut for #name {
                     fn set_desc(&mut self, a: &str) -> bool { match self {#(#set_descs),*}}
@@ -464,9 +438,9 @@ fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     match &input.data {
         Data::Enum(data) => {
-            let owner_ids = enum_getter!(data, owner);
-            let last_user_ids = enum_getter!(data, last_users);
-            let sources = enum_getter!(data, source);
+            let owner_ids = gen_match(&data, &format_ident!("owner"), 0);
+            let last_user_ids = gen_match(&data, &format_ident!("last_users"), 0);
+            let sources = gen_match(&data, &format_ident!("source"), 0);
             
             quote! {
                 impl crate::item::ownership::Owned for #name {
@@ -526,13 +500,13 @@ fn generate_ownedmut_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     match &input.data {
         Data::Enum(data) => {
-            let set_owner_ids = enum_setter!(data, change_owner);
-            let set_last_user_ids = enum_setter!(data, set_last_user);
-            let set_sources = enum_setter_3!(data, set_source);
+            let set_owner_ids = gen_match(&data, &format_ident!("change_owner"), 1);
+            let set_last_user_ids = gen_match(&data, &format_ident!("set_last_user"), 1);
+            let set_sources = gen_match(&data, &format_ident!("set_source"), 3);
 
-            let e_owner_ids = enum_defaulter!(data, erase_owner_r);
-            let e_last_user_ids = enum_defaulter!(data, erase_last_user_r);
-            let u_sources = enum_setter_3!(data, unify_source_r);
+            let e_owner_ids = gen_match(&data, &format_ident!("erase_owner_r"), 0);
+            let e_last_user_ids = gen_match(&data, &format_ident!("erase_last_user_r"), 0);
+            let u_sources = gen_match(&data, &format_ident!("unify_source_r"), 3);
             quote! {
                 impl crate::item::ownership::OwnedMut for #name {
                     fn change_owner(&mut self, a: &str) { match self {#(#set_owner_ids),*}}

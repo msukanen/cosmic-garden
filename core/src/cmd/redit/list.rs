@@ -36,7 +36,7 @@ impl Command for ListCommand {
 mod cmd_redit_list {
     use dicebag::InclusiveRandomRange;
 
-    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, list::ListCommand}}, ctx, identity::MachineIdentity, room::Room, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, list::ListCommand}}, ctx, room::Room, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn exits_listing() {
@@ -66,7 +66,7 @@ mod cmd_redit_list {
             let d = format!("This would be the room #{i}");
             let r = Room::new(&id, &t).await.ok().unwrap();
             r.write().await.desc = d;
-            lock.insert_room(r);
+            lock.insert_room(r).await.ok();
         }
         drop(lock);
         let _ = ctx!(state, ListCommand, "r-1 0", s,c.out,w,p, |out:&str| out.contains("Inciner"));

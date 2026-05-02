@@ -25,7 +25,7 @@ impl Command for WeaveCommand {
 
         {
             let mut lock = room_arc.write().await;
-            lock.copyback(wip_copy);
+            lock.scavenge(wip_copy);
             drop(lock);
             (*ROOMS_TO_SAVE).write().await.push(room_arc.clone());
         }

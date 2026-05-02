@@ -88,9 +88,9 @@ impl Command for WeaveCommand {
 
 #[cfg(test)]
 mod medit_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, edit::EditorMode, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, edit::EditorMode, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn weave_test() {
@@ -101,7 +101,7 @@ mod medit_tests {
         let _ = get_operational_mock_life!(c,w);
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the threads stabilize…
+        stabilize_threads!(250);
         let state = ctx!(sup true, state, WeaveCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
         let state = ctx!(sup true, state, MeditCommand, "", s,c,w,p,|out:&str| out.contains("Huh?"));
         assert!(p.read().await.medit_buffer.is_none());
@@ -118,7 +118,7 @@ mod medit_tests {
         p.write().await.config.show_id = true;
         let state = ctx!(sup true, state, WeaveCommand, "persist spawn",s,c,w,p,|out:&str| out.contains("Hoblin!"));
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "hoblin".to_string() }, room: "r-1".into(), reply: None }).ok();
-        tokio::time::sleep(Duration::from_millis(75)).await;
+        stabilize_threads!(25);
         let _ = ctx!(state, LookCommand,"",s,c,w,p);
     }
 }

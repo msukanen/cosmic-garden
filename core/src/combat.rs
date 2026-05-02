@@ -112,7 +112,7 @@ mod combatant_tests {
         // Spawn a lil gobbo.
         let Ok(_) = Entity::new("goblin", &c.out).await else { panic!("Where'd the lil goblin's blueprint go?!"); };
         let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None });
-        stabilize_threads!(150);
+        stabilize_threads!(25);
       
         let mut rx = c.out.broadcast.subscribe();
         tokio::spawn(async move {
@@ -136,8 +136,8 @@ mod combatant_tests {
                 let state = ClientState::Playing { player: p.clone() };
                 let state = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
                 let state = ctx!(state, AttackCommand, "goblin",s,c,w,p);
-                stabilize_threads!(2000);
-                let _ = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("goblin is here"));
+                stabilize_threads!();
+                let _ = ctx!(state, LookCommand, "",s,c,w,p,|out:&str| out.contains("corpse"));
             });
         }
         for x in 2..=100 {
@@ -172,8 +172,9 @@ mod combatant_tests {
         let c = c.out;// we don't need the c.recv part anymore here…
         stabilize_threads!();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
+        stabilize_threads!(25);
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
-        stabilize_threads!(150);
+        stabilize_threads!(25);
         let mut rx = c.broadcast.subscribe();
         tokio::spawn(async move {
             loop {
@@ -251,7 +252,7 @@ mod combatant_tests {
             log::debug!("AttackCommand warming up...");
             let _ = ctx!(state, AttackCommand, "goblin",s,c,w,p);
             log::debug!("AttackCommand fired.");
-            stabilize_threads!(50);
+            stabilize_threads!(250);
             c.shutdown().await;
             log::debug!("Shutdown initiated.");
             return;

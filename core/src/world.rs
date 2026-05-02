@@ -6,7 +6,7 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::Room, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::{Room, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
@@ -136,15 +136,17 @@ impl World {
 
                         let r2 = Room::new("room 2!", "Room #2").await?;
                         let r2_id = r2.read().await.id().to_string();
-                        rooms.insert(r2_id.as_m_id(), r2.clone());
-                        
+                        rooms.insert(r2_id.as_m_id(), r2.clone());                       
                         {
                             let mut l1 = r1.write().await;
-                            l1.raw_exits.insert(Direction::North, r2_id);
+                            let exit = Exit::Free { room: Arc::downgrade(&r2) };
+                            l1.assign_exit(Direction::North, exit).await;
                             l1.save().await?;
-                            
+                        }
+                        {   
                             let mut l2 = r2.write().await;
-                            l2.raw_exits.insert(Direction::South, r1_id);
+                            let exit = Exit::Free { room: Arc::downgrade(&r1) };
+                            l2.assign_exit(Direction::South, exit).await;
                             l2.save().await?;
                         }
                         rooms
@@ -219,21 +221,13 @@ impl World {
         let rooms = self.rooms.clone();
         for room_arc in rooms.values() {
             let mut room = room_arc.write().await;
+            room.bootstrap_exits(&self);
             log::trace!("Room id '{}' vs sought for '{}'…", room.id(), self.root_room_id);
             // weld the root room in place
             if room.id() == self.root_room_id {
                 log::trace!("Welding '{}' as root room.", room.id());
                 self.root_room = room_arc.clone().into();
             }
-            let mut linked = HashMap::new();
-            for (dir, target_id) in &room.raw_exits {
-                if let Some(target_arc) = self.rooms.get(&target_id.as_m_id()) {
-                    linked.insert(dir.clone(), Arc::downgrade(target_arc));
-                } else {
-                    log::warn!("Broken bridge… {} -> {} ({})", room.id(), target_id, dir);
-                }
-            }
-            room.exits = linked;
         }
 
         if self.root_room.is_none() {
@@ -267,9 +261,9 @@ impl World {
         self.insert_room_by_m_id(m_id, id, room)
     }
 
-    /// Try insert a new [Room].
+    /// Try insert a new [Room]. Seldom used directly…
     /// 
-    /// Seldom used directly.
+    /// For the sake of sanity, direct overwrite is not allowed.
     /// 
     /// # Args
     /// - `m_id` of the [Room].
@@ -368,7 +362,11 @@ pub async fn room_list(world: Arc<RwLock<World>>, term: Option<String>) -> Vec<M
 
 #[cfg(test)]
 pub(crate) mod world_tests {
+    use std::sync::Once;
+
     use crate::{cformat, identity::{IdentityMut, MachineIdentity}};
+
+    pub static DISK_VERIFIED: Once = Once::new();
 
     pub(crate) async fn get_operational_mock_world() -> (
         std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
@@ -398,8 +396,16 @@ pub(crate) mod world_tests {
                 
              }).
             try_init();
-        let _ = crate::DATA.get_or_init(|| "data".into());
-        let _ = crate::WORLD.get_or_init(|| "crash-test-dummy".to_string());
+        DISK_VERIFIED.call_once(|| {
+            let _ = crate::DATA.get_or_init(|| "data".into());
+            let _ = crate::WORLD.get_or_init(|| "crash-test-dummy".to_string());
+            let path = std::path::Path::new("data/crash-test-dummy");
+            if path.exists() {
+                log::trace!("Persistence verified.");
+            } else {
+                log::info!("Bootstrap missing.");
+            }
+        });
         use crate::identity::IdentityQuery;
         let mut plr = crate::player::Player::default();
         plr.set_id("test-player-1", true).ok();
@@ -421,52 +427,4 @@ pub(crate) mod world_tests {
             (dtx, drx),
         )
     }
-
-//     #[cfg(feature = "stresstest")]
-//     #[tokio::test]
-//     async fn world_spins_5000_logout() {
-//         use std::{sync::Arc, time::Duration};
-//         use tokio::{sync::RwLock, time};
-//         use crate::{Cli, DATA, identity::IdentityMut, DATA_PATH, io_thread::{io_thread, PLAYERS_TO_LOGOUT}, player::Player, world::World};
-
-//         let _ = env_logger::try_init();
-//         let _ = DATA.set(std::env::var("COSMIC_GARDEN_DATA").unwrap());
-//         let args = Cli {
-//             autosave_queue_interval: None,
-//             host_listen_addr: "0.0.0.0".into(),
-//             host_listen_port: 8080,
-//             world: "cosmic-garden".into(),
-//             data_path: (*DATA_PATH).clone(),
-//             bootstrap_url: None,
-//         };
-//         let mut w = World::load_or_bootstrap(&args).await.unwrap_or_else(|e| panic!("Oh noes! Not the dreaded {e:?}"));
-//         w.link_rooms().await;
-//         let w = Arc::new(RwLock::new(w));
-        
-//         tokio::spawn(io_thread(w.clone(), args.clone()));
-
-//         let mut world_spins_by = time::interval(Duration::from_millis(1_000));
-//         let mut done = false;
-//         let mut times = 1;
-
-//         loop {
-//             tokio::select! {
-//                 _ = world_spins_by.tick() => {
-//                     if !done {
-//                         let mut plr = vec![];
-//                         for _ in 0..5_000 {
-//                             let mut p = Player::default();
-//                             let _ = p.set_id("dummy");
-//                             plr.push(Arc::new(RwLock::new(p)));
-//                         }
-//                         let mut l = (*PLAYERS_TO_LOGOUT).write().await;
-//                         l.extend(plr);
-//                     }
-//                     log::debug!("{times}. hello from world, la-di-da...");
-//                     times += 1;
-//                     done = true;
-//                 }
-//             }
-//         }
-//     }
 }

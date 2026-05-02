@@ -12,7 +12,7 @@ use crate::{
 
 use serde::{Deserialize, Serialize};
 use tokio::fs;
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct BlueprintLibrary {
     world_id: String,
     #[serde(with = "string_vec_to_bool_map")]
