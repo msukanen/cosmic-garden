@@ -314,7 +314,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                                     vct: vct.clone(),
                                     resolution: resolution.clone()
                                 }).ok();
-                                log::debug!("resolution = {resolution:?}");
+                                #[cfg(all(test,feature = "stresstest"))]{log::debug!("resolution = {resolution:?}");}
                                 // TODO deal with possible loot drops if not Resolution::Inconclusive or XyzRetreat:
                                 match resolution {
                                     Resolution::AtkRetreat => { deathrow.push(*a_key);},
@@ -654,7 +654,7 @@ async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resoluti
 mod life_tests {
     use std::{io::Cursor, sync::Arc};
 
-    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn goblin_ocean() {

@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::IdentityQuery, item::{Item, container::Storage}, roomloc_or_bust, tell_user, thread::janitor::add_item_to_lnf, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_iedit_buffer_inaccessible, identity::IdentityQuery, item::{Item, container::storage::Storage}, roomloc_or_bust, tell_user, thread::janitor::add_item_to_lnf, validate_access};
 
 pub struct DevolveCommand;
 

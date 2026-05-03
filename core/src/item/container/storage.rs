@@ -2,7 +2,10 @@
 
 use std::fmt::Display;
 
-use crate::{identity::IdentityQuery, item::{Item, container::specs::StorageSpace}};
+use crate::{identity::IdentityQuery, item::Item};
+
+/// "Unit" of space and/or weight…
+pub type StorageSpace = u16;
 
 /// Various storage related errors.
 /// 

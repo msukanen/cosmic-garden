@@ -6,17 +6,13 @@ pub mod corpse; pub use corpse::{CorpseSpec, bulk_transfer};
 
 use crate::{
     r#const::SIZE_BALANCE,
-    identity::{IdError, IdentityMut, IdentityQuery, uniq::Uuid},
+    identity::uniq::Uuid,
     item::{
         Item, Itemized, ItemizedMut,
-        StorageError, StorageQueryError,
         container::{
-            Storage, StorageMut,
-            specs::{ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageSpace}
+            ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageMut, StorageSpace
         },
-        ownership::{ItemSource, ItemSourceError, Owned, OwnedMut}
     },
-    mob::core::Entity,
     string::{Describable, DescribableMut},
     traits::{Reflector, Tickable},
 };

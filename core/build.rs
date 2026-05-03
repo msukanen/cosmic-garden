@@ -66,7 +66,6 @@ fn generate_cmd_table(file: &mut BufWriter<File>, path_str: &str, table_name: &s
         // Some path gymnastics to make #[path = ...] work across Win-native and WSL ...
         let diff = diff_paths(mf_dir.unwrap(), &*OUT_DIR);
         let clean = diff.unwrap().to_str().unwrap().to_string().replace("\\", "/");
-        //writeln!(reg_file, "//== {clean}/{cmd_path}")?;
         write!(reg_file, "#[path = \"{clean}/{cmd_path}\"] ")?;
         writeln!(reg_file, "pub mod {module_name};")?;
         writeln!(file,"    m.insert(\"{cmd}\".to_string(), Box::new({full_module_path}::{struct_name}Command));")?;

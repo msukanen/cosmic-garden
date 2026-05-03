@@ -1,6 +1,6 @@
 //! Errors ad hominis…
 
-use crate::{identity::IdError, item::container::StorageError, mob::core::EntityError, password::PasswordError, room::RoomError};
+use crate::{identity::IdError, item::container::storage::StorageError, mob::core::EntityError, password::PasswordError, room::RoomError};
 
 /// Cosmic Garden error type - a thin wrapper around more specific ones.
 // Rarely of any use for other but sanitizing [Debug] output.

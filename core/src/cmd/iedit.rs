@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{container::Storage, primordial::PrimordialItem}, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::get_item_blueprint, validate_access};
+use crate::{cmd::{Command, CommandCtx}, edit::EditorMode, identity::IdentityQuery, io::ClientState, item::{container::storage::Storage, primordial::PrimordialItem}, player::ActivityType, roomloc_or_bust, show_help_if_needed, tell_user, thread::librarian::get_item_blueprint, validate_access};
 
 include!(concat!(env!("OUT_DIR"), "/iedit_registry.rs"));
 

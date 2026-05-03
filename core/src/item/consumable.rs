@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{item::{container::specs::StorageSpace, matter::{Matter, MatterState}, ownership::Owner}, mob::{StatType, StatValue, affect::{Affect, Affector}}, identity::uniq::Uuid, traits::{Reflector, Tickable}};
+use crate::{identity::uniq::Uuid, item::{container::StorageSpace, matter::{Matter, MatterState}, ownership::Owner}, mob::{StatType, StatValue, affect::{Affect, Affector}}, traits::{Reflector, Tickable}};
 
 /// Various nutrition types (plus not edible).
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]

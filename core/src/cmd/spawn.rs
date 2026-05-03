@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx, inventory::InventoryCommand, look::LookCommand}, err_tell_user, identity::IdentityQuery, item::{StorageError, container::Storage}, player::Player, room::{Room, RoomPayload}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::{SystemSignal, add_item_to_lnf, librarian::get_item_blueprint, signal::SpawnType}, validate_access};
+use crate::{cmd::{Command, CommandCtx, inventory::InventoryCommand, look::LookCommand}, err_tell_user, identity::IdentityQuery, item::container::storage::{Storage, StorageError}, player::Player, room::{Room, RoomPayload}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::{SystemSignal, add_item_to_lnf, librarian::get_item_blueprint, signal::SpawnType}, validate_access};
 
 pub struct SpawnCommand;
 
