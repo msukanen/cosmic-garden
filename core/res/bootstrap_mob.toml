@@ -1,10 +1,12 @@
 [[mobs]]
 id = "goblin"
 name = "A goblin"
-faction = "Neutral"
 max_weapon_size = "Medium"
 size = "Small"
 desc = "A little goblin."
+
+[mobs.faction.NPC]
+demeanor = "Neutral"
 
 [mobs.hp.HP]
 curr = 50.0

@@ -12,7 +12,7 @@ use crate::{
         Item,
         container::variants::{ContainerVariant, ContainerVariantType},
         weapon::{WeaponSize, str_based_dmg_mul}
-    }, mob::{Stat, StatType, StatValue, faction::EntityFaction}, room::Room, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable
+    }, mob::{Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}}, room::Room, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable
 };
 
 /// Generic [Entity] size categories
@@ -143,7 +143,7 @@ impl Default for Entity {
             brn: Stat::new(StatType::Brn),
             nim: Stat::new(StatType::Nim),
             strn: Stat::new(StatType::Str),
-            faction: EntityFaction::Neutral,
+            faction: EntityFaction::NPC { demeanor: Demeanor::default() },
             max_weapon_size: WeaponSize::Large,
             equipped_weapon: None,
             size: EntitySize::Medium,
