@@ -4,11 +4,11 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{IdentityMut, Itemized, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::IdentityQuery, item::{consumable::ConsumableMatter, container::{Storage, StorageMut, specs::StorageSpace, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut}, identity::uniq::Uuid, traits::{Reflector, Tickable}};
+use crate::{identity::{IdentityQuery, uniq::Uuid}, item::{consumable::ConsumableMatter, container::{StorageSpace, storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut}, traits::{Reflector, Tickable}};
 
 pub mod blueprint; pub use blueprint::BlueprintLibrary;
 pub mod consumable;
-pub mod container; pub use container::{StorageError, StorageQueryError};
+pub mod container;
 pub mod key;
 pub mod matter;
 pub mod ownership;
@@ -161,11 +161,11 @@ impl Storage for Item {
         }
     }
 
-    fn try_insert(&mut self, item: Item) -> Result<(), container::StorageError> {
+    fn try_insert(&mut self, item: Item) -> Result<(), StorageError> {
         match self {
             Self::Container(loot) |
             Self::Corpse { loot,..} => loot.try_insert(item),
-            _ => Err(container::StorageError::NotContainer(item))
+            _ => Err(StorageError::NotContainer(item))
         }
     }
 
