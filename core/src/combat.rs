@@ -50,8 +50,6 @@ pub trait Combatant: IdentityQuery + Damager {
 
     /// Is the [Combatant] dead?
     fn is_dead(&self) -> bool { self.hp().is_dead().ok().unwrap() }
-
-    /// Get location of the [Combatant].
     fn location(&self) -> Weak<RwLock<Room>>;
 }
 
@@ -85,9 +83,9 @@ pub trait CombatantMut : Combatant {
     fn brn_mut<'a>(&'a mut self) -> &'a mut Stat;
     /// Get mutable Nim.
     fn nim_mut<'a>(&'a mut self) -> &'a mut Stat;
-    fn set_location(&mut self, arc: &Arc<RwLock<Room>>);
     fn inventory(&mut self) -> &mut ContainerVariant;
     fn alter_brain_freeze(&mut self, freeze: bool);
+    fn location_mut(&mut self) -> &mut Weak<RwLock<Room>>;
 }
 
 #[cfg(test)]
