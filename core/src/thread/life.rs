@@ -566,7 +566,7 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_a
                     if let Some(mut mob) = reply {
                         mob.set_id(&mob.id().re_uuid(), true).ok();
                         let mob_id = mob.id().to_string();
-                        mob.set_location(&r_arc);
+                        *(mob.location_mut()) = Arc::downgrade(&r_arc);
                         let mob_arc = Arc::new(RwLock::new(mob));
                         {
                             let mut w = world.write().await;
