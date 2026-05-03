@@ -232,21 +232,21 @@ see_also = ["channels"]
 id = "teleport"
 title = "teleport"
 alias = ["teleport", "tele", "port", "yank"]
-access = "admin"
+access = "builder"
 contents = """
 Teleport someone somewhere, be it yourself or someone else.
 
-#1 teleport [me] <target|room-id>
-- Teleports you to <target> or <room-id>
+<c gray># <c green>BUILDER</c></c>
+ * teleport [me] <target|room-id>
+   - Teleports you to <target> or <room-id>
 
-#2 teleport <target>
-- Yanks the <target> to where you are currently.
-
-#3 teleport <target1> <target2|room-id>
-- Teleports <target1> to either where <target2> is or to specified <room-id>.
-
-#4 teleport here|room <room-id>
-- Evicts everyone (except yourself) from the current room to <room-id>.
+<c gray># <c green>ADMIN</c></c>
+ * teleport <target>
+   - Yanks the <target> to where you are currently.
+ * teleport <target1> <target2|room-id>
+   - Teleports <target1> to either where <target2> is or to specified <room-id>.
+ * teleport here|room <room-id>
+   - Evicts everyone (except yourself) from the current room to <room-id>.
 """
 usage = [
     "teleport [me] <target|room-id>",
@@ -451,18 +451,18 @@ row within a minute. Not doing so will remove the pending state soon enough.
 usage = ["hardcore enable"]
 [[help_pages]]
 id = "set"
-access = "builder"
 title = "set"
 alias = ["set"]
 contents = """
-'set' value of some runtime <var>.
+'set' value of some runtime or persistent <var>.
 
 Note: some of the <var> are admin-only by nature...
 
-# FIELDS
- * core_tick <msec>
- * battle_tick <msec>
+# FIELDS (builder/admin)
  * config <var> <val>     ;; <c cyan>set config</c> for a list.
+
+# FIELDS
+ * gender <val>           ;; <c yellow>NOTE:</c> <c red>one-shot permanent</c>!
 """
 usage = ["set <var> <val>"]
 [[help_pages]]

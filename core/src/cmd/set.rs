@@ -95,9 +95,8 @@ mod cmd_set_tests {
         let _ = get_operational_mock_librarian!(c,w);
         let c = c.out;
         stabilize_threads!();
-        let state = ctx!(state, SetCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
-        p.write().await.access = Access::Builder;
         let state = ctx!(state, SetCommand, "", s,c,w,|out:&str| out.contains("admin-only by nature"));
+        p.write().await.access = Access::Builder;
         let state = ctx!(state, SetCommand, "xyc", s,c,w,|out:&str| out.contains("admin-only by nature"));
         let state = ctx!(state, SetCommand, "config", s,c,w,|out:&str| out.contains("Config values"));
         let state = ctx!(state, SetCommand, "config bla", s,c,w,|out:&str| out.contains("Usage"));
