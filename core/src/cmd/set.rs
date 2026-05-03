@@ -1,11 +1,11 @@
 //! 'set' a number of runtime and other variables.
 
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, mob::{Gender, GenderType}, player::Player, player_or_bust, show_help, show_help_if_needed, string::styling::Truthy, tell_user, tell_user_unk, thread::{SystemSignal, life::{TickType, sec_as_ticks}}, util::access::{Access, Accessor}};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, mob::{Gender, GenderType}, player::Player, player_or_bust, show_help, show_help_if_needed, string::styling::Truthy, tell_user, tell_user_unk, util::access::{Access, Accessor}};
 
 pub struct SetCommand;
 
@@ -22,14 +22,6 @@ impl Command for SetCommand {
         let (what, args) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
 
         match what {
-            "core_tick"|"core"|"core-tick" => {
-                if !access.is_admin() { tell_user_unk!(ctx.writer); return };
-                set_core_tick(ctx, args).await
-            },
-            "battle_tick"|"battle"|"battle-tick" => {
-                if !access.is_admin() { tell_user_unk!(ctx.writer); return };
-                set_battle_tick(ctx, args).await
-            },
             "config" => {
                 if !access.is_true_builder() { tell_user_unk!(ctx.writer); return };
                 set_config_val(ctx, args, &plr).await
@@ -38,46 +30,6 @@ impl Command for SetCommand {
             _ => { show_help!(ctx, "set") }
         }
     }
-}
-
-///
-/// Set core tick speed.
-/// 
-/// # Args
-/// - `args` being a numeric value representing milliseconds.
-async fn set_core_tick(ctx: &mut CommandCtx<'_>, args: &str) {
-    if let Ok(msec) = args.parse::<f32>() {
-        if msec < 10.0 {
-            err_tell_user!(ctx.writer, "To prevent <c red>server fire hazard</c>, CG restricts core speed to max <c yellow>100Hz</c>.\n");
-        } else if msec > 1000.0 {
-            err_tell_user!(ctx.writer, "Eh, to tick slower than 1Hz? No thanks, try something faster…\n");
-        }
-
-        let usec = (msec * 1000.0 + msec.fract() * 1000.0).floor() as u64;
-        let duration = Duration::from_micros(usec);
-        ctx.out.life.send(SystemSignal::AlterTickRate { tick_type: TickType::Core, duration }).ok();
-    }
-    tell_user!(ctx.writer, "Speed must be a numeric millisecond value…\n\nCurrent core at <c yellow>{}Hz</c>", sec_as_ticks(1, TickType::Core, ctx.out).await);
-}
-
-///
-/// Set battle tick speed.
-/// 
-/// # Args
-/// - `args` being a numeric value representing milliseconds.
-async fn set_battle_tick(ctx: &mut CommandCtx<'_>, args: &str) {
-    if let Ok(msec) = args.parse::<f32>() {
-        if msec < 10.0 {
-            err_tell_user!(ctx.writer, "To prevent <c red>server fire hazard</c>, CG restricts core speed to max <c yellow>100Hz</c>.\n");
-        } else if msec > 200.0 {
-            err_tell_user!(ctx.writer, "Eh, to tick slower than 5Hz? No thanks, try something faster…\n");
-        }
-
-        let usec = (msec * 1000.0 + msec.fract() * 1000.0).floor() as u64;
-        let duration = Duration::from_micros(usec);
-        ctx.out.life.send(SystemSignal::AlterTickRate { tick_type: TickType::Battle, duration }).ok();
-    }
-    tell_user!(ctx.writer, "Speed must be a numeric millisecond value…\n\nCurrent battle speed at <c yellow>{}Hz</c>", sec_as_ticks(1, TickType::Battle, ctx.out).await);
 }
 
 ///

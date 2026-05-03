@@ -1,6 +1,6 @@
 //! Per-client threading.
 
-use std::{net::SocketAddr, sync::{Arc, Weak}};
+use std::{net::SocketAddr, sync::Arc};
 
 use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpStream, sync::{RwLock, broadcast}};
 
@@ -12,7 +12,7 @@ use crate::{
     reprompt_playing_user,
     string::{prompt::PromptType, sanitize::Sanitizer},
     tell_user,
-    thread::{SystemSignal, life::BattlerKey, signal::SignalSenderChannels},
+    thread::{SystemSignal, signal::SignalSenderChannels},
     world::World
 };
 
@@ -189,9 +189,9 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                         Broadcast::BattleMessage3 { room, atk, vct, message_atk, message_other, message_vct } => {
                             let Some(ploc) = player.read().await.location.upgrade() else { continue; };
                             if !Arc::ptr_eq(&room, &ploc) { continue; }// not there
-                            let ptr = Weak::as_ptr(&Arc::downgrade(&player)) as *const() as BattlerKey;
-                            let a_ptr = Weak::as_ptr(&Arc::downgrade(&atk)) as *const() as BattlerKey;
-                            let v_ptr = Weak::as_ptr(&Arc::downgrade(&vct)) as *const() as BattlerKey;
+                            let ptr = lock2key!(arc player);
+                            let a_ptr = lock2key!(arc atk);
+                            let v_ptr = lock2key!(arc vct);
                             tell_user!(&mut writer, "\n{}\n",
                                 if ptr == a_ptr {
                                     message_atk

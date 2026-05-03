@@ -8,7 +8,7 @@ mod io;             use convert_case::{Case, Casing};
 use sysinfo::System;
 use tokio::{net::TcpListener, sync::RwLock};
 
-use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{DATA, WORLD}, thread::{per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
+use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{DATA, WORLD}, thread::{life::{BATTLE_HZ, CORE_HZ}, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
 
 mod cmd;
 pub mod combat;
@@ -46,6 +46,8 @@ pub struct Cli {
     #[arg(long, env = "COSMIC_GARDEN_DATA", default_value = "data")] data_path: String,
     #[arg(long)] bootstrap_url: Option<String>,
     #[arg(long)] autosave_queue_interval: Option<u64>,
+    #[arg(long, default_value = "100")] core_hz: u8,
+    #[arg(long, default_value = "50")] battle_hz: u8,
 }
 
 /// The main culprit of many things main…
@@ -55,6 +57,8 @@ async fn main() {
     let args = Cli::parse();
     let _ = DATA.set(args.data_path.clone());
     let _ = WORLD.set(args.world.clone());
+    let _ = CORE_HZ.set(args.core_hz.clamp(5, 100));//    5-100 Hz
+    let _ = BATTLE_HZ.set(args.battle_hz.clamp(5, 75));// 5-75 Hz
 
     if (*CMD_ALIASES).is_empty() {
         log::info!("No command aliases defined yet.");
@@ -80,7 +84,7 @@ async fn main() {
     let world = Arc::new(RwLock::new(world));
 
     let jan_t = tokio::spawn(thread::janitor((priv_chs.out.clone(), priv_chs.recv.janitor), world.clone(), args.clone().into(), done_tx));
-    let life_t = tokio::spawn(thread::life((priv_chs.out.clone(), priv_chs.recv.life), world.clone()));
+    let life_t = tokio::spawn(thread::life((priv_chs.out.clone(), priv_chs.recv.life), world.clone(), (args.core_hz, args.battle_hz)));
     let lib_t = tokio::spawn(thread::librarian((priv_chs.out.clone(), priv_chs.recv.librarian), world.clone()));
 
     // Create a listener that will accept incoming connections.

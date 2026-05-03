@@ -399,6 +399,8 @@ pub(crate) mod world_tests {
         DISK_VERIFIED.call_once(|| {
             let _ = crate::DATA.get_or_init(|| "data".into());
             let _ = crate::WORLD.get_or_init(|| "crash-test-dummy".to_string());
+            let _ = crate::thread::life::CORE_HZ.get_or_init(|| 100);
+            let _ = crate::thread::life::BATTLE_HZ.get_or_init(|| 50);
             let path = std::path::Path::new("data/crash-test-dummy");
             if path.exists() {
                 log::trace!("Persistence verified.");

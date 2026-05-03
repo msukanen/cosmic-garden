@@ -28,7 +28,7 @@ impl Command for HardcoreCommand {
         }
         p.hardcore = Some(false);
         // query life-thread about the state…
-        p.affects.insert("HARDCORE".into(), Affect::HardcorePending { remaining: Some(sec_as_ticks(60, TickType::Core, &ctx.out).await) });
+        p.affects.insert("HARDCORE".into(), Affect::HardcorePending { remaining: Some(sec_as_ticks(60, TickType::Core))});
         drop(p);
         tell_user!(ctx.writer, "<c brown>[<c yellow>HARDCORE MODE PENDING…</c>] - to enable, retype <c yellow>hardcore enable</c> within 60 seconds.\n");
     }

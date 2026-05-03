@@ -1,13 +1,15 @@
 //! Life-thread keeps the world ticking.
 
 use std::{collections::HashMap, sync::{Arc, Weak}};
+use once_cell::sync::OnceCell;
 
+use lazy_static::lazy_static;
 use nohash_hasher::BuildNoHashHasher;
 use tokio::{sync::{RwLock, mpsc, oneshot}, time::{Duration, Instant, MissedTickBehavior, interval}};
 
 use crate::{
     combat::{Battler, CombatantMut},
-    identity::{IdentityMut, IdentityQuery, MachineIdentity, uniq::Uuid},
+    identity::{IdentityMut, IdentityQuery, MachineId, MachineIdentity, uniq::Uuid},
     io::Broadcast,
     item::Item,
     mob::{StatValue, core::Entity},
@@ -20,18 +22,22 @@ use crate::{
     world::World
 };
 
+lazy_static! {
+    pub static ref CORE_HZ: OnceCell<u8> = OnceCell::new();
+    pub static ref BATTLE_HZ: OnceCell<u8> = OnceCell::new();
+}
+
 #[cfg(test)]
 #[macro_export]
 macro_rules! get_operational_mock_life {
     ($ch:ident, $w:ident) => {
-        tokio::spawn( crate::thread::life(($ch.out.clone(), $ch.recv.life), $w.clone()))
+        tokio::spawn( crate::thread::life(($ch.out.clone(), $ch.recv.life), $w.clone(), (
+            *crate::thread::life::CORE_HZ.get().unwrap(),
+            *crate::thread::life::BATTLE_HZ.get().unwrap()
+        )))
     };
 }
 
-// Threshold above which we'll stop nagging the World and pre-fetch list(s) in one sweep…
-//pub const PARALLEL_BATTLE_CONGESTION_THRESHOLD: usize = 50;
-
-pub(crate) type BattlerKey = usize;
 #[derive(Clone)]
 struct BattlerRec {
     combatant: Battler,
@@ -66,8 +72,8 @@ impl BattlerRec {
     }
 }
 
-type BattleMap = HashMap<BattlerKey, (BattlerRec, Arc<RwLock<Room>>), BuildNoHashHasher<BattlerKey>>;
-type AggroMap = HashMap<BattlerKey, Vec<BattlerKey>, BuildNoHashHasher<BattlerKey>>;
+type BattleMap = HashMap<MachineId, (BattlerRec, Arc<RwLock<Room>>), BuildNoHashHasher<MachineId>>;
+type AggroMap = HashMap<MachineId, Vec<MachineId>, BuildNoHashHasher<MachineId>>;
 
 /// Battle stage — the place for all battles.
 struct BattleStage {
@@ -87,7 +93,7 @@ impl Default for BattleStage {
 }
 
 impl BattleStage {
-    async fn remove(&mut self, battle_key: BattlerKey) {
+    async fn remove(&mut self, battle_key: MachineId) {
         // first the vct …
         if let Some(atks) = self.vct.remove(&battle_key) {
             for a_key in atks {
@@ -144,15 +150,11 @@ pub enum Resolution {
 }
 
 /// Query seconds-as-ticks.
-pub async fn sec_as_ticks(sec: u32, tick_type: TickType, out: &SignalSenderChannels) -> usize {
-    let (otx,orx) = tokio::sync::oneshot::channel::<u32>();
-    out.life.send(SystemSignal::SecToTicks { sec, tick_type, out: otx }).ok();
-    if let Ok(sat) = orx.await {
-        sat as usize
-    } else {
-        log::warn!("Life thread too busy to tell us current tick rate… Assuming default of 100Hz.");
-        (sec * 100) as usize
-    }
+pub fn sec_as_ticks(sec: u32, tick_type: TickType) -> usize {
+    (sec * *(match tick_type {
+        TickType::Core => CORE_HZ.get().expect("Core Hz not set?!"),
+        TickType::Battle => BATTLE_HZ.get().expect("Battle Hz not set?!"),
+    }) as u32) as usize
 }
 
 enum LifeWorkerSignal {
@@ -172,14 +174,15 @@ pub enum TickType {
 /// Life-thread is the game's "pulse" that ticks the clocks of everything.
 //TODO (It'll do) much more than that Soon™.
 /// 
-pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver), world: Arc<RwLock<World>>) {
+pub(crate) async fn life(
+    (out, mut incoming): (SignalSenderChannels, SigReceiver),
+    world: Arc<RwLock<World>>,
+    (core_hz, battle_hz) : (u8, u8),
+) {
     log::info!("Intervals, intervals…");
-    let mut tick_interval_hz: u64 = 100;
-    let mut battle_interval_hz: u64 = 50;
-
-    let mut tick_interval = interval(Duration::from_millis(1000/ tick_interval_hz));
+    let mut tick_interval = interval(Duration::from_millis(1000/ core_hz as u64));
             tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let mut battle_interval = interval(Duration::from_millis(1000 / battle_interval_hz));
+    let mut battle_interval = interval(Duration::from_millis(1000 / battle_hz as u64));
             battle_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
     let mut bs = BattleStage::default();
     let (worker_out, mut worker_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
@@ -431,7 +434,7 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
                 // Public transportation (or denial of such thereof).
                 //
                 SystemSignal::WantTransportFromTo { who, from, to, via } => {
-                    let who_key = Weak::as_ptr(&Arc::downgrade(&who)) as *const() as BattlerKey;
+                    let who_key = Weak::as_ptr(&Arc::downgrade(&who)) as *const() as MachineId;
                     let who_id = who.read().await.id().to_string();
                     if bs.active.contains_key(&who_key) {
                         out.broadcast.send(Broadcast::Message { to: who.clone(), message: "You're in middle of combat! Try <c yellow>flee</c> first…".into() }).ok();
@@ -457,31 +460,6 @@ pub(crate) async fn life((out, mut incoming): (SignalSenderChannels, SigReceiver
 
                 // Abort battle for `who`.
                 SystemSignal::AbortBattleNow { who } => bs.remove_b(&who).await,
-                
-                // Count how many ticks `sec` is currently.
-                SystemSignal::SecToTicks { sec, tick_type, out } => {
-                    out.send(sec * match tick_type {
-                        TickType::Core => tick_interval_hz,
-                        TickType::Battle => battle_interval_hz,
-                    } as u32).ok();
-                }
-
-                // Alter tick timers.
-                SystemSignal::AlterTickRate { tick_type, duration} => {
-                    match tick_type {
-                        TickType::Core => {
-                            tick_interval_hz = (1.0 / duration.as_secs_f32()) as u64;
-                            tick_interval = tokio::time::interval(duration);
-                            tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-                        }
-
-                        TickType::Battle => {
-                            battle_interval_hz = (1.0 / duration.as_secs_f32()) as u64;
-                            battle_interval = tokio::time::interval(duration);
-                            battle_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-                        }
-                    }
-                }
                 
                 #[cfg(all(test, feature = "stresstest"))]
                 SystemSignal::CountSpawns { num, out } => {

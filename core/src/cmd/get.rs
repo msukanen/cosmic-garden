@@ -106,7 +106,7 @@ mod cmd_get_tests {
                 matter_state: MatterState::Solid,
                 uses: Some(3),
                 affect_ticks: Some(4),
-                rots_in_ticks: sec_as_ticks(600, TickType::Core, &c).await.into(),
+                rots_in_ticks: sec_as_ticks(600, TickType::Core).into(),
             });
             chest.try_insert(a.clone()).ok();
             if idx % 2 == 0 {
@@ -120,6 +120,6 @@ mod cmd_get_tests {
         let r = roomloc_or_bust!(p);
         r.write().await.try_insert(chest).ok();
         state = ctx!(state, GetCommand,"all chest",s,c,w);
-        state = ctx!(state, InventoryCommand,"",s,c,w);
+        _ = ctx!(state, InventoryCommand,"",s,c,w);
     }
 }
