@@ -129,7 +129,11 @@ impl Player {
     }
 
     /// Attempt to save self…
-    pub async fn save(&self) -> Result<(), CgError> {
+    pub async fn save(&mut self) -> Result<(), CgError> {
+        self.location_id = match self.location.upgrade() {
+            None => player_location_void(),
+            Some(arc) => arc.read().await.id().to_string()
+        };
         fs::write(player_save_fp(self.owner_id(), self.id()),
         serde_json::to_string_pretty(self)?).await?;
         Ok(())
@@ -224,6 +228,11 @@ impl Player {
             _ => { set = true; Some(true) }
         };
         set
+    }
+
+    pub(crate) async fn set_location(&mut self, arc: &Arc<RwLock<Room>>) {
+        self.location_id = arc.read().await.id().to_string();
+        self.location = Arc::downgrade(arc);
     }
 }
 

@@ -93,7 +93,7 @@ async fn save_player_now(_: Arc<RwLock<Player>>, _: &str) {
 #[cfg(not(test))]
 /// Save player ASAP.
 async fn save_player_now(plr: Arc<RwLock<Player>>, p_id: &str) {
-    let p = plr.read().await.clone();
+    let mut p = plr.read().await.clone();
     let act_w = p.actions_taken;
     if let Err(e) = p.save().await {
         log::error!("Failed to save player '{p_id}': {e:?}")
