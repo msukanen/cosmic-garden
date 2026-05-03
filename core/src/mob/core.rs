@@ -12,7 +12,7 @@ use crate::{
         Item,
         container::variants::{ContainerVariant, ContainerVariantType},
         weapon::{WeaponSize, str_based_dmg_mul}
-    }, mob::{Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}}, room::Room, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable
+    }, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}}, room::Room, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable
 };
 
 /// Generic [Entity] size categories
@@ -129,6 +129,8 @@ pub struct Entity {
     inventory: ContainerVariant,
     #[serde(default, skip)]
     brain_freeze: bool,
+    #[serde(default)]
+    gender: GenderType,
 }
 
 impl Default for Entity {
@@ -150,7 +152,8 @@ impl Default for Entity {
             location: Weak::new(),
             inventory: entity_inv_default(),
             brain_freeze: false,
-            desc: "Some sort of an entity. Use <c yellow>desc =</c> to describe it…".into()
+            desc: "Some sort of an entity. Use <c yellow>desc =</c> to describe it…".into(),
+            gender: GenderType::default(),
         }
     }
 }
@@ -250,6 +253,14 @@ impl Tickable for Entity {
         let sn = self.sn_mut().tick().await;
         let san = self.san_mut().tick().await;
         hp || mp || sn || san
+    }
+}
+
+impl Gender for Entity {
+    fn gender(&self) -> GenderType { self.gender }
+    fn set_gender(&mut self, gender: GenderType) -> Result<(), GenderError> {
+        self.gender = gender;
+        Ok(())
     }
 }
 

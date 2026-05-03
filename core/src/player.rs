@@ -7,7 +7,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, help::HelpPage, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Stat, StatType, StatValue, affect::Affect, core::Entity, faction::{EntityFaction, FactionMut}, traits::Mob}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, help::HelpPage, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::Entity, faction::{EntityFaction, FactionMut}, traits::Mob}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -91,6 +91,7 @@ pub struct Player {
     /// Is the character 'hardcore', eligible for perma-death?
     #[serde(default)]
     pub hardcore: Option<bool>,
+    gender: GenderType,
 }
 
 fn player_location_void() -> String { UNNAMED.into() }
@@ -257,6 +258,7 @@ impl Default for Player {
             faction: EntityFaction::Player { pvp: false },
             equipped_weapon: None,
             hardcore: None,
+            gender: GenderType::Unset,// gender is set later.
         }
     }
 }
@@ -340,5 +342,21 @@ impl Damager for Player {
         
         // W × Str(S)/50; S=100 by default (for human at least).
         w.base_dmg * str_based_dmg_mul(self.str().current(), false) * (self.size().rel_vs_weapon(&w.weapon_size))
+    }
+}
+
+impl Gender for Player {
+    fn gender(&self) -> GenderType { self.gender }
+    /// Set initial gender.
+    //
+    // Gender for [Player] characters cannot be changed once set,
+    // no matter what "opinion" WOKE has about it - it's DNA, not psychological.
+    //
+    fn set_gender(&mut self, gender: GenderType) -> Result<(), GenderError> {
+        self.gender = match self.gender {
+            GenderType::Unset => gender,
+            _ => return Err(GenderError::Immutable)
+        };
+        Ok(())
     }
 }

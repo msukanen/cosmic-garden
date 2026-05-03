@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, item::weapon::WeaponSize, mob::{Stat, StatType, StatValue, core::{EntitySize, EntitySizeError}, faction::{EntityFaction, EntityFactionError, FactionMut, Factioned}, traits::{Mob, MobMut}}, show_help, show_help_if_needed, tell_user, validate_access, validate_editor_mode};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, item::weapon::WeaponSize, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, core::{Entity, EntitySize, EntitySizeError}, faction::{EntityFaction, EntityFactionError, FactionMut, Factioned}, traits::{Mob, MobMut}}, show_help, show_help_if_needed, tell_user, validate_access, validate_editor_mode};
 
 pub struct SetCommand;
 
@@ -31,16 +31,26 @@ impl Command for SetCommand {
             }
             // safe to unwrap as ctx.args cannot be empty down here.
             match what.chars().nth(0).unwrap() {
+                // Faction
                 'f'|'F' => if let Err(e) = set_faction(ed.faction_mut(), args) {
                     err_tell_user!(ctx.writer, "Uh… {}\n", e);
-                } else { tell_user!(ctx.writer, "Faction set: <c cyan>{}</c>\n", ed.faction())},
+                } else { tell_user!(ctx.writer, "Faction set: <c cyan>{}</c>\n", ed.faction())}
+
+                // Max.wpn size
                 'm'|'M'|
                 'w'|'W' => if let Err(e) = set_max_weapon_size(ed.max_weapon_size_mut(), args) {
                     err_tell_user!(ctx.writer, "Uh… {}\n", e);
-                } else { tell_user!(ctx.writer, "Max weapon size set: <c cyan>{}</c>\n", ed.max_weapon_size())},
+                } else { tell_user!(ctx.writer, "Max weapon size set: <c cyan>{}</c>\n", ed.max_weapon_size())}
+
+                // Size
                 's'|'S' => if let Err(e) = set_size(ed.size_mut(), args) {
                     err_tell_user!(ctx.writer, "Uh… {}\n", e);
-                } else { tell_user!(ctx.writer, "Size set: <c cyan>{}</c>\n", ed.size())},
+                } else { tell_user!(ctx.writer, "Size set: <c cyan>{}</c>\n", ed.size())}
+
+                // Gender
+                'g'|'G' => if let Err(e) = set_gender(ed, args) {
+                    err_tell_user!(ctx.writer, "DNA does not work like that: {}", e);
+                } else { tell_user!(ctx.writer, "Gender set: <c cyan>{}</c>", ed.gender())}
                 
                 _ => err_tell_user!(ctx.writer, "Known operators are: <c yellow>f</c>action, <c yellow>m</c>ax <c yellow>w</c>eapon size, <c yellow>s</c>ize.")
             }
@@ -103,6 +113,14 @@ fn set_size(ent_sz: &mut EntitySize, args: &str) -> Result<(), EntitySizeError> 
         Ok(sz) => { *ent_sz = sz; Ok(()) }
         Err(e) => Err(e)
     }
+}
+
+fn set_gender(entity: &mut Entity, args: &str) -> Result<(), GenderError> {
+    let g = GenderType::try_from(args);
+    Ok(match g {
+        Err(e) => return Err(e),
+        Ok(g) => {entity.set_gender(g).ok();}
+    })
 }
 
 #[cfg(test)]

@@ -1,26 +1,40 @@
-//! 'set' a number of runtime variables.
+//! 'set' a number of runtime and other variables.
 
 use std::{sync::Arc, time::Duration};
 
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, player::Player, show_help, show_help_if_needed, string::styling::Truthy, tell_user, thread::{SystemSignal, life::{TickType, sec_as_ticks}}, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, mob::{Gender, GenderType}, player::Player, player_or_bust, show_help, show_help_if_needed, string::styling::Truthy, tell_user, tell_user_unk, thread::{SystemSignal, life::{TickType, sec_as_ticks}}, util::access::{Access, Accessor}};
 
 pub struct SetCommand;
 
 #[async_trait]
 impl Command for SetCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
-        let plr = validate_access!(ctx, builder);
+        let (plr, access) = {
+            let plr = player_or_bust!(ctx);
+            let access = plr.read().await.access.clone();
+            (plr, access)
+        };
         show_help_if_needed!(ctx, "set");
         
         let (what, args) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
 
         match what {
-            "core_tick"|"core"|"core-tick" => set_core_tick(ctx, args).await,
-            "battle_tick"|"battle"|"battle-tick" => set_battle_tick(ctx, args).await,
-            "config" => set_config_val(ctx, args, &plr).await,
+            "core_tick"|"core"|"core-tick" => {
+                if !access.is_admin() { tell_user_unk!(ctx.writer); return };
+                set_core_tick(ctx, args).await
+            },
+            "battle_tick"|"battle"|"battle-tick" => {
+                if !access.is_admin() { tell_user_unk!(ctx.writer); return };
+                set_battle_tick(ctx, args).await
+            },
+            "config" => {
+                if !access.is_true_builder() { tell_user_unk!(ctx.writer); return };
+                set_config_val(ctx, args, &plr).await
+            },
+            "gender" => set_gender_val(ctx, plr, access, args).await,
             _ => { show_help!(ctx, "set") }
         }
     }
@@ -94,6 +108,25 @@ async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &Arc<RwLock<P
     };
     drop(p);
     tell_user!(ctx.writer, "Variable <c cyan>{}</c> set to <c cyan>{}</c>.\n", which, tf);
+}
+
+/// Set gender, if applicable.
+async fn set_gender_val(ctx: &mut CommandCtx<'_>, plr: Arc<RwLock<Player>>, access: Access, args: &str) {
+    let current = plr.read().await.gender();
+    match (access, current) {
+        (_, GenderType::Unset) => {
+            let g = GenderType::try_from(args);
+            if let Err(e) = g {
+                err_tell_user!(ctx.writer, "Yea, well… {}\n", e);
+            }
+            let g = g.unwrap();
+            tell_user!(ctx.writer, "You are now and forever more {}!\n", g);
+            plr.write().await.set_gender(g).ok();
+        }
+
+        (Access::Admin, _) => err_tell_user!(ctx.writer, "Sorry, but not even an admin can alter their own gender.\n"),
+        (_,_) => tell_user_unk!(ctx.writer)
+    }
 }
 
 #[cfg(test)]
