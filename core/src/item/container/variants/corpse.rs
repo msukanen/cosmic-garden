@@ -1,11 +1,11 @@
 //! Corpse spec.
 
-use std::{collections::VecDeque, sync::Arc};
+use std::{collections::{HashMap, VecDeque}, sync::Arc};
 
 use serde::{Deserialize, Serialize};
 use tokio::sync::RwLock;
 
-use crate::{cmd::CommandCtx, err_tell_user, identity::{IdError, IdentityMut, IdentityQuery}, item::{Item, StorageError, StorageQueryError, container::{Storage, specs::{ContainerSpec, StorageSpace}}, ownership::{ItemSource, ItemSourceError, Owned, OwnedMut}}, mob::core::Entity, player::Player, room::Room, thread::add_item_to_lnf};
+use crate::{cmd::CommandCtx, err_tell_user, identity::{IdError, IdentityMut, IdentityQuery, uniq::StrUuid}, item::{Item, container::{ContainerSpec, Storage, StorageSpace, storage::{StorageError, StorageQueryError}, variants::ContainerVariant}, ownership::{ItemSource, ItemSourceError, Owned, OwnedMut}}, mob::core::Entity, player::Player, room::Room, tell_user, thread::add_item_to_lnf};
 
 mod arc_n_ent_transform {
     use std::sync::Arc;
@@ -115,15 +115,21 @@ impl Storage for CorpseSpec {
     }
 }
 
+impl CorpseSpec {
+    // file-private .try_insert() bypass.
+    fn bypass_try_insert(&mut self, item: Item) {
+        self.spec.contents.insert(item.id().to_string(), item);
+    }
+}
 
 /// Bulk transfer everything within `from` to `plr` inventory who is at `room`.
 pub async fn bulk_transfer(ctx: &mut CommandCtx<'_>, plr: Arc<RwLock<Player>>, room: Arc<RwLock<Room>>, from: &str) {
     if let Some(src) = room.write().await.peek_at_mut(from) {
         if !matches!(*src, Item::Container(_)|Item::Corpse{..}) {
-            err_tell_user!(ctx.writer, "'{}' doesn't contain anything. Did you mean to pick it insted?\n", from)
+            err_tell_user!(ctx.writer, "'{}' doesn't contain anything. Did you mean to pick it insted?\n", from.show_uuid(false))
         }
         let Some(items) = src.eject_all() else {
-            err_tell_user!(ctx.writer, "Bummer, '{}' seems to be empty!\n", from)
+            err_tell_user!(ctx.writer, "Bummer, '{}' seems to be empty!\n", from.show_uuid(false))
         };
         let mut not_taken = vec![];
         let mut taken_names = vec![];
@@ -141,7 +147,10 @@ pub async fn bulk_transfer(ctx: &mut CommandCtx<'_>, plr: Arc<RwLock<Player>>, r
         }
         let ntl = not_taken.len();
         for item in not_taken {
-            if let Err(e) = src.try_insert(item) {
+            // as we can't use .try_insert() with corpses, we try something else...
+            if let Item::Corpse{loot: ContainerVariant::Corpse(spec),..} = src {
+                spec.bypass_try_insert(item);
+            } else if let Err(e) = src.try_insert(item) {
                 log::error!("Something fishy with {src:?} - cannot insert - {e:?}");
                 add_item_to_lnf(e).await;
             }
@@ -153,6 +162,24 @@ pub async fn bulk_transfer(ctx: &mut CommandCtx<'_>, plr: Arc<RwLock<Player>>, r
                 _ => ("", "s", "any of ")
             };
             err_tell_user!(ctx.writer, "There's {}thing{}, but you don't seem to be able to carry {}it…\n", a,s,ait);
+        } else {
+            let mut things: HashMap<String, u32> = HashMap::new();
+            let total = taken_names.len();
+            for n in taken_names {
+                things.entry(n).and_modify(|c| *c += 1).or_insert(1);
+            }
+            if things.keys().len() < 6 {
+                tell_user!(ctx.writer, "You nab: {}\n", things.into_iter().map(|(n,x)| {
+                    let (num, s) = match x {
+                        0 => ("none of".into(), "s"),
+                        1 => ("one".into(), ""),
+                        x => (format!("{x}"), "s")
+                    };
+                    format!("{num} {n}{s}")
+                }).collect::<Vec<String>>().join(", "));
+            } else {
+                tell_user!(ctx.writer, "You nab a bunch of things ({} in total).\n", total);
+            }
         }
     }
 }
