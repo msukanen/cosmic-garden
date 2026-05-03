@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::item::Item;
+use crate::{item::Item, util::escape_hatch::VILLAIN_ID};
 use super::{IdError, IdentityMut, IdentityQuery};
 
 lazy_static! {
@@ -152,7 +152,9 @@ pub fn as_id(input: &str) -> Result<String, IdError> {
         return Err(IdError::TooLong);
     }
 
-    if crate::r#const::HARDCODED_RESERVED.contains(out) {
+    if crate::r#const::HARDCODED_RESERVED.contains(out) ||
+        VILLAIN_ID.contains(&out)
+    {
         return Err(IdError::ReservedName(out.to_string()));
     }
 
