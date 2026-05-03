@@ -17,7 +17,7 @@ macro_rules! translocate {
             let p_id = $plr.read().await.id().to_string();
             $origin.write().await.who.remove(&p_id);
             $target.write().await.who.insert(p_id.clone(), std::sync::Arc::downgrade(&$plr));
-            $plr.write().await.location = std::sync::Arc::downgrade(&$target);
+            $plr.write().await.set_location(&$target).await;
         }
     };
 
@@ -26,16 +26,17 @@ macro_rules! translocate {
         {
             $origin.write().await.who.remove(&$p_id);
             $target.write().await.who.insert($p_id.clone(), std::sync::Arc::downgrade(&$plr));
-            $plr.write().await.location = std::sync::Arc::downgrade(&$target);
+            $plr.write().await.set_location(&$target).await;
         }
     };
 
     // Translocate [$ent][Entity] (ID $id) from [$origin][Room] to [$target][Room]
     (ent $ent:expr, $id:ident, $origin:expr, $target:expr) => {
         {
+            use crate::combat::CombatantMut;
             $origin.write().await.entities.remove(&$id);
             $target.write().await.entities.insert($id.clone(), $ent.clone());
-            $ent.write().await.location = std::sync::Arc::downgrade(&$target);
+            *($ent.write().await.location_mut()) = std::sync::Arc::downgrade(&$target);
         }
     };
 }
