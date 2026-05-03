@@ -141,7 +141,7 @@ mod cmd_redit_way {
         let lt = get_operational_mock_life!(c,w);
         stabilize_threads!(100);
         let state = ctx!(state, LookCommand, "", s,c.out,w);
-        let state = ctx!(sup true, state, WayCommand, "east r-3",s,c.out,w,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup state, WayCommand, "east r-3",s,c.out,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let state = ctx!(state, WayCommand, "east r-3",s,c.out,w,|out:&str| out.contains("actually"));
         let state = ctx!(state, WayCommand, "balloon r-2",s,c.out,w,|out:&str| out.contains("deduct"));

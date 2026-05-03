@@ -5,7 +5,7 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::{IdentityMut, IdentityQuery, MachineIdentity, uniq::Uuid}, item::{container::Storage, ownership::{ItemSource, OwnedMut}}, roomloc_or_bust, show_help_if_needed, tell_user, thread::add_item_to_lnf, traits::Reflector, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::{IdentityMut, IdentityQuery, MachineIdentity, uniq::Uuid}, item::{container::storage::Storage, ownership::{ItemSource, OwnedMut}}, roomloc_or_bust, show_help_if_needed, tell_user, thread::add_item_to_lnf, traits::Reflector, validate_access};
 
 pub struct CloneCommand;
 
@@ -72,7 +72,7 @@ impl Command for CloneCommand {
 mod cmd_clone_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{clone::CloneCommand, inventory::InventoryCommand, look::LookCommand}, r#const::SMALL_ITEM, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityQuery, uniq::Uuid}, item::{Item, container::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{clone::CloneCommand, inventory::InventoryCommand, look::LookCommand}, r#const::SMALL_ITEM, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityQuery, uniq::Uuid}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn cmd_clone_knife() {
@@ -93,12 +93,12 @@ mod cmd_clone_tests {
         });
         let real_id = item.id().to_string();
         p.write().await.inventory.try_insert(item).expect("Seriously? No space for a sm0l knife?");
-        let state = ctx!(sup true, state, CloneCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup state, CloneCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Player { event_host: false, builder: true };
-        let state = ctx!(sup true, state, CloneCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup state, CloneCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(sup true, state, CloneCommand, real_id.as_str(), s,c,w);
-        let _ = ctx!(sup true, state, InventoryCommand, "", s,c,w,|out:&str| out.split("dinged").collect::<Vec<&str>>().len() >= 3 );
+        let state = ctx!(sup state, CloneCommand, real_id.as_str(), s,c,w);
+        let _ = ctx!(sup state, InventoryCommand, "", s,c,w,|out:&str| out.split("dinged").collect::<Vec<&str>>().len() >= 3 );
     }
 
     #[tokio::test]
@@ -110,14 +110,14 @@ mod cmd_clone_tests {
         let _ = get_operational_mock_life!(c,w);
         stabilize_threads!();
         let c = c.out;
-        let state = ctx!(sup true, state, CloneCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup state, CloneCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Player { event_host: false, builder: true };
-        let state = ctx!(sup true, state, CloneCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
+        let state = ctx!(sup state, CloneCommand, "", s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         p.write().await.config.show_id = true;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(50);
-        let state = ctx!(sup true, state, LookCommand, "", s,c,w,|out:&str| out.contains("A goblin"));
+        let state = ctx!(sup state, LookCommand, "", s,c,w,|out:&str| out.contains("A goblin"));
         // the gobbo's ID...
         let g= {
             if let Some(r_arc) = p.read().await.location.upgrade() {
@@ -126,7 +126,7 @@ mod cmd_clone_tests {
                 ent_arc.read().await.id().to_string()
             } else { panic!("Where did the room go?!") }
         };
-        let state = ctx!(sup true, state, CloneCommand, g.as_str(), s,c,w,|out:&str| out.contains("ning entity"));
-        let _ = ctx!(sup true, state, LookCommand, "", s,c,w,|out:&str| out.split("goblin").collect::<Vec<&str>>().len() >= 3 );
+        let state = ctx!(sup state, CloneCommand, g.as_str(), s,c,w,|out:&str| out.contains("ning entity"));
+        let _ = ctx!(sup state, LookCommand, "", s,c,w,|out:&str| out.split("goblin").collect::<Vec<&str>>().len() >= 3 );
     }
 }

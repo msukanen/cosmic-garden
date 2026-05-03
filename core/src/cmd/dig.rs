@@ -105,7 +105,7 @@ mod cmd_dig_tests {
         let (w,c,(mut state,p),_) = get_operational_mock_world().await;
         let c = c.out;
         // note: dig bypasses life-thread judgement.
-        state = ctx!(sup true, state, DigCommand, "",s,c,w,|out:&str| out.contains("Huh?"));
+        state = ctx!(sup state, DigCommand, "",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         state = ctx!(state, DigCommand, "east r-3",s,c,w);
         state = ctx!(state, DigCommand, "east r-3",s,c,w);
@@ -118,7 +118,7 @@ mod cmd_dig_tests {
         let (w,c,(mut state,p),_) = get_operational_mock_world().await;
         let c = c.out;
         // note: dig bypasses life-thread judgement.
-        state = ctx!(sup true, state, DigCommand, "teleport r-4",s,c,w,|out:&str| out.contains("Huh?"));
+        state = ctx!(sup state, DigCommand, "teleport r-4",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         state = ctx!(state, DigCommand, "teleport r-4",s,c,w);
         state = ctx!(state, DigCommand, "teleport r-4",s,c,w);

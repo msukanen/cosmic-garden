@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::IdentityQuery, io::ClientState, item::{Item, container::Storage, primordial::Metamorphize}, tell_user, thread::{add_item_to_lnf, librarian::shelve_item_blueprint}, validate_access};
+use crate::{cmd::{Command, CommandCtx, iedit::abort::AbortCommand}, identity::IdentityQuery, io::ClientState, item::{Item, container::storage::Storage, primordial::Metamorphize}, tell_user, thread::{add_item_to_lnf, librarian::shelve_item_blueprint}, validate_access};
 
 pub struct WeaveCommand;
 
