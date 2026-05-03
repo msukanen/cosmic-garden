@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::IdentityQuery, item::{Item, container::{Storage, variants::bulk_transfer}}, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user, thread::add_item_to_lnf, util::activity::ActionWeight};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::IdentityQuery, item::{Item, container::{storage::Storage, bulk_transfer}}, player_or_bust, roomloc_or_bust, show_help_if_needed, tell_user, thread::add_item_to_lnf, util::activity::ActionWeight};
 
 pub struct GetCommand;
 
@@ -73,7 +73,7 @@ impl Command for GetCommand {
 mod cmd_get_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{attack::AttackCommand, look::LookCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, room::RoomPayload, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{attack::AttackCommand, get::GetCommand, inventory::InventoryCommand, look::LookCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, uniq::Uuid}, item::{Item, ItemizedMut, consumable::{ConsumableMatter, EffectType}, container::{storage::Storage, variants::{ContainerVariant, ContainerVariantType}}, matter::MatterState, ownership::Owner}, mob::StatType, room::RoomPayload, roomloc_or_bust, stabilize_threads, string::DescribableMut, thread::{SystemSignal, life::{TickType, sec_as_ticks}, signal::SpawnType}, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn get_all() {
@@ -86,9 +86,40 @@ mod cmd_get_tests {
         let c = c.out;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: RoomPayload::Id("r-1".into()), reply: None }).ok();
         stabilize_threads!(25);
-        state = ctx!(sup true, state, AttackCommand, "goblin",s,c,w);
+        state = ctx!(sup state, AttackCommand, "goblin",s,c,w);
         // let combat roll a moment…
         stabilize_threads!(2000);
         state = ctx!(state, LookCommand,"",s,c,w);
+        state = ctx!(state, GetCommand,"all",s,c,w,|out:&str| out.contains("vacuum"));
+        state = ctx!(state, GetCommand,"corpse",s,c,w,|out:&str| out.contains("undertaker"));
+        state = ctx!(state, GetCommand,"all copse",s,c,w,|out:&str| out.contains("such thing"));
+        state = ctx!(state, GetCommand,"all corpse",s,c,w,|out:&str| out.contains("seems to be empty"));
+        let mut chest = Item::Container(ContainerVariant::raw(ContainerVariantType::Chest));
+        for idx in 0..10 {
+            let mut a = Item::Consumable(ConsumableMatter {
+                id: "apple".re_uuid(),
+                title: "apple".into(),
+                owner: Owner::no_one(),
+                size: 7,
+                nutrition: EffectType::Heal { stat: StatType::HP, drain: 5.0 },
+                desc: "It's… an apple!".into(),
+                matter_state: MatterState::Solid,
+                uses: Some(3),
+                affect_ticks: Some(4),
+                rots_in_ticks: sec_as_ticks(600, TickType::Core, &c).await.into(),
+            });
+            chest.try_insert(a.clone()).ok();
+            if idx % 2 == 0 {
+                a.set_id("orange", false).ok();
+                a.set_title("orange");
+                a.set_size(8);
+                a.set_desc("It's… an oragnge!");
+                chest.try_insert(a).ok();
+            }
+        }
+        let r = roomloc_or_bust!(p);
+        r.write().await.try_insert(chest).ok();
+        state = ctx!(state, GetCommand,"all chest",s,c,w);
+        state = ctx!(state, InventoryCommand,"",s,c,w);
     }
 }
