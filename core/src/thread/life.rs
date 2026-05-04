@@ -322,7 +322,6 @@ pub(crate) async fn life(
                                     resolution: resolution.clone()
                                 }).ok();
                                 #[cfg(all(test,feature = "stresstest"))]{log::debug!("resolution = {resolution:?}");}
-                                // TODO deal with possible loot drops if not Resolution::Inconclusive or XyzRetreat:
                                 match resolution {
                                     Resolution::AtkRetreat => { deathrow.push(*a_key);},
                                     Resolution::AtkVictory {..} => {
@@ -671,6 +670,7 @@ mod life_tests {
         }
         // let the dust settle…
         let _ = orx.await;
+        stabilize_threads!(10_000); // see for 10s what spams...
         let work_duration = start_work.elapsed();
         let spawns_per_sec = MILLION_GOBBOS as f64 / work_duration.as_secs_f64();
         let r1 = w.read().await.get_room_by_id("r-1").unwrap();

@@ -101,7 +101,7 @@ pub trait Affector {
 pub fn stack_affect(item: &str, affect: &Affect, stash: &mut HashMap<String, Affect>) {
     let nouuid = item.no_uuid();
     let mut stashed = false;
-    if let Some(existing) = stash.get_mut(&nouuid) {
+    if let Some(existing) = stash.get_mut(nouuid) {
         match (existing, affect) {
             (
                 Affect::Effect { kind: ek, remaining: ex_rem },
@@ -119,7 +119,7 @@ pub fn stack_affect(item: &str, affect: &Affect, stash: &mut HashMap<String, Aff
     }
     
     if !stashed {
-        stash.insert(nouuid, affect.clone());
+        stash.insert(nouuid.to_string(), affect.clone());
     }
 }
 
