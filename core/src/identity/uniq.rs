@@ -23,17 +23,7 @@ pub trait UuidValidator {
     fn is_id(&self) -> Result<(), IdError>;
 }
 
-impl UuidValidator for String {
-    #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
-    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
-}
-
-impl UuidValidator for &String {
-    #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
-    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
-}
-
-impl UuidValidator for &str {
+impl UuidValidator for str {
     #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
     #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
 }
@@ -46,8 +36,8 @@ pub trait TryAttachUuid<T> {
     fn maybe_with_uuid(&self) -> Option<T>;
 }
 
-pub trait Uuid : UuidCore {
-    fn no_uuid(&self) -> String;
+pub trait Uuid<'a> : UuidCore {
+    fn no_uuid(&'a self) -> &'a str;
     fn re_uuid(&self) -> String;
 }
 
@@ -63,12 +53,8 @@ fn append_uuid_bypass(value: &str) -> String {
     format!("{value}-{}", uuid::Uuid::new_v4())
 }
 
-/// Remove UUID if present.
-pub fn remove_uuid(value: &str) -> String {
-    value.show_uuid(false).into()
-}
-
 pub trait StrUuid {
+    /// Show UUID of `self`? — yes/no.
     fn show_uuid(&self, yn: bool) -> &str;
 }
 impl StrUuid for str {
@@ -82,27 +68,12 @@ impl StrUuid for str {
     }
 }
 
-impl UuidCore for &str {
+impl UuidCore for str {
     #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
-}
-impl Uuid for &str {
-    #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
-    #[inline] fn re_uuid(&self) -> String { append_uuid_bypass(self.show_uuid(false)) }
 }
 
-impl UuidCore for String {
-    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
-}
-impl Uuid for String {
-    #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
-    #[inline] fn re_uuid(&self) -> String { append_uuid_bypass(self.show_uuid(false)) }
-}
-
-impl UuidCore for &String {
-    #[inline] fn with_uuid(&self) -> String { append_uuid(self) }
-}
-impl Uuid for &String {
-    #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
+impl<'a> Uuid<'a> for str {
+    #[inline] fn no_uuid(&'a self) -> &'a str { self.show_uuid(false) }
     #[inline] fn re_uuid(&self) -> String { append_uuid_bypass(self.show_uuid(false)) }
 }
 
