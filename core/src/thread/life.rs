@@ -179,11 +179,15 @@ pub(crate) async fn life(
     world: Arc<RwLock<World>>,
     (core_hz, battle_hz) : (u8, u8),
 ) {
-    log::info!("Intervals, intervals…");
-    let mut tick_interval = interval(Duration::from_millis(1000/ core_hz as u64));
+    const fn core_hz_ms(core_hz: u8) -> u64 { 1000/ core_hz as u64 }
+    const fn battle_hz_ms(battle_hz: u8) -> u64 { 1_000/ battle_hz as u64 }
+
+    let mut tick_interval = interval(Duration::from_millis(core_hz_ms(core_hz)));
             tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let mut battle_interval = interval(Duration::from_millis(1000 / battle_hz as u64));
+    let mut battle_interval = interval(Duration::from_millis(battle_hz_ms(battle_hz)));
             battle_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+    // Battle stage & reporter for it…
     let mut bs = BattleStage::default();
     let (worker_out, mut worker_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
     let (reporter_out, mut reporter_rx) = mpsc::unbounded_channel::<LifeWorkerSignal>();
@@ -269,9 +273,9 @@ pub(crate) async fn life(
     });
 
     log::info!("Life thread firing up…");
-    #[cfg(all(test, feature = "stresstest"))]
+    #[cfg(test)]
     let mut spawn_count: usize = usize::MAX;
-    #[cfg(all(test, feature = "stresstest"))]
+    #[cfg(test)]
     let mut spawn_out: Option<tokio::sync::oneshot::Sender<()>> = None;
 
     let mut tick = 0;
@@ -376,7 +380,7 @@ pub(crate) async fn life(
 
                 // Spawn some [Entity].
                 SystemSignal::Spawn {what, room, reply} => {
-                    #[cfg(all(test, feature = "stresstest"))]
+                    #[cfg(test)]
                     {
                         spawn_count = spawn_count.saturating_sub(1);
                         if spawn_count == 0 {
@@ -385,10 +389,14 @@ pub(crate) async fn life(
                             }
                             spawn_out = None;
                         }
-                        if spawn_count % 10_000 == 0 {
-                            log::info!("Spawns to go: {spawn_count}");
+                        #[cfg(feature = "stresstest")]
+                        {
+                            if spawn_count % 1_000 == 0 {
+                                log::info!("Spawns to go: {spawn_count}");
+                            }
                         }
                     }
+
                     let ok = spawn_something(&out, what, &room, &world).await;
                     if let Some(out) = reply {
                         out.send(ok).ok();
@@ -400,15 +408,17 @@ pub(crate) async fn life(
                     // We might be busy, let a worker handle the initial hurdle.
                     tokio::spawn({
                         let sig = worker_out.clone();
-                        //let sys = out.clone();
                         async move {
                             let (a_loc, a_title) = {
                                 let a = atk_arc.read().await;
                                 (a.location().upgrade(), a.title().to_string())
                             };
                             let v_title = vct_arc.read().await.title().to_string();
+
                             if let Some(room) = a_loc {
-                                #[cfg(test)]{log::trace!("Battle-check: OK \"{a_title}\"|{} vs \"{v_title}\"|{}", atk_arc.read().await.id(), vct_arc.read().await.id());}
+                                #[cfg(test)]{
+                                    log::debug!("Battle-check: OK \"{a_title}\"|{} vs \"{v_title}\"|{}", atk_arc.read().await.id(), vct_arc.read().await.id());
+                                }
                                 
                                 let atk = BattlerRec {
                                     combatant: atk_arc,
@@ -418,6 +428,7 @@ pub(crate) async fn life(
                                     combatant: vct_arc,
                                     title: Arc::from(v_title),
                                 };
+                                // Signal life that it's fine to proceed with this fight.
                                 sig.send(LifeWorkerSignal::BattleOk { atk, vct, room: room.clone() }).ok();
                             } else {
                                 log::error!("Cannot initiate fight in the void!");
@@ -437,6 +448,7 @@ pub(crate) async fn life(
                     let who_key = Weak::as_ptr(&Arc::downgrade(&who)) as *const() as MachineId;
                     let who_id = who.read().await.id().to_string();
                     if bs.active.contains_key(&who_key) {
+                        log::debug!("Combat move rejected.");
                         out.broadcast.send(Broadcast::Message { to: who.clone(), message: "You're in middle of combat! Try <c yellow>flee</c> first…".into() }).ok();
                         continue;
                     }
@@ -454,14 +466,14 @@ pub(crate) async fn life(
                     drop(plr);
 
                     if let Err(_) = out.broadcast.send(Broadcast::Force {silent: true, command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
-                        log::error!("Communications blackout?!");
+                        log::error!("Broadcast channel(s) out of business – communications blackout?!");
                     };
                 }
 
                 // Abort battle for `who`.
                 SystemSignal::AbortBattleNow { who } => bs.remove_b(&who).await,
                 
-                #[cfg(all(test, feature = "stresstest"))]
+                #[cfg(test)]
                 SystemSignal::CountSpawns { num, out } => {
                     spawn_count = num;
                     spawn_out = Some(out);
@@ -475,38 +487,8 @@ pub(crate) async fn life(
             // Listen to potential workers.
             //
             Some(sig) = worker_rx.recv() => match sig {
-                LifeWorkerSignal::BattleOk { atk, vct, room } => {
-                    let a_key = lock2key!(arc &atk.combatant);
-                    let v_key = lock2key!(arc &vct.combatant);
-                    {
-                        let mut a_lock = atk.combatant.write().await;
-                        let mut v_lock = vct.combatant.write().await;
-                        a_lock.alter_brain_freeze(true);
-                        v_lock.alter_brain_freeze(true);
-                    }
-                    bs.active.insert(a_key, (atk, room.clone()));
-                    bs.active.insert(v_key, (vct, room.clone()));
-                    if let Some(a) = bs.atk.get_mut(&a_key) {
-                        if !a.contains(&v_key) {
-                            a.push(v_key);
-                        }
-                    } else {
-                        log::trace!("New attacker: {a_key}");
-                        bs.atk.insert(a_key, vec![v_key]);
-                    }
-                    if let Some(v) = bs.vct.get_mut(&v_key) {
-                        if !v.contains(&a_key) {
-                            v.push(a_key);
-                        }
-                    } else {
-                        log::trace!("New victim: {v_key}");
-                        bs.vct.insert(v_key, vec![a_key]);
-                    }
-                    log::debug!("LifeworkerSignal::BattleOk!");
-                }
-
+                LifeWorkerSignal::BattleOk { atk, vct, room } => register_ok_battle(atk,vct,room,&mut bs).await,
                 LifeWorkerSignal::BattleFail { atk, vct } => {
-                    log::debug!("LifeworkerSignal::BattleFail");
                     // attempt purge, just in case.
                     let a_key = lock2key!(arc atk);
                     let v_key = lock2key!(arc vct);
@@ -514,6 +496,7 @@ pub(crate) async fn life(
                     bs.remove(v_key).await;
                 }
 
+                // we ignore all the other LifeWorkerSignals here as they're for the workers, not for main thread.
                 _ => ()
             }
         }
@@ -558,6 +541,7 @@ async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &Roo
 /// Spawned?
 async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_arc: &Arc<RwLock<Room>>, world: &Arc<RwLock<World>>) -> bool
 {
+    static mut C: usize = 0;
     match what {
         SpawnType::Mob { id } => {
             let (oneshot, recv) = oneshot::channel::<Option<Entity>>();
@@ -575,7 +559,8 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_a
                             // …then the room itself.
                             r_arc.write().await.entities.insert(mob_id.as_m_id(), mob_arc);
                         }// drop 'w' now…
-                        log::trace!("Life has spawned '{mob_id}' at '{}'", r_arc.read().await.id());
+                        // log::trace!("Life has spawned #{} '{mob_id}' at '{}'", unsafe {C}, r_arc.read().await.id());
+                        unsafe { C += 1; }
                         return true;
                     } else {
                         log::warn!("There's no record of '{id}' in the entity catalogue…");
@@ -628,6 +613,37 @@ async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resoluti
     }
 }
 
+/// Register Ok'd battle.
+async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: Arc<RwLock<Room>>, bs: &mut BattleStage) {
+                    let a_key = lock2key!(arc &atk.combatant);
+                    let v_key = lock2key!(arc &vct.combatant);
+                    {
+                        let mut a_lock = atk.combatant.write().await;
+                        let mut v_lock = vct.combatant.write().await;
+                        a_lock.alter_brain_freeze(true);
+                        v_lock.alter_brain_freeze(true);
+                    }
+                    bs.active.insert(a_key, (atk, room.clone()));
+                    bs.active.insert(v_key, (vct, room.clone()));
+                    if let Some(a) = bs.atk.get_mut(&a_key) {
+                        if !a.contains(&v_key) {
+                            a.push(v_key);
+                        }
+                    } else {
+                        log::trace!("New attacker: {a_key}");
+                        bs.atk.insert(a_key, vec![v_key]);
+                    }
+                    if let Some(v) = bs.vct.get_mut(&v_key) {
+                        if !v.contains(&a_key) {
+                            v.push(a_key);
+                        }
+                    } else {
+                        log::trace!("New victim: {v_key}");
+                        bs.vct.insert(v_key, vec![a_key]);
+                    }
+                    log::debug!("LifeworkerSignal::BattleOk!");
+                }
+
 #[cfg(test)]
 mod life_tests {
     use std::{io::Cursor, sync::Arc};
@@ -639,7 +655,7 @@ mod life_tests {
         #[cfg(feature = "stresstest")]
         const MILLION_GOBBOS: usize = 1_000_000;
         #[cfg(not(feature = "stresstest"))]
-        const MILLION_GOBBOS: usize = 1_000;// just 1,000 if not stresstesting...
+        const MILLION_GOBBOS: usize = 60_000;// just 1,000 if not stresstesting...
 
         let (w,c,_,j) = get_operational_mock_world().await;
         get_operational_mock_janitor!(c,w,j.0);
@@ -647,6 +663,7 @@ mod life_tests {
         get_operational_mock_librarian!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
         stabilize_threads!();
+        let start_work = std::time::Instant::now();
         let (otx,orx) = tokio::sync::oneshot::channel::<()>();
         c.life.send(SystemSignal::CountSpawns { num: MILLION_GOBBOS, out: otx }).ok();
         for _ in 1..=MILLION_GOBBOS {
@@ -654,7 +671,13 @@ mod life_tests {
         }
         // let the dust settle…
         let _ = orx.await;
+        let work_duration = start_work.elapsed();
+        let spawns_per_sec = MILLION_GOBBOS as f64 / work_duration.as_secs_f64();
+        let r1 = w.read().await.get_room_by_id("r-1").unwrap();
+        let spawn_c = r1.read().await.entities.len();
+
         log::debug!("--terminated--");
+        log::debug!("Duration: {work_duration:?} | Throughput: {spawns_per_sec:.2} ent/sec | Entities: {spawn_c}");
     }
 
     #[tokio::test]
