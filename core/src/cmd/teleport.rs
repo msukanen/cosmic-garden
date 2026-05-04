@@ -3,10 +3,9 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use either::Either;
 use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx, look::LookCommand}, combat::Combatant, err_tell_user, identity::{IdentityQuery, MachineIdentity}, io::Broadcast, mob::core::Entity, player::Player, room::Room, roomloc_or_bust, show_help_if_needed, tell_user, tell_user_unk, translocate, util::access::Accessor, validate_access, world::World};
+use crate::{cmd::{Command, CommandCtx}, combat::Combatant, err_tell_user, identity::{IdentityQuery, MachineIdentity}, mob::core::Entity, player::Player, room::Room, roomloc_or_bust, show_help_if_needed, tell_user, translocate, validate_access, world::World};
 
 pub struct TeleportCommand;
 
@@ -25,122 +24,13 @@ impl Command for TeleportCommand {
             let p = plr.read().await;
             let p_id = p.id().to_string();
             let is_ghost = p.config.is_ghost;
-            let loc = roomloc_or_bust!(plr);
+            let loc = roomloc_or_bust!(ctx, plr);
             (p_id, is_ghost, loc)
         };
-        // let mut args = ctx.args.split_once(' ').unwrap_or_else(||(ctx.args, ""));
 
-        // loop {
-        // // what to port?
-        // match args.0 {
-        //     "self"|"me" => {
-        //         if args.1.is_empty() {
-        //             tell_user!(ctx.writer, "Right, right - teleport - but where to?\n");
-        //             return;
-        //         }
-        //         let w = ctx.world.read().await;
-        //         let target_arc = match w.get_room_by_id(args.1) {
-        //             Some(target_arc) => target_arc.clone(),
-        //             _ => match w.players_by_id.get(args.1) {
-        //                 Some(pl_arc) => {
-        //                     let p = pl_arc.read().await;
-        //                     let Some(ploc) = p.location.upgrade() else {
-        //                         log::warn!("Teleport destination player '{}' in void.", args.1);
-        //                         tell_user!(ctx.writer, "Found a player matching that ID, but they're in the void - no can do…\n");
-        //                         return;
-        //                     };
-        //                     ploc.clone()
-        //                 },
-        //                 _ => {
-        //                     log::debug!("Teleport fail: destination '{}' was neither Room or Player.", args.1);
-        //                     tell_user!(ctx.writer, "A slight typo there? I can't locate a room nor any player with that ID…\n");
-        //                     return;
-        //                 }
-        //             }
-        //         };
-        //         log::debug!("Teleport translocating to '{}'", args.1);
-        //         translocate!(plr, plr.read().await.location.upgrade().unwrap(), target_arc);
-        //         drop(w);
-        //         if !is_ghost {
-        //             ctx.out.broadcast.send(Broadcast::System {
-        //                 rooms: vec![target_arc.clone()],
-        //                 from: plr.clone().into(),
-        //                 message: format!("<c red>Something startling materializes in the field of vicinity…!</c>"),
-        //             }).ok();
-        //         }
-        //         LookCommand.exec({ctx.args = "";ctx}).await;
-        //         return;
-        //     },
-
-        //     other => {
-        //         if args.1.is_empty() {
-        //             // send self to other
-        //             args = ("me", args.0);
-        //             continue;
-        //         }
-                
-        //         // ok, we have two different arcs to figure out - is 'other' a player or room and if 'args.1' is a player or room…
-        //         let fst = try_resolve_to_something(other, ctx.world.clone()).await;
-        //         let snd = try_resolve_to_something(args.1, ctx.world.clone()).await;
-        //         match (fst, snd) {
-        //             (Some(Either::Right(p_arc)), Some(Either::Left(r_arc))) => {
-        //                 let Some(p_loc) = p_arc.read().await.location.upgrade() else {
-        //                     tell_user!(ctx.writer, "That didn't work out too well. Player '{}' was and remains the void.\n", other);
-        //                     return;
-        //                 };
-        //                 translocate!(p_arc.clone(), p_loc.clone(), r_arc.clone());
-        //                 ctx.out.broadcast.send({
-        //                     let name = p_arc.read().await.title().to_string();
-        //                     Broadcast::BiSignal {
-        //                     to: r_arc.clone(),
-        //                     from: p_loc.clone(),
-        //                     who: p_arc.clone(),
-        //                     message_to: format!("Very surprised looking <c cyan>{name}</c> materializes in your vicinity…"),
-        //                     message_from: format!("Suddenly the mists swallow <c cyan>{name}</c>!"),
-        //                     message_who: format!("Ut-oh, the forces unseen have transported you across space and time!"),
-        //                 }}).ok();
-        //                 log::info!("Admin '{admin_id}' port '{other}' to room '{}'.", args.1);
-        //                 tell_user!(ctx.writer, "Bon voyage, '{}'… Room '{}' awaits.\n", other, args.1);
-        //             },
-        //             (Some(Either::Right(p_arc_target)), Some(Either::Right(p_arc_dest))) => {
-        //                 let Some(r_target) = p_arc_target.read().await.location.upgrade() else {
-        //                     tell_user!(ctx.writer, "That didn't work out too well. Player '{}' was and remains the void.\n", other);
-        //                     return;
-        //                 };
-        //                 let Some(r_dest) = p_arc_dest.read().await.location.upgrade() else {
-        //                     tell_user!(ctx.writer, "Nope, '{}' is in the void. Sending '{}' there would be bad juju.\n", args.1, other);
-        //                     return;
-        //                 };
-        //                 translocate!(p_arc_target.clone(), r_target.clone(), r_dest.clone());
-        //                 ctx.out.broadcast.send({
-        //                     let name = p_arc_target.read().await.title().to_string();
-        //                     Broadcast::BiSignal {
-        //                     to: r_dest.clone(),
-        //                     from: r_target.clone(),
-        //                     who: p_arc_target.clone(),
-        //                     message_to: format!("Very surprised looking <c cyan>{name}</c> materializes in your vicinity…"),
-        //                     message_from: format!("Suddenly the mists swallow <c cyan>{name}</c>!"),
-        //                     message_who: format!("Ut-oh, the forces unseen have transported you across space and time!"),
-        //                 }}).ok();
-        //                 log::info!("Admin '{admin_id}' port '{other}' to player '{}'.", args.1);
-        //                 tell_user!(ctx.writer, "'{}' has been sent to meet with '{}'.\n", other, args.1);
-        //             },
-        //             (Some(Either::Left(_)),_) => {
-        //                 tell_user!(ctx.writer, "Warping spacetime and moving <c yellow>rooms</c>? How about, uh, nope?\n");
-        //             },
-        //             (_, None) => {
-        //                 tell_user!(ctx.writer, "No matter how I read this, I can't locate '{}'.\n", args.1);
-        //             },
-        //             (None, _) => {
-        //                 tell_user!(ctx.writer, "'{}' doesn't seem to exist, whatever it should be…\n", other);
-        //             }
-        //         }
-        //         return ;
-        //     }
-        // }
-        // }
         let (what, wher) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
         match what {
+            // Teleport self.
             "me"|"self" => if wher.is_empty() {
                 err_tell_user!(ctx.writer, "You move swiftly nowhere — happens when you forget to mention destination…\n");
             } else {
@@ -150,18 +40,48 @@ impl Command for TeleportCommand {
                 }
             }
 
+            // Teleport everyone and everything in the room with you.
+            "all" => if wher.is_empty() {
+                err_tell_user!(ctx.writer, "Ok… they move real swift nowhere at all. So, mind tell \"where to\"?\n");
+            } else {
+                match try_resolve_to_something(wher, &ctx.world, &loc).await {
+                    None => err_tell_user!(ctx.writer, "Whatever or wherever '{}' might be, you have no clue.\n", wher),
+                    Some(found) => {
+                        let t_loc = match found {
+                            TeleType::Entity(_) => err_tell_user!(ctx.writer, "Well… hauling everyone to some specific entity? Maybe not today.\n"),
+                            TeleType::Player(p) => {
+                                if let Some(p_loc) = p.read().await.location().upgrade() {
+                                    if Arc::ptr_eq(&p_loc, &loc) {
+                                        err_tell_user!(ctx.writer, "Sure, easy. They're already there, as in… right here.\n");
+                                    } else {
+                                        p_loc.clone()
+                                    }
+                                } else {
+                                    err_tell_user!(ctx.writer, "Ut-oh, that player is in the void?! Nope, not going to haul everyone *there*!\n");
+                                }
+                            }
+                            TeleType::Room(r) => r.clone()
+                        };
+                        // acquire targets and start warping the spacetime…
+                    }
+                }
+            }
+
+            // …or teleport something somewhere else (or yank to where you are…)
             _ => {
                 let what = match try_resolve_to_something(what, &ctx.world, &loc).await {
                     None => err_tell_user!(ctx.writer, "Ok, but… whatever '{}' is, or where, you have no clue.\n", what),
                     Some(found) => found
                 };
                 if wher.is_empty() {
+                    // Yank.
                     translocate(ctx, plr, what, TeleType::Room(loc)).await;
                 } else {
                     let wher = match try_resolve_to_something(wher, &ctx.world, &loc).await {
                         None => err_tell_user!(ctx.writer, "Shucks, whatever '{}' is or where, you have no clue.\n", wher),
                         Some(found) => found
                     };
+                    // Port.
                     translocate(ctx, plr, what, wher).await;
                 }
             }
@@ -181,20 +101,60 @@ async fn try_resolve_to_something(id: &str, world: &Arc<RwLock<World>>, loc: &Ar
     }
     else if let Some(ent) = loc.read().await.entities.get(&id.as_m_id()) {
         Some(TeleType::Entity(ent.clone()))
-    } else {
+    }
+    else if let Some(ent) = world.read().await.entities.get(&id.as_m_id()) {
+        if let Some(arc) = ent.upgrade() {
+            Some(TeleType::Entity(arc.clone()))
+        } else {
+            None
+        }
+    }
+    // serious fallbacks:
+    else {
+        // see room entity-by-entity
+        for e_arc in loc.read().await.entities.values() {
+            let lock = e_arc.read().await;
+            if lock.id().starts_with(id) {
+                return Some(TeleType::Entity(e_arc.clone()));
+            }
+        }
+        // worst case scenario: world…
+        for e in world.read().await.entities.values() {
+            if let Some(e_arc) = e.upgrade() {
+                let lock = e_arc.read().await;
+                if lock.id().starts_with(id) {
+                    return Some(TeleType::Entity(e_arc.clone()));
+                }
+            }
+        }
+        log::debug!("No {id}({}) found anywhere!", id.as_m_id());
         None
     }
 }
 
+/// Translocate an Entity or Player to another Player or Entity.
 async fn translocate(ctx: &mut CommandCtx<'_>, initiator: Arc<RwLock<Player>>, what: TeleType, wher: TeleType ) {
-    let Some(ini_loc) = initiator.read().await.location().upgrade().clone() else {
+    // Nail the initiator down during translocate! We'll avoid any potential spacetime warps with it.
+    // … and keep the lock immutable even though it's a .write lock. We're not writing anything, just
+    //   keeping them still over the course of translocate's course.
+    let Ok(ini_lock) = initiator.try_write() else {
+        log::warn!("translocate deadlock dodged.");
+        err_tell_user!(ctx.writer, "Yikes! Better try this later, spacetime too turbulent…\n");
+    };
+
+    let Some(ini_loc) = ini_lock.location().upgrade().clone() else {
         log::error!("Initiator '{}' in the void!", initiator.read().await.id());
         err_tell_user!(ctx.writer, "<c red>[ERR]</c> <c yellow>Not happening!</c>\n <c blue>*</c> Not going to teleport anything into the void with you…\n <c blue>*</c> Move to Garden space first.\n");
     };
 
     let (vct_id, vct_title, tgt) =
     match (what, wher) {
-        (TeleType::Entity(_), TeleType::Entity(_)) => err_tell_user!(ctx.writer, "Bonking heads is one thing, but to occupy same space with teleport? Too cruel…\n"),
+        (TeleType::Entity(e1), TeleType::Entity(e2)) =>
+            if Arc::ptr_eq(&e1, &e2) {
+                err_tell_user!(ctx.writer, "Schrödinger's {}? Lets not try that…\n", e1.read().await.title());
+            } else {
+                err_tell_user!(ctx.writer, "Bonking heads is one thing, but to occupy same space with teleport? Too cruel…\n")
+            }
         
         (TeleType::Entity(e), tgt) => {
             let tgt = match tgt {
@@ -221,7 +181,7 @@ async fn translocate(ctx: &mut CommandCtx<'_>, initiator: Arc<RwLock<Player>>, w
             )
         }
         
-        (TeleType::Player(vct), TeleType::Entity(_)) => {
+        (TeleType::Player(vct), TeleType::Entity(ent)) => {
             // erase last goto as there's no backtracking teleport…
             vct.write().await.last_goto = None;
 
@@ -232,23 +192,26 @@ async fn translocate(ctx: &mut CommandCtx<'_>, initiator: Arc<RwLock<Player>>, w
                 (v_id, v_loc)
             };
             
-            translocate!(vct, v_id, maybe_fake_loc, ini_loc);
+            let t_loc = ent.read().await.location().upgrade().unwrap_or_else(|| ini_loc.clone());
+            translocate!(vct, v_id, maybe_fake_loc, t_loc);
             
             let v_lock = vct.read().await;
             (
                 v_id,
                 v_lock.title().to_string(),
-                "right here".into()
+                if Arc::ptr_eq(&ini_loc, &t_loc) { "right here".into() } else {t_loc.read().await.id().into()}
             )
         }
 
         (TeleType::Player(vct), tgt) => {
             // erase last goto as there's no backtracking teleport…
-            vct.write().await.last_goto = None;
 
             let tgt = match tgt {
                 TeleType::Room(arc) => arc,
                 TeleType::Player(oth) => {
+                    if Arc::ptr_eq(&vct, &oth) {
+                        err_tell_user!(ctx.writer, "But… they're already at themselves? No point teleporting them to where they already are.\n");
+                    }
                     let Some(arc) = oth.read().await.location().upgrade().clone() else {
                         err_tell_user!(ctx.writer, "Target player '{}' in the void. Not sending '{}' there!\n", oth.read().await.id(), vct.read().await.id());
                     };
@@ -256,10 +219,17 @@ async fn translocate(ctx: &mut CommandCtx<'_>, initiator: Arc<RwLock<Player>>, w
                 },
                 _ => unreachable!("Handled already.")
             };
-            let v_id = vct.read().await.id().to_string();
-            let maybe_fake_loc = match vct.read().await.location().upgrade() {
-                None => ini_loc.clone(),
-                Some(arc) => arc.clone()
+            let (maybe_fake_loc, v_id) = {
+                let mut lock = vct.write().await;
+                lock.last_goto = None;
+                let v_id = lock.id().to_string();
+                (match lock.location().upgrade() {
+                    None => {
+                        log::warn!("Target {v_id} was in the void… pulling into reality.");
+                        ini_loc.clone()
+                    },
+                    Some(arc) => arc.clone()
+                }, v_id)
             };
             
             translocate!(vct, v_id, maybe_fake_loc, tgt);
@@ -272,8 +242,79 @@ async fn translocate(ctx: &mut CommandCtx<'_>, initiator: Arc<RwLock<Player>>, w
                 format!("to {} ({})", t_lock.title().to_string(), t_lock.id().to_string())
             )
         }
+
+        // Room + Entity combination *summons* the entity from designated room to you, if possible.
+        (TeleType::Room(from), TeleType::Entity(ent)) => {
+            let mut here = ini_loc.write().await;
+            let mut there = from.write().await;
+            let lock = ent.write().await;
+            let ent_id = lock.id().to_string();
+            let ent_title = lock.title().to_string();
+            let m_id = ent_id.as_m_id();
+            drop(lock);
+            there.entities.remove(&m_id);
+            here.entities.insert(m_id, ent);
+            (
+                ent_id,
+                ent_title,
+                "to right here".into()
+            )
+        }
         _ => err_tell_user!(ctx.writer, "Nope — not going to warp spacetime by teleporting *rooms*!\n")
     };
 
     tell_user!(ctx.writer, "Resolution…: {} ({}) translocated {}.\n", vct_title, vct_id, tgt)
+}
+
+#[cfg(test)]
+mod cmd_teleport_tests {
+    use std::{io::Cursor, sync::{Arc, Weak}};
+
+    use tokio::sync::RwLock;
+
+    use crate::{cmd::{look::LookCommand, teleport::TeleportCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery, uniq::Uuid}, player::Player, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+
+    #[tokio::test]
+    async fn teleport_self() {
+        let mut b: Vec<u8> = vec![];
+        let mut s = Cursor::new(&mut b);
+        let (w,c,(mut state,p),_) = get_operational_mock_world().await;
+        get_operational_mock_life!(c,w);
+        get_operational_mock_librarian!(c,w);
+        stabilize_threads!();
+        let c = c.out;
+        state = ctx!(sup state,TeleportCommand,"",s,c,w,|out:&str| out.contains("Huh?"));
+        p.write().await.access = Access::Player { event_host: false, builder: true };
+        state = ctx!(sup state,TeleportCommand,"",s,c,w,|out:&str| out.contains("Huh?"));
+        p.write().await.access = Access::Builder;
+        state = ctx!(sup state,TeleportCommand,"",s,c,w,|out:&str| out.contains("Usage"));
+        
+        let r2 = w.read().await.get_room_by_id("r-2").unwrap().clone();
+        let mut p2 = Player::default();
+        let p2_id = "p2".to_string();
+        p2.set_id(&p2_id, false).ok();
+        p2.set_title("Player#2");
+        p2.set_location(&r2).await;
+        let p2 = Arc::new(RwLock::new(p2));
+        r2.write().await.who.insert(p2_id.clone(), Arc::downgrade(&p2));
+        w.write().await.players_by_id.insert(p2_id.clone(), p2);
+
+        state = ctx!(sup state,TeleportCommand,"p3",s,c,w,|out:&str| out.contains("whatever 'p3'"));
+        
+        let r1 = w.read().await.get_room_by_id("r-1").unwrap().clone();
+        // void attempt
+        p.write().await.location = Weak::new();
+        state = ctx!(sup state,TeleportCommand,"p2",s,c,w,|out:&str| out.contains("in the void"));
+        p.write().await.location = Arc::downgrade(&r1);
+        state = ctx!(sup state,TeleportCommand,"p2",s,c,w,|out:&str| out.contains("Resolution"));
+
+        c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: crate::room::RoomPayload::Id("r-2".to_string()), reply: None }).ok();
+        stabilize_threads!(10);
+        state = ctx!(sup state,TeleportCommand,"p2 boglin",s,c,w,|out:&str| out.contains("Shucks"));
+        state = ctx!(state,TeleportCommand,"p2 goblin",s,c,w);
+        // room + ent transports ent from designated room (instead of trying to warp spacetime by transporting the room…)
+        state = ctx!(state,TeleportCommand,"r-2 goblin",s,c,w);
+
+        stabilize_threads!(100);
+    }
 }
