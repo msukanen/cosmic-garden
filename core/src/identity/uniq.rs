@@ -127,18 +127,24 @@ pub fn as_id(input: &str) -> Result<String, IdError> {
         return Err(IdError::TooLong);
     }
 
-    if crate::r#const::HARDCODED_RESERVED.contains(out) ||
-        VILLAIN_ID.contains(&out)
-    {
-        return Err(IdError::ReservedName(out.to_string()));
+    for token in out.split(|c| c == '-'||c == '_') {
+        if token.is_empty() { continue; }// redundant likely, but …
+        if crate::r#const::HARDCODED_RESERVED.contains(token) ||
+            VILLAIN_ID.contains(&token)
+        {
+            log::warn!("ID '{out}' blocked: contains reserved token '{token}'");
+            return Err(IdError::ReservedName(out.into()));
+        }
     }
 
-    Ok(out.to_string())
+    Ok(out.into())
 }
 
 /// Check if string is valid as ID without actually creating an ID out of it.
 /// 
-/// Note: unlike [as_id], [is_id] doesn't check against hardcoded reserved words.
+/// Note#1: unlike [as_id], [is_id] doesn't check against hardcoded reserved words.
+/// 
+/// Note#2: used mainly by the companion proc-macros.
 pub fn is_id(input: &str) -> Result<(), IdError> {
     let mut out = 0;
     let mut last_was_junk = false;
