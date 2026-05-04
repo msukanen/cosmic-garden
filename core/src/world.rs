@@ -4,12 +4,13 @@ use std::{collections::HashMap, net::SocketAddr, sync::{Arc, Weak}, usize};
 use futures::{StreamExt, stream};
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
-use tokio::{fs, sync::RwLock};
+use tokio::{fs, sync::{RwLock, Semaphore}, task::JoinSet};
 
 use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::{Room, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
+pub(crate) const CPU_CORES: usize = 16;// adjust to whatever number of cores your server has…
 
 /// The world!
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -48,8 +49,8 @@ pub struct World {
     pub channels: Option<SignalSenderChannels>,
 }
 
-#[cfg(test)]
 impl World {
+    #[cfg(test)]
     pub async fn dummy() -> Self {
         let root_room = Some(Room::new("r-1", "Incineration Chamber").await.unwrap());
         let room_2 = Some(Room::new("r-2", "Waterfall").await.unwrap());
@@ -156,7 +157,7 @@ impl World {
                     entities: HashMap::default(),
                 };
                 w.save(true).await?;
-                log::info!("World '{}' bootstrapped successfully.", w.name);
+                log::info!("Brand new world: '{}'; bootstrapped successfully.", w.name);
                 Ok(w)
             }
         }
@@ -176,6 +177,12 @@ impl World {
     }
 
     /// Insert [Player] to mappings.
+    /// 
+    /// # Args
+    /// - [`world`][World] arc.
+    /// - `addr`; IPv4/IPv6
+    /// - `id` of the [Player].
+    /// - `arc` of the [Player].
     pub async fn insert_player(world: Arc<RwLock<World>>, addr: &SocketAddr, id: &str, arc: Arc<RwLock<Player>>) {
         {// map the soul…
             let mut w = world.write().await;
@@ -296,8 +303,18 @@ pub struct RoomPaginateResult {
 
 impl World {
     pub async fn tick(&mut self) {
+        let max_par = CPU_CORES;
+        let sem = Arc::new(Semaphore::new(max_par));
+        let mut join_set = JoinSet::new();
+
         for r in self.rooms.values() {
-            r.write().await.tick().await;
+            let sem_clone = Arc::clone(&sem);
+            let r_clone = r.clone();
+            join_set.spawn(async move {
+                let _permit = sem_clone.acquire_owned().await.unwrap();
+                let mut r = r_clone.write().await;
+                r.tick().await;
+            });
         }
     }
 

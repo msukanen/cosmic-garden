@@ -371,22 +371,32 @@ impl StorageMut for Room {
 
 impl Room {
     pub async fn tick(&mut self) {
+        let max_par = crate::world::CPU_CORES;
+        let sem = Arc::new(tokio::sync::Semaphore::new(max_par));
+        let mut join_set = tokio::task::JoinSet::new();
+
         for p_weak in self.who.values() {
             if let Some(p_arc) = p_weak.upgrade() {
-                let mut p = p_arc.write().await;
-                // no reaction yet to "positive" tick(s)
-                let _= p.tick().await;
+                if let Ok(mut p) = p_arc.try_write() {
+                    // no reaction yet to "positive" tick(s)
+                    let _= p.tick();
+                }
             }
         }
 
         for e in self.entities.values() {
-            let mut lock = e.write().await;
-            // no reaction yet to "positive" tick(s)
-            let _ = lock.tick().await;
+            let sem_clone = Arc::clone(&sem);
+            let e_clone = e.clone();
+            join_set.spawn(async move {
+                let _permit = sem_clone.acquire_owned().await.unwrap();
+                if let Ok(mut e) = e_clone.try_write() {
+                    _ = e.tick().await;
+                }
+            });
         }
 
         // no reaction yet to "positive" tick(s)
-        let _ = self.contents.tick().await;
+        let _ = self.contents.tick();
         #[cfg(all(debug_assertions,feature = "stresstest"))]{
             log::debug!("Room '{}' ticked.", self.id);
         }
