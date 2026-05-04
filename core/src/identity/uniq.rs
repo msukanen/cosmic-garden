@@ -56,6 +56,10 @@ fn append_uuid(value: &str) -> String {
     if UUID_RE.is_match(value) {
         return value.into()
     }
+    append_uuid_bypass(value)
+}
+
+fn append_uuid_bypass(value: &str) -> String {
     format!("{value}-{}", uuid::Uuid::new_v4())
 }
 
@@ -83,7 +87,7 @@ impl UuidCore for &str {
 }
 impl Uuid for &str {
     #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
-    #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
+    #[inline] fn re_uuid(&self) -> String { append_uuid_bypass(self.show_uuid(false)) }
 }
 
 impl UuidCore for String {
@@ -91,7 +95,7 @@ impl UuidCore for String {
 }
 impl Uuid for String {
     #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
-    #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
+    #[inline] fn re_uuid(&self) -> String { append_uuid_bypass(self.show_uuid(false)) }
 }
 
 impl UuidCore for &String {
@@ -99,7 +103,7 @@ impl UuidCore for &String {
 }
 impl Uuid for &String {
     #[inline] fn no_uuid(&self) -> String { remove_uuid(self) }
-    #[inline] fn re_uuid(&self) -> String { append_uuid(self.show_uuid(false)) }
+    #[inline] fn re_uuid(&self) -> String { append_uuid_bypass(self.show_uuid(false)) }
 }
 
 impl TryAttachUuid<Item> for Option<Item> {
