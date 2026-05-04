@@ -5,8 +5,9 @@ use std::{collections::HashSet, fs, ops::Deref, path::PathBuf, sync::Arc};
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use tokio::sync::RwLock;
+use unicode_normalization::UnicodeNormalization;
 
-use crate::{io::reserved_names_fp, item::container::storage::StorageSpace, util::escape_hatch::VILLAIN_ID};
+use crate::{identity::MAX_ID_LEN, io::reserved_names_fp, item::container::storage::StorageSpace, util::escape_hatch::VILLAIN_ID};
 
 // some const to deal with [World]-specific choices that aren't present for a reason or other…
 pub const GREETING: &'static str = "Welcome to Cosmic Garden!";
@@ -72,7 +73,7 @@ lazy_static! {
             "bin", "www", "windows", "win32",
             "win64", "dos", "user", "ftp",
             "tcp", "http", "https", "udp",
-            "admin", "sys", "system", "root",
+            "admin", "sys", "system",
             "world", "self", "me", "omfg",
             "room", "here", "all", "force",
             "builder", "anybuilder", "any_builder",
@@ -85,6 +86,24 @@ lazy_static! {
         
         // reserved "villain" words, e.g. Rust keywords et al.
         for name in VILLAIN_ID { reserved.insert(name); }
+
+        // let's treat reserved names as a plaintext file with any non-alphanum as separator
+        match fs::read_to_string(reserved_names_fp()) {
+            Ok(plaintext) => {
+                for raw in plaintext.split_whitespace() {
+                    let cleaned: String = raw
+                        .to_lowercase()
+                        .nfd()
+                        .filter(|c| c.is_ascii_alphanumeric())
+                        .collect();
+                    if !cleaned.is_empty() && cleaned.len() < MAX_ID_LEN {
+                        let static_str: &'static str = Box::leak(cleaned.into_boxed_str());
+                        reserved.insert(static_str);
+                    }
+                }
+            }
+            Err(e) => log::warn!("Error reading '{}': {e:?}", reserved_names_fp().display())
+        }
         
         reserved
     };
