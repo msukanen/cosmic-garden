@@ -108,13 +108,24 @@ macro_rules! validate_access {
 
 #[macro_export]
 macro_rules! roomloc_or_bust {
-    ($plr:ident) => {
-        {
-            let p = $plr.read().await;
-            let Some(p_loc) = p.location.upgrade() else {
-                return;
-            };
-            p_loc
-        }
-    };
+    ($plr:ident) => {{
+        let p = $plr.read().await;
+        let Some(p_loc) = p.location.upgrade() else {
+            log::warn!("Command initiator in the void… Cancelling.");
+            return;
+        };
+        p_loc
+    }};
+
+    ($ctx:ident, $plr:ident) => {{
+        let p = $plr.read().await;
+        let Some(p_loc) = p.location.upgrade() else {
+            if matches!($ctx.state, crate::io::ClientState::Playing{..}|crate::io::ClientState::Editing{..}) {
+                crate::err_tell_user!($ctx.writer, "You're in the void. Cancelling…\n");
+            }
+            log::warn!("Command initiator in the void… Cancelling.");
+            return;
+        };
+        p_loc
+    }};
 }
