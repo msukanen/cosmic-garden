@@ -20,7 +20,7 @@ impl Command for TeleportCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let plr = validate_access!(ctx, true_builder);
         show_help_if_needed!(ctx, "u teleport");
-        let (p_id, is_ghost, loc) = {
+        let (_p_id, _is_ghost, loc) = {
             let p = plr.read().await;
             let p_id = p.id().to_string();
             let is_ghost = p.config.is_ghost;
@@ -272,7 +272,7 @@ mod cmd_teleport_tests {
 
     use tokio::sync::RwLock;
 
-    use crate::{cmd::{look::LookCommand, teleport::TeleportCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery, uniq::Uuid}, player::Player, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{teleport::TeleportCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityMut, player::Player, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn teleport_self() {
@@ -313,7 +313,7 @@ mod cmd_teleport_tests {
         state = ctx!(sup state,TeleportCommand,"p2 boglin",s,c,w,|out:&str| out.contains("Shucks"));
         state = ctx!(state,TeleportCommand,"p2 goblin",s,c,w);
         // room + ent transports ent from designated room (instead of trying to warp spacetime by transporting the room…)
-        state = ctx!(state,TeleportCommand,"r-2 goblin",s,c,w);
+        _ = ctx!(state,TeleportCommand,"r-2 goblin",s,c,w);
 
         stabilize_threads!(100);
     }

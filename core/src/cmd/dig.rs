@@ -108,7 +108,7 @@ mod cmd_dig_tests {
         state = ctx!(sup state, DigCommand, "",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         state = ctx!(state, DigCommand, "east r-3",s,c,w);
-        state = ctx!(state, DigCommand, "east r-3",s,c,w);
+        _ = ctx!(state, DigCommand, "east r-3",s,c,w);
     }
 
     #[tokio::test]
@@ -121,6 +121,6 @@ mod cmd_dig_tests {
         state = ctx!(sup state, DigCommand, "teleport r-4",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         state = ctx!(state, DigCommand, "teleport r-4",s,c,w);
-        state = ctx!(state, DigCommand, "teleport r-4",s,c,w);
+        _ = ctx!(state, DigCommand, "teleport r-4",s,c,w);
     }
 }
