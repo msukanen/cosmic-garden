@@ -426,18 +426,24 @@ pub(crate) mod world_tests {
             }
         });
         use crate::identity::IdentityQuery;
+        // world basics…
+        let mut world = crate::world::World::dummy().await;
+        
+        // create Player#1
         let mut plr = crate::player::Player::default();
         plr.set_id("test-player-1", true).ok();
         let plr_id = plr.id().to_string();
         let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
-        let mut world = crate::world::World::dummy().await;
         world.players_by_id.insert(plr_id.clone(), plr.clone());
-        let sigs = crate::SignalChannels::default();
-        world.channels = sigs.out.clone().into();
-
+        // put player#1 into r-1
         let Some(r) = world.rooms.get(&"r-1".as_m_id()) else { panic!("r-1 missing?!")};
         r.write().await.who.insert(plr_id.clone(), std::sync::Arc::downgrade(&plr));
         plr.write().await.location = std::sync::Arc::downgrade(&r);
+
+        // signal channels…
+        let sigs = crate::SignalChannels::default();
+        world.channels = sigs.out.clone().into();
+
         let (dtx,drx) = tokio::sync::oneshot::channel::<()>();
 
         (   std::sync::Arc::new(tokio::sync::RwLock::new(world)),
