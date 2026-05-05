@@ -1,15 +1,12 @@
 //! When worlds collide…
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, usize};
 
-use futures::{StreamExt, stream};
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::{RwLock, Semaphore}, task::JoinSet};
 
-use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::EntityWeak, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity}, io::world_fp, item::Item, mob::EntityWeak, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
-const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
-const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
 pub(crate) const CPU_CORES: usize = 16;// adjust to whatever number of cores your server has…
 
 /// The world!
@@ -293,16 +290,6 @@ impl World {
     }
 }
 
-/// Room pagination result type.
-pub struct RoomPaginateResult {
-    /// ID/Arc
-    pub entries: Vec<(MachineId, RoomArc)>,
-    /// Total num of search matches.
-    pub total_found: usize,
-    /// Total pages (relative to `per_page` of the search).
-    pub total_pages: usize,
-}
-
 impl World {
     pub async fn tick(&mut self) {
         let max_par = CPU_CORES;
@@ -320,61 +307,74 @@ impl World {
         }
     }
 
-    /// Get room entries as per id/title needle search in "pages" (see [RoomPaginateResult]).
-    pub async fn paginated_room_entries(&self, needle: &str, page: usize, mut per_page: usize) -> RoomPaginateResult {
-        if per_page == 0 {
-            per_page = usize::MAX;
-        }
-        let needle = needle.to_lowercase();
-        let id_needle = needle.as_id().unwrap_or("**garbage**".into());
-        let mut pages = if self.rooms.len() < NUM_ROOMS_FOR_PARALLEL_SHIFT {
-            let mut res = Vec::new();
-            for (id, r) in self.rooms.iter() {
-                let lock = r.read().await;
-                let title = lock.title().to_lowercase();
-                log::debug!("{id} @ {title}");
-                if lock.id().contains(&id_needle) || title.contains(&needle) {
-                    res.push((*id, r.clone()));
+    fn room_list(&self, term: Option<String>, out: tokio::sync::oneshot::Sender<Vec<(MachineId, RoomArc)>>) {
+        let list: Vec<(MachineId, RoomArc)> = self.rooms.iter()
+            .map(|(k,v)| (*k, v.clone()))
+            .collect();
+        tokio::spawn(async move {
+            let Some(term) = term else {
+                out.send(list).ok();
+                return;
+            };
+            if term.is_empty() {
+                out.send(list).ok();
+                return;
+            }
+            
+            let term_str = term.to_lowercase();
+            let mut term = term_str.as_str();
+            
+            enum SearchMode { Start, Contain, End, Entire }
+            let mode = match term.chars().nth(0).unwrap() {
+                '^' => if term.ends_with('$') {
+                    term = &term[1..term.len()-1];
+                    SearchMode::Entire
+                } else {
+                    term = &term[1..];
+                    SearchMode::Start
+                }
+                _ => if term.ends_with('$') {
+                    term = &term[..term.len()-1];
+                    SearchMode::End
+                } else { SearchMode::Contain }
+            };
+
+            // in case we go just "^$"", "^", or "$"…:
+            if term.is_empty() {
+                out.send(list).ok();
+                return;
+            }
+
+            let mut found: Vec<(MachineId, RoomArc)> = vec![];
+            for (id, r_arc) in list.iter() {
+                let lock = r_arc.read().await;
+                match mode {
+                    SearchMode::Contain => if lock.id().contains(&term) || lock.title().contains(&term) {
+                        found.push((*id, r_arc.clone()));
+                    }
+                    
+                    SearchMode::End => if lock.id().ends_with(&term) || lock.title().to_lowercase().contains(&term) {
+                        found.push((*id, r_arc.clone()));
+                    }
+
+                    SearchMode::Entire => if lock.id() == term || lock.title().to_lowercase() == term {
+                        found.push((*id, r_arc.clone()));
+                    }
+
+                    SearchMode::Start => if lock.id().starts_with(&term) || lock.title().to_lowercase().starts_with(&term) {
+                        found.push((*id, r_arc.clone()));
+                    }
                 }
             }
-            res
-        } else {
-            let room_clones: Vec<(MachineId,RoomArc)> = self.rooms.iter().map(|(id,r)|(id.clone(),r.clone())).collect();
-            stream::iter(room_clones)
-                .map(|(id,r)| {
-                    let id_needle = id_needle.clone();
-                    let needle = needle.clone();
-                    let id = id.clone();
-                    let r = r.clone();
-                    async move {
-                        let lock = r.read().await;
-                        let title = lock.title().to_lowercase();
-                        let matches = lock.id().contains(&id_needle) || title.contains(&needle);
-                        (id,r.clone(),matches)
-                    }
-                })
-                .buffered(NUM_WORLD_IDENT_ROOMS_IN_PARALLEL) // TODO adjust?
-                .filter(|(_,_,matches)| futures::future::ready(*matches))
-                .map(|(id,r,_)| (id,r))
-                .collect::<Vec<_>>()
-                .await
-        };
-        pages.sort_unstable_by(|a,b| a.0.cmp(&b.0));
-        let total_found = pages.len();
-        let entries = pages.into_iter().skip(page.saturating_sub(1) * per_page).take(per_page).collect();
-        RoomPaginateResult {
-            entries, total_found, total_pages: (total_found + per_page - 1) / per_page // saturating_add would be safer, but anywhere close to usize::MAX rooms, really?
-        }
-    }
-
-    fn room_list(&self, term: Option<String>, out: tokio::sync::oneshot::Sender<Vec<MachineId>>) {
-        let list: Vec<MachineId> = self.rooms.keys().cloned().collect();
-        tokio::spawn(async move { (list, term, out) });
+                       //(list, term, out)
+            out.send(found).ok();
+        });
     }
 }
 
-pub async fn room_list(world: WorldArc, term: Option<String>) -> Vec<MachineId> {
-    let (out, recv) = tokio::sync::oneshot::channel::<Vec<MachineId>>();
+/// Ask the world for rooms that match given `term`, if any.
+pub async fn room_list(world: &WorldArc, term: Option<String>) -> Vec<(MachineId, RoomArc)> {
+    let (out, recv) = tokio::sync::oneshot::channel::<Vec<(MachineId, RoomArc)>>();
     world.read().await.room_list(term, out);
     recv.await.unwrap_or_default()
 }
