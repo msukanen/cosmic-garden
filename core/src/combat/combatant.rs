@@ -1,10 +1,6 @@
 //! "Combatant" traits.
 
-use std::sync::Weak;
-
-use tokio::sync::RwLock;
-
-use crate::{identity::IdentityQuery, item::container::variants::ContainerVariant, mob::{Stat, StatError, StatValue}, room::Room};
+use crate::{identity::IdentityQuery, item::container::variants::ContainerVariant, mob::{Stat, StatError, StatValue}, room::RoomWeak};
 
 /// A trait for all "combatants".
 pub trait Combatant: IdentityQuery + super::Damager {
@@ -42,7 +38,7 @@ pub trait Combatant: IdentityQuery + super::Damager {
 
     /// Is the [Combatant] dead?
     fn is_dead(&self) -> bool { self.hp().is_dead().ok().unwrap() }
-    fn location(&self) -> Weak<RwLock<Room>>;
+    fn location(&self) -> RoomWeak;
 }
 
 /// Mutable trait for all "combatants".
@@ -77,5 +73,5 @@ pub trait CombatantMut : Combatant {
     fn nim_mut<'a>(&'a mut self) -> &'a mut Stat;
     fn inventory(&mut self) -> &mut ContainerVariant;
     fn alter_brain_freeze(&mut self, freeze: bool);
-    fn location_mut(&mut self) -> &mut Weak<RwLock<Room>>;
+    fn location_mut(&mut self) -> &mut RoomWeak;
 }

@@ -1,10 +1,8 @@
 //! System signals.
 
-use std::sync::Arc;
+use tokio::sync::{broadcast, mpsc};
 
-use tokio::sync::{RwLock, broadcast, mpsc};
-
-use crate::{combat::Battler, help::HelpPage, io::Broadcast, item::Item, mob::core::Entity, player::Player, room::{Room, RoomPayload}, thread::librarian::BlueprintType, util::{access::Access, direction::Direction}};
+use crate::{combat::Battler, help::HelpPage, io::Broadcast, item::Item, mob::core::Entity, player::PlayerArc, room::{RoomArc, RoomPayload}, thread::librarian::BlueprintType, util::{access::Access, direction::Direction}};
 
 pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
 pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
@@ -18,13 +16,13 @@ pub enum SystemSignal {
     //--- Janitor ---
     //
     /// Player logging out, queue or otherwise.
-    PlayerNeedsSaving (Arc<RwLock<Player>>),
+    PlayerNeedsSaving (PlayerArc),
     /// Save the whales, now!
     SaveWorld,
     /// Item tucked into L'n'F.
     LostAndFound,
     /// Save a [Room].
-    SaveRoom { arc: Arc<RwLock<Room>> },
+    SaveRoom { arc: RoomArc },
 
     //
     //--- Librarian ---
@@ -77,8 +75,8 @@ pub enum SystemSignal {
         reply: Option<tokio::sync::oneshot::Sender<bool>>,
     },
     Attack { atk_arc: Battler, vct_arc: Battler },
-    PlayerLogout { player: Arc<RwLock<Player>> },
-    WantTransportFromTo { who: Arc<RwLock<Player>>, from: Arc<RwLock<Room>>, to: Arc<RwLock<Room>>, via: Direction },
+    PlayerLogout { player: PlayerArc },
+    WantTransportFromTo { who: PlayerArc, from: RoomArc, to: RoomArc, via: Direction },
     AbortBattleNow { who: Battler },
     #[cfg(test)]
     CountSpawns { num: usize, out: tokio::sync::oneshot::Sender<()> },

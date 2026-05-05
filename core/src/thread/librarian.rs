@@ -1,11 +1,16 @@
 //! Librarian! She's cute, but does some heavy lifting if needed.
 
-use std::{sync::Arc, time::Duration};
-
-use tokio::sync::RwLock;
+use std::time::Duration;
 
 use crate::{
-    help::{HelpLibrary, HelpPage}, identity::{IdentityQuery, uniq::{StrUuid, TryAttachUuid}}, item::{BlueprintLibrary, Item}, mob::{core::Entity, spawn_lib::EntityLibrary}, thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, traits::Reflector, util::access::Access, world::World
+    help::{HelpLibrary, HelpPage},
+    identity::{IdentityQuery, uniq::{StrUuid, TryAttachUuid}},
+    item::{BlueprintLibrary, Item},
+    mob::{core::Entity, spawn_lib::EntityLibrary},
+    thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}},
+    traits::Reflector,
+    util::access::Access,
+    world::WorldArc
 };
 
 #[cfg(test)]
@@ -30,11 +35,8 @@ struct Library {
 
 #[cfg(test)]
 mod librarian_test_cache {
-    use std::sync::Arc;
-    use tokio::sync::OnceCell;
     use crate::{help::HelpLibrary, item::BlueprintLibrary, mob::spawn_lib::EntityLibrary};
-
-    pub static LIB_DATA_CACHE: OnceCell<Arc<(BlueprintLibrary, EntityLibrary, HelpLibrary)>> = OnceCell::const_new();
+    pub static LIB_DATA_CACHE: tokio::sync::OnceCell<std::sync::Arc<(BlueprintLibrary, EntityLibrary, HelpLibrary)>> = tokio::sync::OnceCell::const_new();
 }
 
 /// 
@@ -44,7 +46,7 @@ mod librarian_test_cache {
 /// 
 pub async fn librarian(
     (out, mut incoming): (SignalSenderChannels, SigReceiver),
-    world: Arc<RwLock<World>>,
+    world: WorldArc,
 ) {
     #[cfg(test)]
     let shared_data = {
@@ -52,7 +54,7 @@ pub async fn librarian(
             let b = BlueprintLibrary::load_or_bootstrap().await.expect("Blueprint library in fire!");
             let h = HelpLibrary::load_or_bootstrap().await.expect("Help! Help in distress!");
             let e = EntityLibrary::load_or_bootstrap().await.expect("Zoo in chaos!");
-            Arc::new((b,e,h))
+            std::sync::Arc::new((b,e,h))
         }).await.clone()
     };
 

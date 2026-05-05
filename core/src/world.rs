@@ -1,12 +1,12 @@
 //! When worlds collide…
-use std::{collections::HashMap, net::SocketAddr, sync::{Arc, Weak}, usize};
+use std::{collections::HashMap, net::SocketAddr, sync::Arc, usize};
 
 use futures::{StreamExt, stream};
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::{RwLock, Semaphore}, task::JoinSet};
 
-use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::core::Entity, player::Player, room::{Room, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::world_fp, item::Item, mob::EntityWeak, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 const NUM_ROOMS_FOR_PARALLEL_SHIFT: usize = 50;
 const NUM_WORLD_IDENT_ROOMS_IN_PARALLEL: usize = 50;
@@ -29,25 +29,27 @@ pub struct World {
 
     /// Players sorted by their direct socket address.
     #[serde(skip, default)]
-    pub players_by_sockaddr: HashMap<SocketAddr, Arc<RwLock<Player>>>,
+    pub players_by_sockaddr: HashMap<SocketAddr, PlayerArc>,
     /// Players sorted by user's login ID (not their [Player] character's ID).
     #[serde(skip, default)]
-    pub players_by_id: HashMap<String, Arc<RwLock<Player>>>,
+    pub players_by_id: HashMap<String, PlayerArc>,
 
     #[serde(rename = "rooms", with = "room_id_sieve")]
-    rooms: HashMap<MachineId, Arc<RwLock<Room>>, BuildNoHashHasher<MachineId>>,
+    rooms: HashMap<MachineId, RoomArc, BuildNoHashHasher<MachineId>>,
     #[serde(default = "default_root_room_id")]
     pub root_room_id: String,
     #[serde(skip)]
-    pub root_room: Option<Arc<RwLock<Room>>>,
+    pub root_room: Option<RoomArc>,
     #[serde(default, skip)]
-    pub entities: HashMap<MachineId, Weak<RwLock<Entity>>, BuildNoHashHasher<MachineId>>,
+    pub entities: HashMap<MachineId, EntityWeak, BuildNoHashHasher<MachineId>>,
 
     #[serde(default)]
     pub lost_and_found: HashMap<MachineId, Item>,
     #[serde(skip)]
     pub channels: Option<SignalSenderChannels>,
 }
+/// World arc type.
+pub type WorldArc = Arc<RwLock<World>>;
 
 impl World {
     #[cfg(test)]
@@ -81,7 +83,7 @@ mod room_id_sieve {
     use serde::{Serializer, Deserializer, Deserialize, ser::SerializeSeq};
 
     /// HashMap → list of IDs.
-    pub fn serialize<S>(rooms: &HashMap<MachineId, Arc<RwLock<Room>>, BuildNoHashHasher<MachineId>>, s: S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(rooms: &HashMap<MachineId, RoomArc, BuildNoHashHasher<MachineId>>, s: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let mut seq = s.serialize_seq(Some(rooms.len()))?;
         for id in rooms.keys() {
@@ -91,7 +93,7 @@ mod room_id_sieve {
     }
 
     /// Take the list of IDs and materialize the [Room]s from disk.
-    pub fn deserialize<'de, D>(d: D) -> Result<HashMap<MachineId, Arc<RwLock<Room>>, BuildNoHashHasher<MachineId>>, D::Error>
+    pub fn deserialize<'de, D>(d: D) -> Result<HashMap<MachineId, RoomArc, BuildNoHashHasher<MachineId>>, D::Error>
     where D: Deserializer<'de> {
         let ids = Vec::<String>::deserialize(d)?;
         let mut rooms = HashMap::default();
@@ -183,7 +185,7 @@ impl World {
     /// - `addr`; IPv4/IPv6
     /// - `id` of the [Player].
     /// - `arc` of the [Player].
-    pub async fn insert_player(world: Arc<RwLock<World>>, addr: &SocketAddr, id: &str, arc: Arc<RwLock<Player>>) {
+    pub async fn insert_player(world: WorldArc, addr: &SocketAddr, id: &str, arc: PlayerArc) {
         {// map the soul…
             let mut w = world.write().await;
             w.players_by_sockaddr.insert(addr.clone(), arc.clone());
@@ -247,12 +249,12 @@ impl World {
     }
 
     /// Try get `Arc` of a [Room] by `id`…
-    pub fn get_room_by_id(&self, id: &str) -> Option<Arc<RwLock<Room>>> {
+    pub fn get_room_by_id(&self, id: &str) -> Option<RoomArc> {
         self.get_room_by_m_id(id.as_m_id())
     }
 
     /// Try get `Arc` of a [Room] by [machine ID][MachineId].
-    pub fn get_room_by_m_id(&self, m_id: MachineId) -> Option<Arc<RwLock<Room>>> {
+    pub fn get_room_by_m_id(&self, m_id: MachineId) -> Option<RoomArc> {
         self.rooms.get(&m_id).cloned()
     }
 
@@ -262,7 +264,7 @@ impl World {
     /// - [`room`][Room] to insert.
     /// # Returns
     /// `Ok` or [IdError].
-    pub async fn insert_room(&mut self, room: Arc<RwLock<Room>>) -> Result<(), IdError> {
+    pub async fn insert_room(&mut self, room: RoomArc) -> Result<(), IdError> {
         let id = room.read().await.id().to_string();
         let m_id = id.as_m_id();
         self.insert_room_by_m_id(m_id, id, room)
@@ -279,7 +281,7 @@ impl World {
     /// 
     /// # Returns
     /// `Ok` or [IdError].
-    pub fn insert_room_by_m_id(&mut self, m_id: MachineId, id: String, room: Arc<RwLock<Room>>) -> Result<(), IdError> {
+    pub fn insert_room_by_m_id(&mut self, m_id: MachineId, id: String, room: RoomArc) -> Result<(), IdError> {
         if self.rooms.contains_key(&m_id) {
             log::error!("Builder: Room ID '{id}' collision course detected. Refusing banging them against each other.");
             return Err(IdError::ReservedName(id));
@@ -294,7 +296,7 @@ impl World {
 /// Room pagination result type.
 pub struct RoomPaginateResult {
     /// ID/Arc
-    pub entries: Vec<(MachineId, Arc<RwLock<Room>>)>,
+    pub entries: Vec<(MachineId, RoomArc)>,
     /// Total num of search matches.
     pub total_found: usize,
     /// Total pages (relative to `per_page` of the search).
@@ -337,7 +339,7 @@ impl World {
             }
             res
         } else {
-            let room_clones: Vec<(MachineId,Arc<RwLock<Room>>)> = self.rooms.iter().map(|(id,r)|(id.clone(),r.clone())).collect();
+            let room_clones: Vec<(MachineId,RoomArc)> = self.rooms.iter().map(|(id,r)|(id.clone(),r.clone())).collect();
             stream::iter(room_clones)
                 .map(|(id,r)| {
                     let id_needle = id_needle.clone();
@@ -371,7 +373,7 @@ impl World {
     }
 }
 
-pub async fn room_list(world: Arc<RwLock<World>>, term: Option<String>) -> Vec<MachineId> {
+pub async fn room_list(world: WorldArc, term: Option<String>) -> Vec<MachineId> {
     let (out, recv) = tokio::sync::oneshot::channel::<Vec<MachineId>>();
     world.read().await.room_list(term, out);
     recv.await.unwrap_or_default()
@@ -381,15 +383,15 @@ pub async fn room_list(world: Arc<RwLock<World>>, term: Option<String>) -> Vec<M
 pub(crate) mod world_tests {
     use std::sync::Once;
 
-    use crate::{cformat, identity::{IdentityMut, MachineIdentity}};
+    use crate::{cformat, identity::{IdentityMut, MachineIdentity}, player::PlayerArc, world::WorldArc};
 
     pub static DISK_VERIFIED: Once = Once::new();
 
     pub(crate) async fn get_operational_mock_world() -> (
-        std::sync::Arc<tokio::sync::RwLock<crate::world::World>>,
+        WorldArc,
         crate::SignalChannels,
         (   crate::io::ClientState,
-            std::sync::Arc<tokio::sync::RwLock<crate::player::Player>>
+            PlayerArc
         ),
         (   tokio::sync::oneshot::Sender<()>,
             tokio::sync::oneshot::Receiver<()>

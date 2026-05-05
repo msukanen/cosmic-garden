@@ -1,11 +1,8 @@
 //! Entry locking mechanisms and such.
 
-use std::sync::{Arc, Weak};
-
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 
-use crate::{identity::{IdentityQuery, uniq::StrUuid}, item::Item, room::{ExitLike, Room}};
+use crate::{identity::{IdentityQuery, uniq::StrUuid}, item::Item, room::{ExitLike, RoomArc, RoomWeak}};
 
 #[derive(Debug, PartialEq)]
 pub enum LockingError {
@@ -29,22 +26,22 @@ pub enum ExitState {
 #[derive(Debug, Clone)]
 pub enum Exit {
     /// No distinct "door" or alike to deal with.
-    Free { room: Weak<RwLock<Room>> },
+    Free { room: RoomWeak },
     /// An open entrance which may or may not have a lock.
-    Open { key_bp: Option<String>, room: Weak<RwLock<Room>> },
+    Open { key_bp: Option<String>, room: RoomWeak },
     /// An closed entrance which may or may not have a lock.
-    Closed { key_bp: Option<String>, room: Weak<RwLock<Room>> },
+    Closed { key_bp: Option<String>, room: RoomWeak },
     /// A locked entrance.
-    Locked { key_bp: String, room: Weak<RwLock<Room>> },
+    Locked { key_bp: String, room: RoomWeak },
     /// An open, autolocking entrance.
-    OpenAL { key_bp: String, room: Weak<RwLock<Room>> },
+    OpenAL { key_bp: String, room: RoomWeak },
     /// A locked autolocking entrance.
-    LockedAL { key_bp: String, room: Weak<RwLock<Room>> },
+    LockedAL { key_bp: String, room: RoomWeak },
 }
 
 impl Exit {
     /// Get the destination `Weak` [Room].
-    pub fn as_weak(&self) -> Weak<RwLock<Room>> {
+    pub fn as_weak(&self) -> RoomWeak {
         match self {
             Self::Free { room }        |
             Self::Closed { room,.. }   |
@@ -56,7 +53,7 @@ impl Exit {
     }
 
     /// Try upgrade destination `Weak` [Room] to `Arc`.
-    pub fn as_arc(&self) -> Option<Arc<RwLock<Room>>> {
+    pub fn as_arc(&self) -> Option<RoomArc> {
         match self {
             Self::Free { room }        |
             Self::Closed { room,.. }   |
@@ -68,14 +65,14 @@ impl Exit {
     }
 
     /// Connect the [Exit] to the given [Room].
-    pub fn reroute(&mut self, dest: Arc<RwLock<Room>>) {
+    pub fn reroute(&mut self, dest: RoomArc) {
         match self {
             Self::Free { room }        |
             Self::Closed { room,.. }   |
             Self::Locked { room,.. }   |
             Self::LockedAL { room,.. } |
             Self::Open { room,.. }     |
-            Self::OpenAL { room,.. }   => *room = Arc::downgrade(&dest)
+            Self::OpenAL { room,.. }   => *room = std::sync::Arc::downgrade(&dest)
         }
     }
 
@@ -208,10 +205,10 @@ impl Exit {
     }
 
     /// NOTE: **Bootstrap phase** raw exit transformer.
-    pub fn from_arc(exl: ExitLike, room_arc: Arc<RwLock<Room>>) -> Self {
-        Self::from(exl, Arc::downgrade(&room_arc))
+    pub fn from_arc(exl: ExitLike, room_arc: RoomArc) -> Self {
+        Self::from(exl, std::sync::Arc::downgrade(&room_arc))
     }
-    pub fn from(exl: ExitLike, room_weak: Weak<RwLock<Room>>) -> Self {
+    pub fn from(exl: ExitLike, room_weak: RoomWeak) -> Self {
         match exl.state {
             ExitState::Closed => Self::Closed { key_bp: exl.key_bp, room: room_weak },
             ExitState::Free => Self::Free { room: room_weak },

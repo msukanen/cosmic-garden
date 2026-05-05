@@ -1,68 +1,64 @@
-use std::sync::Arc;
-
-use tokio::sync::RwLock;
-
-use crate::{combat::Battler, player::Player, room::Room};
+use crate::{combat::Battler, player::PlayerArc, room::RoomArc};
 
 /// Various broadcast types.
 #[derive(Clone)]
 pub enum Broadcast {
     /// 'say' something.
     Say {
-        room: Arc<RwLock<Room>>,
+        room: RoomArc,
         message: String,
-        from: Arc<RwLock<Player>>,
+        from: PlayerArc,
     },
 
     /// 'who' is moving 'from' 'to'.
     Movement {
-        from: Arc<RwLock<Room>>,
-        to: Arc<RwLock<Room>>,
-        who: Arc<RwLock<Player>>,
+        from: RoomArc,
+        to: RoomArc,
+        who: PlayerArc,
     },
 
     /// 'who' logs out.
     Logout {
-        from: Arc<RwLock<Room>>,
+        from: RoomArc,
         who: String,
     },
 
     /// 'message' ('from'…) to all in given 'room(s)'.
     System {
-        rooms: Vec<Arc<RwLock<Room>>>,
+        rooms: Vec<RoomArc>,
         message: String,
-        from: Option<Arc<RwLock<Player>>>,
+        from: Option<PlayerArc>,
     },
 
     Message {
-        to: Arc<RwLock<Player>>,
+        to: PlayerArc,
         message: String,
     },
 
     /// 'who' is moving 'from' 'to' with message for a) 'to' b) 'from' c) self.
     BiSignal {
-        to: Arc<RwLock<Room>>,
-        from: Arc<RwLock<Room>>,
-        who: Arc<RwLock<Player>>,
+        to: RoomArc,
+        from: RoomArc,
+        who: PlayerArc,
         message_to: String,
         message_from: String,
         message_who: String,
     },
 
     MessageInRoom2 {
-        room: Arc<RwLock<Room>>,
-        actor: Arc<RwLock<Player>>,
+        room: RoomArc,
+        actor: PlayerArc,
         message_actor: String,
         message_other: String,
     },
 
     MessageInRoom {
-        room: Arc<RwLock<Room>>,
+        room: RoomArc,
         message: String,
     },
 
     BattleMessage3 {
-        room: Arc<RwLock<Room>>,
+        room: RoomArc,
         atk: Battler,
         vct: Battler,
         message_atk: String,
@@ -73,7 +69,7 @@ pub enum Broadcast {
     Force {
         command: String,
         who: ForceTarget,
-        by: Option<Arc<RwLock<Player>>>,
+        by: Option<PlayerArc>,
         silent: bool,
         delivery: Option<String>,
     },
@@ -83,7 +79,7 @@ pub enum Broadcast {
 
 #[derive(Debug, Clone)]
 pub enum ForceTarget {
-    Room { id: Arc<RwLock<Room>> },
-    Player { id: Arc<RwLock<Player>> },
+    Room { id: RoomArc },
+    Player { id: PlayerArc },
     All,
 }

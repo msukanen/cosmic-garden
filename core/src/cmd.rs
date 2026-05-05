@@ -1,11 +1,8 @@
 //! Commanding core.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
-use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::ClientState, player::Player, tell_user, tell_user_unk, thread::signal::SignalSenderChannels, util::direction::Directional, world::World};
+use crate::{cmd::{cmd_alias::CMD_ALIASES, goto::GotoCommand}, edit::EditorMode, io::ClientState, player::PlayerArc, tell_user, tell_user_unk, thread::signal::SignalSenderChannels, util::direction::Directional, world::WorldArc};
 
 #[macro_use]
 pub mod cmd_alias;
@@ -20,14 +17,14 @@ pub struct CommandCtx<'a>
 {
     pub pre_pad_n: bool,
     pub state: ClientState,
-    pub world: Arc<RwLock<World>>,
+    pub world: WorldArc,
     pub out: &'a SignalSenderChannels,
     pub args: &'a str,
     pub writer: &'a mut (dyn tokio::io::AsyncWrite + Unpin + Send),
 }
 
 impl CommandCtx<'_> {
-    pub fn get_player_arc(&self) -> Option<Arc<RwLock<Player>>> {
+    pub fn get_player_arc(&self) -> Option<PlayerArc> {
         match &self.state {
             ClientState::Editing { player, .. } |
             ClientState::Playing { player } => Some(player.clone()),

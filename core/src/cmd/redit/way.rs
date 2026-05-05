@@ -3,9 +3,8 @@
 use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, room::{Room, locking::Exit}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::SystemSignal, util::direction::{Direction, Directional}, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, room::{RoomArc, locking::Exit}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::SystemSignal, util::direction::{Direction, Directional}, validate_access};
 
 pub struct WayCommand;
 
@@ -71,12 +70,12 @@ impl Command for WayCommand {
     }
 }
 
-async fn rm_uni_way(origin: Arc<RwLock<Room>>, dir: &str) {
+async fn rm_uni_way(origin: RoomArc, dir: &str) {
     let dir = Direction::from(dir);
     origin.write().await.remove_exit(&dir);
 }
 
-async fn rm_bi_way(ctx: &mut CommandCtx<'_>, origin: Arc<RwLock<Room>>, dir: &str) {
+async fn rm_bi_way(ctx: &mut CommandCtx<'_>, origin: RoomArc, dir: &str) {
     let d = Direction::from(dir);
     let opp = d.opposite();
     // grab the neighbor before dir is eradicated
@@ -90,7 +89,7 @@ async fn rm_bi_way(ctx: &mut CommandCtx<'_>, origin: Arc<RwLock<Room>>, dir: &st
     }
 }
 
-async fn make_uni_way(ctx: &mut CommandCtx<'_>, origin: Arc<RwLock<Room>>, dir: &str, dest_id: &str) {
+async fn make_uni_way(ctx: &mut CommandCtx<'_>, origin: RoomArc, dir: &str, dest_id: &str) {
     let dir = Direction::from(dir);
     let exit = Exit::Free { room:
         if let Some(d_arc) = ctx.world.read().await.get_room_by_id(dest_id) {
@@ -100,7 +99,7 @@ async fn make_uni_way(ctx: &mut CommandCtx<'_>, origin: Arc<RwLock<Room>>, dir: 
     origin.write().await.assign_exit(dir, exit).await;
 }
 
-async fn make_bi_way(ctx: &mut CommandCtx<'_>, origin: Arc<RwLock<Room>>, dir: &str, dest_id: &str) {
+async fn make_bi_way(ctx: &mut CommandCtx<'_>, origin: RoomArc, dir: &str, dest_id: &str) {
     let (dest_id, ovr_bdir) = dest_id.split_once(' ').unwrap_or((dest_id, ""));
     make_uni_way(ctx, origin.clone(), dir, dest_id).await;
     if dest_id.is_empty() {

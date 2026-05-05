@@ -1,11 +1,8 @@
 //! 'set' a number of runtime and other variables.
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, mob::{Gender, GenderType}, player::Player, player_or_bust, show_help, show_help_if_needed, string::styling::Truthy, tell_user, tell_user_unk, util::access::{Access, Accessor}};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, mob::{Gender, GenderType}, player::PlayerArc, player_or_bust, show_help, show_help_if_needed, string::styling::Truthy, tell_user, tell_user_unk, util::access::{Access, Accessor}};
 
 pub struct SetCommand;
 
@@ -35,7 +32,7 @@ impl Command for SetCommand {
 ///
 /// Set a personal configuration variable.
 /// 
-async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &Arc<RwLock<Player>>) {
+async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &PlayerArc) {
     let config = plr.read().await.config.clone();
     let (var, args) = args.split_once(' ').unwrap_or((args, ""));
     if var.is_empty() {
@@ -63,7 +60,7 @@ async fn set_config_val(ctx: &mut CommandCtx<'_>, args: &str, plr: &Arc<RwLock<P
 }
 
 /// Set gender, if applicable.
-async fn set_gender_val(ctx: &mut CommandCtx<'_>, plr: Arc<RwLock<Player>>, access: Access, args: &str) {
+async fn set_gender_val(ctx: &mut CommandCtx<'_>, plr: PlayerArc, access: Access, args: &str) {
     let current = plr.read().await.gender();
     match (access, current) {
         (_, GenderType::Unset) => {

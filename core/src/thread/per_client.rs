@@ -2,7 +2,7 @@
 
 use std::{net::SocketAddr, sync::Arc};
 
-use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpStream, sync::{RwLock, broadcast}};
+use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpStream, sync::broadcast};
 
 use crate::{
     cmd::{self, CommandCtx},
@@ -13,14 +13,14 @@ use crate::{
     string::{prompt::PromptType, sanitize::Sanitizer},
     tell_user,
     thread::{SystemSignal, signal::SignalSenderChannels},
-    world::World
+    world::WorldArc
 };
 
 pub(crate) struct PerClientData {
     pub socket: TcpStream,
     pub addr: SocketAddr,
     pub out: SignalSenderChannels,
-    pub world: Arc<RwLock<World>>,
+    pub world: WorldArc,
     pub rx: broadcast::Receiver<Broadcast>,
 }
 

@@ -1,10 +1,10 @@
 //! I/O related stuff lives here…
 
-use std::{net::SocketAddr, sync::Arc};
+use std::net::SocketAddr;
 
-use tokio::{net::tcp::OwnedWriteHalf, sync::RwLock};
+use tokio::net::tcp::OwnedWriteHalf;
 
-use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery, uniq::UuidValidator}, player::Player, string::prompt::PromptType, tell_user, thread::signal::SignalSenderChannels, user::UserInfo, world::World};
+use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery, uniq::UuidValidator}, player::{Player, PlayerArc}, string::prompt::PromptType, tell_user, thread::signal::SignalSenderChannels, user::UserInfo, world::{World, WorldArc}};
 
 pub mod broadcast; pub use broadcast::*;
 pub mod file; pub use file::*;
@@ -16,8 +16,8 @@ pub enum ClientState {
     EnteringPassword1 { name: String },
     EnteringPasswordV { name: String, pw1: String },
     ChoosingPlayer { info: UserInfo },
-    Playing { player: Arc<RwLock<Player>> },
-    Editing { player: Arc<RwLock<Player>>, mode: EditorMode },
+    Playing { player: PlayerArc },
+    Editing { player: PlayerArc, mode: EditorMode },
     Logout,
 }
 
@@ -48,7 +48,7 @@ impl ClientState {
     }
 
     /// Big state handler…
-    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: Arc<RwLock<World>>, addr: &SocketAddr, system_ch: &SignalSenderChannels, input: &str) -> Self {
+    pub async fn handle(mut self, mut writer: &mut OwnedWriteHalf, world: WorldArc, addr: &SocketAddr, system_ch: &SignalSenderChannels, input: &str) -> Self {
         match self {
             Self::EnteringLogin => {
                 let state = match input.as_id() {
@@ -137,7 +137,7 @@ impl ClientState {
                     }
 
                     // Final preparations…
-                    let p = Arc::new(RwLock::new(p));
+                    let p: PlayerArc = p.into();
                     let state = Self::Playing { player: p.clone() };
                     {
                         tell_user!(&mut writer, "{}", p.read().await.prompt(&state).unwrap_or_default());
@@ -230,7 +230,7 @@ impl ClientState {
                     tell_user!(&mut writer, "{}\n", get_prompt!(world, PromptType::SystemError));
                     return Self::Logout;
                 }
-                let p = Arc::new(RwLock::new(p));
+                let p: PlayerArc = p.into();
                 let state = Self::Playing { player: p.clone() };
                 {
                     World::insert_player(world.clone(), addr, &id, p.clone()).await;

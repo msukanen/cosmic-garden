@@ -3,16 +3,15 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, combat::Combatant, err_tell_user, identity::{IdentityQuery, MachineIdentity}, mob::core::Entity, player::Player, room::Room, roomloc_or_bust, show_help_if_needed, tell_user, translocate, validate_access, world::World};
+use crate::{cmd::{Command, CommandCtx}, combat::Combatant, err_tell_user, identity::{IdentityQuery, MachineIdentity}, mob::EntityArc, player::{PlayerArc, PlayerWeak}, room::RoomArc, roomloc_or_bust, show_help_if_needed, tell_user, translocate, validate_access, world::WorldArc};
 
 pub struct TeleportCommand;
 
 enum TeleType {
-    Player(Arc<RwLock<Player>>),
-    Entity(Arc<RwLock<Entity>>),
-    Room(Arc<RwLock<Room>>),
+    Player(PlayerArc),
+    Entity(EntityArc),
+    Room(RoomArc),
 }
 
 #[async_trait]
@@ -63,6 +62,7 @@ impl Command for TeleportCommand {
                             TeleType::Room(r) => r.clone()
                         };
                         // acquire targets and start warping the spacetime…
+                        let players = loc.read().await.who.values().cloned().collect::<Vec<PlayerWeak>>();
                     }
                 }
             }
@@ -90,7 +90,7 @@ impl Command for TeleportCommand {
 }
 
 /// Resolve `id` to either Room or Player, or neither.
-async fn try_resolve_to_something(id: &str, world: &Arc<RwLock<World>>, loc: &Arc<RwLock<Room>>) -> Option<TeleType> {
+async fn try_resolve_to_something(id: &str, world: &WorldArc, loc: &RoomArc) -> Option<TeleType> {
     let w = world.read().await;
 
     if let Some(room) = w.get_room_by_id(id) {
@@ -133,7 +133,7 @@ async fn try_resolve_to_something(id: &str, world: &Arc<RwLock<World>>, loc: &Ar
 }
 
 /// Translocate an Entity or Player to another Player or Entity.
-async fn translocate(ctx: &mut CommandCtx<'_>, initiator: Arc<RwLock<Player>>, what: TeleType, wher: TeleType ) {
+async fn translocate(ctx: &mut CommandCtx<'_>, initiator: PlayerArc, what: TeleType, wher: TeleType ) {
     // Nail the initiator down during translocate! We'll avoid any potential spacetime warps with it.
     // … and keep the lock immutable even though it's a .write lock. We're not writing anything, just
     //   keeping them still over the course of translocate's course.

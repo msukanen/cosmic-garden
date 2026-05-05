@@ -7,7 +7,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, help::HelpPage, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::Entity, faction::{EntityFaction, FactionMut}, traits::Mob}, room::Room, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, help::HelpPage, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::Entity, faction::{EntityFaction, FactionMut}, traits::Mob}, room::{Room, RoomArc, RoomWeak}, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -50,7 +50,7 @@ pub struct Player {
     #[serde(default = "player_location_void")]
     pub(crate) location_id: String,
     #[serde(skip)]
-    pub location: Weak<RwLock<Room>>,
+    pub location: RoomWeak,
     
     #[serde(default = "player_hp_default")] pub hp: Stat,
     #[serde(default = "player_mp_default")] pub mp: Stat,
@@ -77,7 +77,7 @@ pub struct Player {
 
     /// Last place in the line of travels…
     #[serde(default, skip)]
-    pub last_goto: Option<(Direction, Weak<RwLock<Room>>)>,
+    pub last_goto: Option<(Direction, RoomWeak)>,
 
     #[serde(skip, default = "player_faction_default")]
     pub faction: EntityFaction,
@@ -93,6 +93,15 @@ pub struct Player {
     pub hardcore: Option<bool>,
     gender: GenderType,
 }
+/// Player arc type.
+pub type PlayerArc = Arc<RwLock<Player>>;
+impl Into<PlayerArc> for Player {
+    fn into(self) -> PlayerArc {
+        std::sync::Arc::new(tokio::sync::RwLock::new(self))
+    }
+}
+/// Player weak arc type.
+pub type PlayerWeak = Weak<RwLock<Player>>;
 
 fn player_location_void() -> String { UNNAMED.into() }
 fn player_hp_default() -> Stat { Stat::new(StatType::HP) }
@@ -119,8 +128,8 @@ impl Player {
     /// - `id` of the [Player].
     /// 
     /// # Returns
-    /// `Arc<RwLock<Player>>` if successful.
-    pub async fn load(owner_id: &str, id: &str) -> Result<Arc<RwLock<Self>>, CgError> {
+    /// `PlayerArc` if successful.
+    pub async fn load(owner_id: &str, id: &str) -> Result<PlayerArc, CgError> {
         let mut player: Self = serde_json::from_str(
             &fs::read_to_string(player_save_fp(owner_id, id)).await?
         )?;
@@ -151,7 +160,7 @@ impl Player {
     /// Place [Player] directly in `target_arc` [Room].
     /// 
     //NOTE: potential deadlock if not careful.
-    pub async fn place_direct(player: Arc<RwLock<Player>>, target_arc: Arc<RwLock<Room>>) -> Result<(), CgError> {
+    pub async fn place_direct(player: PlayerArc, target_arc: RoomArc) -> Result<(), CgError> {
         let tgt_id = {
             let mut tgt_lock = target_arc.write().await;
             let p_lock = player.read().await;
@@ -173,7 +182,7 @@ impl Player {
     }
 
     /// Accumulate action weight.
-    pub async fn act(&mut self, player: Arc<RwLock<Player>>, system_ch: &SignalSenderChannels, act_wt: ActionWeight) -> usize {
+    pub async fn act(&mut self, player: PlayerArc, system_ch: &SignalSenderChannels, act_wt: ActionWeight) -> usize {
         self.actions_taken += act_wt.clone();
         if self.actions_taken >= SAVE_ASAP_THRESHOLD {
             // He'll pick up, sooner or later…
@@ -230,7 +239,7 @@ impl Player {
         set
     }
 
-    pub(crate) async fn set_location(&mut self, arc: &Arc<RwLock<Room>>) {
+    pub(crate) async fn set_location(&mut self, arc: &RoomArc) {
         self.location_id = arc.read().await.id().to_string();
         self.location = Arc::downgrade(arc);
     }

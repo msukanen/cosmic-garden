@@ -1,18 +1,23 @@
 //! Mob core.
 
-use std::{fmt::Display, sync::Weak};
+use std::fmt::Display;
 
 use async_trait::async_trait;
 use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mob, MobMut};
 use serde::{Deserialize, Serialize};
-use tokio::{fs, sync::RwLock};
+use tokio::fs;
 
 use crate::{
     combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::{IdentityQuery, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
         Item,
         container::variants::{ContainerVariant, ContainerVariantType},
         weapon::{WeaponSize, str_based_dmg_mul}
-    }, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}}, room::Room, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::Tickable
+    },
+    mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}},
+    room::RoomWeak,
+    string::UNNAMED,
+    thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels},
+    traits::Tickable
 };
 
 /// Generic [Entity] size categories
@@ -124,7 +129,7 @@ pub struct Entity {
     size: EntitySize,
     pub(crate) equipped_weapon: Option<Item>,
     #[serde(default, skip)]
-    location: Weak<RwLock<Room>>,
+    location: RoomWeak,
     #[serde(default = "entity_inv_default")]
     inventory: ContainerVariant,
     #[serde(default, skip)]
@@ -149,7 +154,7 @@ impl Default for Entity {
             max_weapon_size: WeaponSize::Large,
             equipped_weapon: None,
             size: EntitySize::Medium,
-            location: Weak::new(),
+            location: std::sync::Weak::new(),
             inventory: entity_inv_default(),
             brain_freeze: false,
             desc: "Some sort of an entity. Use <c yellow>desc =</c> to describe it…".into(),
@@ -201,7 +206,7 @@ impl Entity {
         Self {
             inventory: entity_inv_default(),
             desc: self.desc.clone(),
-            location: Weak::new(),
+            location: std::sync::Weak::new(),
             brain_freeze: false,
             equipped_weapon: None,
             ..self.clone()

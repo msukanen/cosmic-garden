@@ -3,9 +3,8 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player::Player, player_or_bust, string::Describable, tell_user, util::access::Accessor};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player::PlayerArc, player_or_bust, string::Describable, tell_user, util::access::Accessor};
 
 pub struct LookCommand;
 
@@ -80,7 +79,7 @@ impl Command for LookCommand {
         // People:
         let ppl_arcs = who.iter()
             .filter_map(|(_,w)| w.upgrade())
-            .collect::<Vec<Arc<RwLock<Player>>>>();
+            .collect::<Vec<PlayerArc>>();
         let show_self = {
             let p = plr.read().await;
             p.config.show_self_in_room

@@ -1,15 +1,11 @@
 //! Combat (and other bats) rules and stuff.
 
-use std::sync::Arc;
-
-use tokio::sync::RwLock;
-
 use crate::mob::StatValue;
 
 pub mod combatant; pub use combatant::*;
 
 /// Generic "battler" type.
-pub type Battler = Arc<RwLock<dyn CombatantMut + Send + Sync>>;
+pub type Battler = std::sync::Arc<tokio::sync::RwLock<dyn CombatantMut + Send + Sync>>;
 
 pub trait Damager {
     /// Get (current) dmg per attack.

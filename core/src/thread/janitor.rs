@@ -5,10 +5,10 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::RwLock, time};
 
-use crate::{Cli, identity::{IdentityQuery, MachineIdentity}, item::Item, player::Player, room::Room, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, world::World};
+use crate::{Cli, identity::{IdentityQuery, MachineIdentity}, item::Item, player::PlayerArc, room::RoomArc, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, world::WorldArc};
 
 lazy_static! {
-    pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<Arc<RwLock<Room>>>>> = Arc::new(RwLock::new(Vec::new()));
+    pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<RoomArc>>> = Arc::new(RwLock::new(Vec::new()));
     pub static ref LOST_AND_FOUND: Arc<RwLock<Vec<Item>>> = Arc::new(RwLock::new(Vec::new()));
 }
 pub const SAVE_ASAP_THRESHOLD: usize = 100;
@@ -29,7 +29,7 @@ macro_rules! get_operational_mock_janitor {
 /// 
 pub(crate) async fn janitor(
     (_out, mut incoming): (SignalSenderChannels, SigReceiver),
-    world: Arc<RwLock<World>>,
+    world: WorldArc,
     args: Option<Cli>,
     done_tx: tokio::sync::oneshot::Sender<()>
 ) {
@@ -87,12 +87,12 @@ pub(crate) async fn janitor(
 
 #[cfg(test)]
 // stub for #[cfg(test)].
-async fn save_player_now(_: Arc<RwLock<Player>>, _: &str) {
+async fn save_player_now(_: PlayerArc, _: &str) {
     log::debug!("[STUB] save_player_now() disabled in #[cfg(test)].");
 }
 #[cfg(not(test))]
 /// Save player ASAP.
-async fn save_player_now(plr: Arc<RwLock<Player>>, p_id: &str) {
+async fn save_player_now(plr: PlayerArc, p_id: &str) {
     let mut p = plr.read().await.clone();
     let act_w = p.actions_taken;
     if let Err(e) = p.save().await {
@@ -104,7 +104,7 @@ async fn save_player_now(plr: Arc<RwLock<Player>>, p_id: &str) {
 }
 
 /// Auto-save cycle.
-async fn autosave_queue(world: Arc<RwLock<World>>) {
+async fn autosave_queue(world: WorldArc) {
     let mut players_to_save = {
         let w = world.read().await;
         let mut p_arcs = vec![];
@@ -133,7 +133,7 @@ async fn autosave_queue(world: Arc<RwLock<World>>) {
 /// # Args
 /// - `force_save` if true, the world state is stored regardless of "necessity".
 ///                Generally used when a [Room] is added/removed.
-async fn save_the_whales(world: Arc<RwLock<World>>, force_save: bool) -> bool {
+async fn save_the_whales(world: WorldArc, force_save: bool) -> bool {
     if let Err(e) = world.read().await.save(force_save).await {
         log::error!("World save failed?! {e:?}");
         return false;
@@ -173,7 +173,7 @@ where T: Into<Item> + IdentityQuery
 }
 
 /// Lost and found. Persist it all, someone might need it later…
-async fn lost_and_found(world: Arc<RwLock<World>>) {
+async fn lost_and_found(world: WorldArc) {
     let items_to_save = {
         let mut lock = LOST_AND_FOUND.write().await;
         lock.drain(..).collect::<Vec<_>>()

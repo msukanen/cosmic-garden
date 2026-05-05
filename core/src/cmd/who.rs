@@ -1,7 +1,5 @@
 //! Who's online?
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
 
 use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, player_or_bust, string::styling::RULER_LINE_PLAIN, util::access::Accessor, tell_user};
@@ -26,7 +24,7 @@ impl Command for WhoCommand {
         for (id, p_arc) in &world.players_by_id {
             let p = p_arc.read().await;
             if p.config.is_ghost && !is_staff { continue; }
-            let title = if Arc::ptr_eq(&plr, &p_arc) { "<you>" } else { p.title() };
+            let title = if std::sync::Arc::ptr_eq(&plr, &p_arc) { "<you>" } else { p.title() };
             let loc_id = p.location_id.clone();
             
             if is_staff {

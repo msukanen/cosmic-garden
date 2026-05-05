@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::core::Entity, player::Player, room::locking::{Exit, ExitState}, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::locking::{Exit, ExitState}, traits::Tickable, util::direction::Direction, world::World};
 
 pub mod locking;
 
@@ -42,7 +42,7 @@ impl std::error::Error for RoomError {}
 /// Payload for [SystemSignal].
 pub enum RoomPayload {
     Id(String),
-    Arc(Arc<RwLock<Room>>)
+    Arc(RoomArc)
 }
 
 impl From<&str> for RoomPayload {
@@ -57,8 +57,8 @@ impl From<String> for RoomPayload {
     }
 }
 
-impl From<Arc<RwLock<Room>>> for RoomPayload {
-    fn from(value: Arc<RwLock<Room>>) -> Self {
+impl From<RoomArc> for RoomPayload {
+    fn from(value: RoomArc) -> Self {
         Self::Arc(value)
     }
 }
@@ -82,7 +82,7 @@ pub struct Room {
     #[serde(default = "empty_room_desc")]
     pub desc: String,
     #[serde(default, skip)]
-    pub who: HashMap<String, Weak<RwLock<Player>>>,
+    pub who: HashMap<String, PlayerWeak>,
 
     #[serde(default, skip)]
     pub exits: HashMap<Direction, Exit>,
@@ -96,11 +96,20 @@ pub struct Room {
     /// NPC [entities][Entity] in the [Room].
     // [Room] is the sole owner of an [Entity].
     #[serde(default, with = "arc_n_t_transform")]
-    pub entities: HashMap<usize, Arc<RwLock<Entity>>>,
+    pub entities: HashMap<usize, EntityArc>,
 
     #[serde(default)]
     pub memory_fog: Option<MemoryFog>,
 }
+/// Room arc type.
+pub type RoomArc = Arc<RwLock<Room>>;
+impl Into<RoomArc> for Room {
+    fn into(self) -> RoomArc {
+        std::sync::Arc::new(tokio::sync::RwLock::new(self))
+    }
+}
+/// Room weak arc type.
+pub type RoomWeak = Weak<RwLock<Room>>;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ExitLike {
@@ -155,9 +164,9 @@ mod arc_n_t_transform {
     use serde::{Deserialize, Deserializer, Serializer, ser::SerializeMap};
     use tokio::sync::RwLock;
 
-    use crate::{identity::MachineId, mob::core::Entity};
+    use crate::{identity::MachineId, mob::{EntityArc, core::Entity}};
 
-    pub fn serialize<S>(what: &HashMap<MachineId, Arc<RwLock<Entity>>>, s:S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(what: &HashMap<MachineId, EntityArc>, s:S) -> Result<S::Ok, S::Error>
     where S: Serializer
     {
         let mut map = s.serialize_map(Some(what.len()))?;
@@ -173,7 +182,7 @@ mod arc_n_t_transform {
         map.end()
     }
 
-    pub fn deserialize<'de, D>(d: D) -> Result< HashMap<MachineId, Arc<RwLock<Entity>>>, D::Error>
+    pub fn deserialize<'de, D>(d: D) -> Result< HashMap<MachineId, EntityArc>, D::Error>
     where D: Deserializer<'de>
     {
         let raw: HashMap<MachineId, Entity> = HashMap::deserialize(d)?;
@@ -200,7 +209,7 @@ impl Room {
     /// # Args
     /// - `id` of the new (or loaded) [Room].
     /// - *[[potential]]* `title` of the new [Room]. This is ignored if [Room] gets loaded.
-    pub async fn new(id: &str, title: &str) -> Result<Arc<RwLock<Self>>, CgError> {
+    pub async fn new(id: &str, title: &str) -> Result<RoomArc, CgError> {
         // check if there is pre-existing file...
         let loaded = Room::load_sync(id);
         let room = match loaded {
@@ -296,16 +305,16 @@ impl Room {
     }
 
     /// List adjacent [rooms][Room], if any.
-    pub fn list_adjacent(&self) -> Vec<Weak<RwLock<Room>>> {
-        self.exits.iter().map(|(_,r)| r.as_weak()).collect::<Vec<Weak<RwLock<Room>>>>()
+    pub fn list_adjacent(&self) -> Vec<RoomWeak> {
+        self.exits.iter().map(|(_,r)| r.as_weak()).collect::<Vec<RoomWeak>>()
     }
 
     /// List adjacent [rooms][Room], if any, using BFS.
     /// Although this is very swift, it's not the most awesome of ideas to use too high `depth` value.
-    pub async fn list_adjacent_bfs(start: &Arc<RwLock<Room>>, depth: u8) -> Vec<Weak<RwLock<Room>>> {
+    pub async fn list_adjacent_bfs(start: &RoomArc, depth: u8) -> Vec<RoomWeak> {
         let mut visited = HashSet::new();
         let mut queue = VecDeque::new();
-        let mut nearby: HashMap<usize, Weak<RwLock<Room>>> = HashMap::new();
+        let mut nearby: HashMap<usize, RoomWeak> = HashMap::new();
 
         let start_w = lock2key!(arc start);
         queue.push_back((Arc::downgrade(start), 0));

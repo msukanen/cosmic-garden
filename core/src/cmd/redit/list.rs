@@ -20,8 +20,8 @@ impl Command for ListCommand {
             page = 1;
         }
         let rooms = {
-            let r = ctx.world.read().await;
-            let rooms = r.paginated_room_entries(what, page, 10).await;
+            let w = ctx.world.read().await;
+            let rooms = w.paginated_room_entries(what, page, 10).await;
             for (m_id, arc) in &rooms.entries {
                 let lock = arc.read().await;
                 report.push_str(&format!("  <c yellow>{}</c> <c gray>:</c> {} <c gray>:</c> <c cyan>{}</c>\n", m_id, lock.id(), lock.title()));

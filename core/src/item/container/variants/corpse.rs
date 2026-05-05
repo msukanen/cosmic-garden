@@ -1,19 +1,18 @@
 //! Corpse spec.
 
-use std::{collections::{HashMap, VecDeque}, sync::Arc};
+use std::collections::{HashMap, VecDeque};
 
 use serde::{Deserialize, Serialize};
-use tokio::sync::RwLock;
 
-use crate::{cmd::CommandCtx, err_tell_user, identity::{IdError, IdentityMut, IdentityQuery, uniq::StrUuid}, item::{Item, container::{ContainerSpec, Storage, StorageSpace, storage::{StorageError, StorageQueryError}, variants::ContainerVariant}, ownership::{ItemSource, ItemSourceError, Owned, OwnedMut}}, mob::core::Entity, player::Player, room::Room, tell_user, thread::add_item_to_lnf};
+use crate::{cmd::CommandCtx, err_tell_user, identity::{IdError, IdentityMut, IdentityQuery, uniq::StrUuid}, item::{Item, container::{ContainerSpec, Storage, StorageSpace, storage::{StorageError, StorageQueryError}, variants::ContainerVariant}, ownership::{ItemSource, ItemSourceError, Owned, OwnedMut}}, mob::EntityArc, player::PlayerArc, room::RoomArc, tell_user, thread::add_item_to_lnf};
 
 mod arc_n_ent_transform {
     use std::sync::Arc;
     use serde::{Deserialize, Deserializer, Serializer};
     use tokio::sync::RwLock;
-    use crate::mob::core::Entity;
+    use crate::mob::{EntityArc, core::Entity};
 
-    pub fn serialize<S>(what: &Option<Arc<RwLock<Entity>>>, s:S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(what: &Option<EntityArc>, s:S) -> Result<S::Ok, S::Error>
     where S: Serializer
     {
         match what {
@@ -27,7 +26,7 @@ mod arc_n_ent_transform {
         }
     }
 
-    pub fn deserialize<'de, D>(d: D) -> Result< Option<Arc<RwLock<Entity>> >, D::Error>
+    pub fn deserialize<'de, D>(d: D) -> Result< Option<EntityArc>, D::Error>
     where D: Deserializer<'de>
     {
         let opt: Option<Entity> = Option::deserialize(d)?;
@@ -40,7 +39,7 @@ mod arc_n_ent_transform {
 pub struct CorpseSpec {
     pub(crate) spec: ContainerSpec,
     #[serde(default, with = "arc_n_ent_transform")]
-    pub(crate) possessed_by: Option<Arc<RwLock<Entity>>>,
+    pub(crate) possessed_by: Option<EntityArc>,
 }
 
 impl IdentityMut for CorpseSpec {
@@ -123,7 +122,7 @@ impl CorpseSpec {
 }
 
 /// Bulk transfer everything within `from` to `plr` inventory who is at `room`.
-pub async fn bulk_transfer(ctx: &mut CommandCtx<'_>, plr: Arc<RwLock<Player>>, room: Arc<RwLock<Room>>, from: &str) {
+pub async fn bulk_transfer(ctx: &mut CommandCtx<'_>, plr: PlayerArc, room: RoomArc, from: &str) {
     if let Some(src) = room.write().await.peek_at_mut(from) {
         if !matches!(*src, Item::Container(_)|Item::Corpse{..}) {
             err_tell_user!(ctx.writer, "'{}' doesn't contain anything. Did you mean to pick it insted?\n", from.show_uuid(false))

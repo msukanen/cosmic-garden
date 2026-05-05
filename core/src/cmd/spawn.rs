@@ -1,11 +1,8 @@
 //! Spawn something!
 
-use std::sync::Arc;
-
 use async_trait::async_trait;
-use tokio::sync::RwLock;
 
-use crate::{cmd::{Command, CommandCtx, inventory::InventoryCommand, look::LookCommand}, err_tell_user, identity::IdentityQuery, item::container::storage::{Storage, StorageError}, player::Player, room::{Room, RoomPayload}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::{SystemSignal, add_item_to_lnf, librarian::get_item_blueprint, signal::SpawnType}, validate_access};
+use crate::{cmd::{Command, CommandCtx, inventory::InventoryCommand, look::LookCommand}, err_tell_user, identity::IdentityQuery, item::container::storage::{Storage, StorageError}, player::PlayerArc, room::{RoomArc, RoomPayload}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::{SystemSignal, add_item_to_lnf, librarian::get_item_blueprint, signal::SpawnType}, validate_access};
 
 pub struct SpawnCommand;
 
@@ -45,7 +42,7 @@ impl Command for SpawnCommand {
 }
 
 /// Request an [Entity] to be spawned at `loc`.
-async fn spawn_entity(ctx: &mut CommandCtx<'_>, loc: Arc<RwLock<Room>>, args: &str) {
+async fn spawn_entity(ctx: &mut CommandCtx<'_>, loc: RoomArc, args: &str) {
     let (out, recv) = tokio::sync::oneshot::channel::<bool>();
     ctx.out.life.send(SystemSignal::Spawn {
         what: SpawnType::Mob { id: args.into() },
@@ -61,7 +58,7 @@ async fn spawn_entity(ctx: &mut CommandCtx<'_>, loc: Arc<RwLock<Room>>, args: &s
 }
 
 /// Request an [Item] to be spawned either at `loc` or in caller's inventory.
-async fn spawn_item(ctx: &mut CommandCtx<'_>, loc: Arc<RwLock<Room>>, plr: Arc<RwLock<Player>>, args: &str) {
+async fn spawn_item(ctx: &mut CommandCtx<'_>, loc: RoomArc, plr: PlayerArc, args: &str) {
     log::debug!("Spawn item called with: {args}");
     let (op, mut what) = args.split_once(' ').unwrap_or((args, ""));
     let mut here = false;

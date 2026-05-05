@@ -245,7 +245,7 @@ fn replace_nth_line(text: &str, line_num: usize, text_to_insert: &str) -> String
 /// Access `$ed` (hedit, redit, etc.) of the given `$ctx`.
 /// 
 /// # Args
-/// - `$plr` Arc<RwLock>>
+/// - `$plr` [PlayerArc]
 /// - `$ed` e.g. hedit, iedit, redit …
 // NOTE: may sputter with Enum based stuff, like Iedit.
 #[macro_export]

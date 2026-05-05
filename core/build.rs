@@ -76,3 +76,11 @@ fn generate_cmd_table(file: &mut BufWriter<File>, path_str: &str, table_name: &s
 }
 
 include!(concat!(env!("CARGO_MANIFEST_DIR"), "/src/util/escape_hatch.rs"));
+
+fn escape_hatch(villain: &str) -> String {
+    if VILLAIN_ID.contains(&villain) {
+        format!("r#{}", villain)
+    } else {
+        villain.into()
+    }
+}

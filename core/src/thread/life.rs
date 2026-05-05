@@ -1,11 +1,11 @@
 //! Life-thread keeps the world ticking.
 
-use std::{collections::HashMap, sync::{Arc, Weak}};
+use std::{collections::HashMap, sync::Arc};
 use once_cell::sync::OnceCell;
 
 use lazy_static::lazy_static;
 use nohash_hasher::BuildNoHashHasher;
-use tokio::{sync::{RwLock, mpsc, oneshot}, time::{Duration, Instant, MissedTickBehavior, interval}};
+use tokio::{sync::{mpsc, oneshot}, time::{Duration, Instant, MissedTickBehavior, interval}};
 
 use crate::{
     combat::{Battler, CombatantMut},
@@ -13,13 +13,13 @@ use crate::{
     io::Broadcast,
     item::Item,
     mob::{StatValue, core::Entity},
-    room::{Room, RoomPayload},
+    room::{RoomArc, RoomPayload},
     string::{DescribableMut, styling::maybe_plural},
     thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}},
     traits::Reflector,
     translocate,
     util::approx::ApproxI32,
-    world::World
+    world::WorldArc
 };
 
 lazy_static! {
@@ -41,11 +41,11 @@ macro_rules! get_operational_mock_life {
 #[derive(Clone)]
 struct BattlerRec {
     combatant: Battler,
-    title: Arc<str>,
+    title: std::sync::Arc<str>,
 }
 
 impl BattlerRec {
-    async fn loot_pinata(&self, world: &Arc<RwLock<World>>) {
+    async fn loot_pinata(&self, world: &WorldArc) {
         let mut lock = self.combatant.write().await;
         if let Some(room) = lock.location().upgrade() {
             let mut c_inv = Item::Corpse { loot: lock.inventory().deep_reflect(), size: 50 };
@@ -72,7 +72,7 @@ impl BattlerRec {
     }
 }
 
-type BattleMap = HashMap<MachineId, (BattlerRec, Arc<RwLock<Room>>), BuildNoHashHasher<MachineId>>;
+type BattleMap = HashMap<MachineId, (BattlerRec, RoomArc), BuildNoHashHasher<MachineId>>;
 type AggroMap = HashMap<MachineId, Vec<MachineId>, BuildNoHashHasher<MachineId>>;
 
 /// Battle stage — the place for all battles.
@@ -158,7 +158,7 @@ pub fn sec_as_ticks(sec: u32, tick_type: TickType) -> usize {
 }
 
 enum LifeWorkerSignal {
-    BattleOk { atk: BattlerRec, vct: BattlerRec, room: Arc<RwLock<Room>> },
+    BattleOk { atk: BattlerRec, vct: BattlerRec, room: RoomArc },
     BattleFail { atk: Battler, vct: Battler },
     BattleMsg { atk: BattlerRec, vct: BattlerRec, resolution: Resolution },
     Shutdown,
@@ -176,7 +176,7 @@ pub enum TickType {
 /// 
 pub(crate) async fn life(
     (out, mut incoming): (SignalSenderChannels, SigReceiver),
-    world: Arc<RwLock<World>>,
+    world: WorldArc,
     (core_hz, battle_hz) : (u8, u8),
 ) {
     const fn core_hz_ms(core_hz: u8) -> u64 { 1000/ core_hz as u64 }
@@ -421,11 +421,11 @@ pub(crate) async fn life(
                                 
                                 let atk = BattlerRec {
                                     combatant: atk_arc,
-                                    title: Arc::from(a_title),
+                                    title: std::sync::Arc::from(a_title),
                                 };
                                 let vct = BattlerRec {
                                     combatant: vct_arc,
-                                    title: Arc::from(v_title),
+                                    title: std::sync::Arc::from(v_title),
                                 };
                                 // Signal life that it's fine to proceed with this fight.
                                 sig.send(LifeWorkerSignal::BattleOk { atk, vct, room: room.clone() }).ok();
@@ -444,7 +444,7 @@ pub(crate) async fn life(
                 // Public transportation (or denial of such thereof).
                 //
                 SystemSignal::WantTransportFromTo { who, from, to, via } => {
-                    let who_key = Weak::as_ptr(&Arc::downgrade(&who)) as *const() as MachineId;
+                    let who_key = lock2key!(arc &who);
                     let who_id = who.read().await.id().to_string();
                     if bs.active.contains_key(&who_key) {
                         log::debug!("Combat move rejected.");
@@ -514,7 +514,7 @@ pub(crate) async fn life(
 /// 
 /// # Returns
 /// Spawned?
-async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &RoomPayload, world: &Arc<RwLock<World>>) -> bool {
+async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &RoomPayload, world: &WorldArc) -> bool {
     match &what {
         SpawnType::Mob { id } => {
             let w = world.read().await;
@@ -538,7 +538,7 @@ async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &Roo
 /// 
 /// # Returns
 /// Spawned?
-async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_arc: &Arc<RwLock<Room>>, world: &Arc<RwLock<World>>) -> bool
+async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_arc: &RoomArc, world: &WorldArc) -> bool
 {
     static mut C: usize = 0;
     match what {
@@ -550,7 +550,7 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_a
                         mob.set_id(&mob.id().re_uuid(), true).ok();
                         let mob_id = mob.id().to_string();
                         *(mob.location_mut()) = Arc::downgrade(&r_arc);
-                        let mob_arc = Arc::new(RwLock::new(mob));
+                        let mob_arc = mob.into();
                         {
                             let mut w = world.write().await;
                             // tell the world 1st…
@@ -579,7 +579,7 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_a
 }
 
 /// Fite!
-async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resolution {
+async fn punt(atk: Battler, vct: Battler, _room: &RoomArc) -> Resolution {
     let mut a = atk.write().await;
     let mut v = vct.write().await;
 
@@ -613,7 +613,7 @@ async fn punt(atk: Battler, vct: Battler, _room: &Arc<RwLock<Room>>) -> Resoluti
 }
 
 /// Register Ok'd battle.
-async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: Arc<RwLock<Room>>, bs: &mut BattleStage) {
+async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: RoomArc, bs: &mut BattleStage) {
                     let a_key = lock2key!(arc &atk.combatant);
                     let v_key = lock2key!(arc &vct.combatant);
                     {
