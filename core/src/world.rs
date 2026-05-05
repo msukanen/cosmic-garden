@@ -311,6 +311,7 @@ impl World {
         let list: Vec<(MachineId, RoomArc)> = self.rooms.iter()
             .map(|(k,v)| (*k, v.clone()))
             .collect();
+        // offload to spawn.
         tokio::spawn(async move {
             let Some(term) = term else {
                 out.send(list).ok();
@@ -322,23 +323,12 @@ impl World {
             }
             
             let term_str = term.to_lowercase();
-            let mut term = term_str.as_str();
-            
-            enum SearchMode { Start, Contain, End, Entire }
-            let mode = match term.chars().nth(0).unwrap() {
-                '^' => if term.ends_with('$') {
-                    term = &term[1..term.len()-1];
-                    SearchMode::Entire
-                } else {
-                    term = &term[1..];
-                    SearchMode::Start
-                }
-                _ => if term.ends_with('$') {
-                    term = &term[..term.len()-1];
-                    SearchMode::End
-                } else { SearchMode::Contain }
-            };
-
+            let term = term_str.as_str();
+            let starts_with = term.starts_with('^');
+            let ends_with = term.ends_with('$');
+            let term = term
+                .trim_start_matches('^')
+                .trim_end_matches('$');
             // in case we go just "^$"", "^", or "$"…:
             if term.is_empty() {
                 out.send(list).ok();
@@ -348,25 +338,16 @@ impl World {
             let mut found: Vec<(MachineId, RoomArc)> = vec![];
             for (id, r_arc) in list.iter() {
                 let lock = r_arc.read().await;
-                match mode {
-                    SearchMode::Contain => if lock.id().contains(&term) || lock.title().contains(&term) {
-                        found.push((*id, r_arc.clone()));
-                    }
-                    
-                    SearchMode::End => if lock.id().ends_with(&term) || lock.title().to_lowercase().contains(&term) {
-                        found.push((*id, r_arc.clone()));
-                    }
-
-                    SearchMode::Entire => if lock.id() == term || lock.title().to_lowercase() == term {
-                        found.push((*id, r_arc.clone()));
-                    }
-
-                    SearchMode::Start => if lock.id().starts_with(&term) || lock.title().to_lowercase().starts_with(&term) {
-                        found.push((*id, r_arc.clone()));
-                    }
-                }
+                let maybe = match (starts_with, ends_with) {
+                    (true, true) => lock.id() == term || lock.title().to_lowercase() == term,
+                    (true, _) => lock.id().starts_with(&term) || lock.title().to_lowercase().starts_with(&term),
+                    (_, true) => lock.id().ends_with(&term) || lock.title().to_lowercase().ends_with(&term),
+                    _ => lock.id().contains(&term) || lock.title().contains(&term)
+                };
+                if !maybe { continue; }
+                found.push((*id, r_arc.clone()));
             }
-                       //(list, term, out)
+
             out.send(found).ok();
         });
     }
