@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use dicebag::InclusiveRandomRange;
 
-use crate::{r#const::SIZE_BALANCE, item::{container::storage::StorageSpace, weapon::WeaponSize}, traits::Tickable, util::approx::ApproxI32};
+use crate::{r#const::SIZE_BALANCE, item::{container::storage::StorageSpace, weapon::WeaponSize}, traits::{TickMeaning, Tickable}, util::approx::ApproxI32};
 
 pub const MAX_STAT_VALUE: StatValue = 1000.0;
 // TODO: convert raw TICKS_BETWEEN_DRAIN into some runtime calibrateable type.
@@ -396,21 +396,23 @@ impl Display for Stat {
 
 #[async_trait]
 impl Tickable for Stat {
-    async fn tick(&mut self) -> bool {
+    // NOTE stat ticks don't have global effects…
+    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
         let Ok(drain) = self.drain() else {
             // no drain, nothing to tick
-            return false;
+            return None;
         };
         if drain.abs() < 0.001 {
             // no meaningful drain; nothing to tick
-            return false;
+            return None;
         }
         if self.capped() && drain > 0.0 {
-            return false;
+            return None;
         }
         let old = self.current();
         self.add_assign(drain);
-        (self.current() - old).abs() > 0.001
+        (self.current() - old).abs() > 0.001;
+        None
     }
 }
 

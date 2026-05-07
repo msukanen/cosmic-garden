@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{IdentityMut, Itemized, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::{IdentityQuery, uniq::Uuid}, item::{consumable::ConsumableMatter, container::{StorageSpace, storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut}, traits::{Reflector, Tickable}};
+use crate::{identity::{IdentityQuery, uniq::Uuid}, item::{consumable::ConsumableMatter, container::{StorageSpace, storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut}, traits::{Reflector, TickMeaning, Tickable}};
 
 pub mod blueprint; pub use blueprint::BlueprintLibrary;
 pub mod consumable;
@@ -303,13 +303,13 @@ impl Metamorphize for Item {
 
 #[async_trait]
 impl Tickable for Item {
-    async fn tick(&mut self) -> bool {
+    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
         match self {
-            Self::Consumable(c) => c.tick().await,
+            Self::Consumable(c)   => c.tick(),
             Self::Container(loot) |
-            Self::Corpse { loot,..} => loot.tick().await,
-            Self::Primordial(c)   => c.tick().await,
-            _ => false
+            Self::Corpse { loot,..} => loot.tick(),
+            Self::Primordial(c)     => c.tick(),
+            _ => None
         }
     }
 }

@@ -7,7 +7,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, help::HelpPage, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::Entity, faction::{EntityFaction, FactionMut}, traits::Mob}, room::{Room, RoomArc, RoomWeak}, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::Tickable, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, Damager}, error::CgError, help::HelpPage, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::Entity, faction::{EntityFaction, FactionMut}, traits::Mob}, room::{Room, RoomArc, RoomWeak}, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -301,25 +301,36 @@ impl Accessor for Player {
 
 #[async_trait]
 impl Tickable for Player {
-    async fn tick(&mut self) -> bool {
-        let hp_t = self.hp_mut().tick().await;
-        let mp_t = self.mp_mut().tick().await;
-        let sn_t = self.sn_mut().tick().await;
-        let san_t = self.san_mut().tick().await;
+    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+        self.hp_mut().tick();
+        self.mp_mut().tick();
+        self.sn_mut().tick();
+        self.san_mut().tick();
         let old_affects = std::mem::take(&mut self.affects);
         let mut survivors = HashMap::new();
         let mut changes: Vec<_> = Vec::new();
         for (id, mut affect) in old_affects {
             if affect.expired() { continue; }
             {
+                // apply any and all suitable effects…
                 if let Affect::Effect { ref kind, .. } = affect {
-                    if let EffectType::Heal { stat, drain } = kind {
-                        changes.push((*stat, *drain));
+                    match kind {
+                        EffectType::NotEdible => {}
+                        
+                        EffectType::Heal { stat, drain } => {
+                            changes.push((*stat, *drain));
+                        }
+                        
+                        EffectType::MultiHeal { stat_n_drain } => {
+                            for (stat, drain) in stat_n_drain {
+                                changes.push((*stat, *drain));
+                            }
+                        }
                     }
                 }
             }
             let hc = matches!(affect, Affect::HardcorePending { .. });
-            affect.tick().await;
+            affect.tick();
             if affect.expired() && hc {
                 if let Some(false) = self.hardcore {
                     self.hardcore = None;
@@ -329,20 +340,29 @@ impl Tickable for Player {
                 survivors.insert(id, affect);
             }
         }
+        // overwrite old affects with those that survived their ticks…
         self.affects = survivors;
         for (stat, amount) in &changes {
             self.apply_stat_change(*stat, *amount);
         }
-        let ch_t = !changes.is_empty();
-        let inv_t = self.inventory.tick().await;
-
-        let meaningful = hp_t || mp_t || sn_t || san_t || ch_t || inv_t;
-        #[cfg(debug_assertions)]{
-            if meaningful {
-                log::debug!("Player-ID '{}' ticked.", self.id);
+        // any stat changes?
+        let _ch_t = !changes.is_empty();
+        // inventory ticks?
+        let mut eff = vec![];
+        if let Some(inv_t) = self.inventory.tick() {
+            for it in inv_t {
+                match it {
+                    TickMeaning::EnvironmentEffect => eff.push(it),
+                    TickMeaning::AffectPossessor { kind } => {
+                        todo!("Hurt Holder")
+                    },
+                    _ => (/*let evaporate*/)
+                }
             }
         }
-        meaningful
+        // we let only EnvironmentEffect to pass thro.
+        eff.retain(|e| matches!(e, TickMeaning::EnvironmentEffect));
+        if eff.is_empty() { None } else { eff.into() }
     }
 }
 

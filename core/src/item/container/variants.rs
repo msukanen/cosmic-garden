@@ -14,7 +14,7 @@ use crate::{
         },
     },
     string::{Describable, DescribableMut},
-    traits::{Reflector, Tickable},
+    traits::{Reflector, TickMeaning, Tickable},
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -212,24 +212,19 @@ impl<'a> IntoIterator for &'a ContainerVariant {
 
 #[async_trait]
 impl Tickable for ContainerVariant {
-    async fn tick(&mut self) -> bool {
+    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
         match self {
             Self::PlayerInventory(spec)|
             Self::Backpack(spec) |
             Self::Chest(spec)    |
             Self::Pouch(spec)    |
-            Self::Room(spec)    => spec.tick().await,
-            Self::Corpse(CorpseSpec { spec, possessed_by })
-                => {
-                    let st = spec.tick().await;
-                    let pt = if let Some(poss) = possessed_by {
-                        let mut lock = poss.write().await;
-                        lock.tick().await
-                    } else {
-                        false
-                    };
-                    st || pt
-                }
+            Self::Room(spec)     => spec.tick(),
+            Self::Corpse(CorpseSpec { spec,.. })=> {
+                if let Some(mut t) = spec.tick() {
+                    t.retain(|e| !matches!(e, TickMeaning::General));
+                    t.into()
+                } else { None }
+            }
         }
     }
 }

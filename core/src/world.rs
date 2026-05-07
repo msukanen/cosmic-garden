@@ -344,8 +344,9 @@ impl World {
                     (_, true) => lock.id().ends_with(&term) || lock.title().to_lowercase().ends_with(&term),
                     _ => lock.id().contains(&term) || lock.title().contains(&term)
                 };
-                if !maybe { continue; }
-                found.push((*id, r_arc.clone()));
+                if maybe {
+                    found.push((*id, r_arc.clone()));
+                }
             }
 
             out.send(found).ok();

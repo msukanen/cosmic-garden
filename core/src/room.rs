@@ -387,8 +387,7 @@ impl Room {
         for p_weak in self.who.values() {
             if let Some(p_arc) = p_weak.upgrade() {
                 if let Ok(mut p) = p_arc.try_write() {
-                    // no reaction yet to "positive" tick(s)
-                    let _= p.tick();
+                    _ = p.tick();
                 }
             }
         }
@@ -399,7 +398,7 @@ impl Room {
             join_set.spawn(async move {
                 let _permit = sem_clone.acquire_owned().await.unwrap();
                 if let Ok(mut e) = e_clone.try_write() {
-                    _ = e.tick().await;
+                    _ = e.tick();
                 }
             });
         }

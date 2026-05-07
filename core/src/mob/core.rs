@@ -17,7 +17,7 @@ use crate::{
     room::RoomWeak,
     string::UNNAMED,
     thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels},
-    traits::Tickable
+    traits::{TickMeaning, Tickable}
 };
 
 /// Generic [Entity] size categories
@@ -252,12 +252,13 @@ impl Damager for Entity {
 
 #[async_trait]
 impl Tickable for Entity {
-    async fn tick(&mut self) -> bool {
-        let hp = self.hp_mut().tick().await;
-        let mp = self.mp_mut().tick().await;
-        let sn = self.sn_mut().tick().await;
-        let san = self.san_mut().tick().await;
-        hp || mp || sn || san
+    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+        self.hp_mut().tick();
+        self.mp_mut().tick();
+        self.sn_mut().tick();
+        self.san_mut().tick();
+        // TODO self-effects of inv
+        self.inventory.tick()
     }
 }
 
@@ -298,7 +299,7 @@ mod entity_tests {
             e.mp_mut().set_curr(next_val);
             while next_val > 0.0 {
                 next_val -= 1.0;
-                if !e.tick().await {
+                if e.tick().is_none() {
                     panic!("No tick?!");
                 }
                 assert_eq!(next_val, e.mp());

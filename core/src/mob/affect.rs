@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::{item::consumable::EffectType, identity::uniq::Uuid, traits::Tickable};
+use crate::{general_tick, identity::uniq::Uuid, item::consumable::EffectType, traits::{TickMeaning, Tickable}};
 
 /// All sorts of affects from good to bad to something else…
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -25,17 +25,18 @@ impl Affect {
 
 #[async_trait]
 impl Tickable for Affect {
-    async fn tick(&mut self) -> bool {
+    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
         match self {
             // Decays:
-            Self::Effect { remaining: Some(1),.. } => {
+            Self::Effect { remaining: Some(1), kind } => {
+                let tick = vec![TickMeaning::AffectPossessor { kind: kind.clone() }].into();
                 *self = Self::Expired;
-                true
+                tick
             }
             
             Self::HardcorePending { remaining: Some(1)} => {
                 *self = Self::Expired;
-                false
+                None
             }
            
             Self::DelayedEffect { delay: Some(1), kind, remaining } =>{
@@ -43,27 +44,34 @@ impl Tickable for Affect {
                             kind: kind.clone(),
                             remaining: remaining.clone()
                         };
-                true
+                general_tick!()
             }
             
-            Self::RushNCrash { remaining: Some(1), crash_kind, delay, crash_remain, .. } => {
+            Self::RushNCrash { remaining: Some(1), crash_kind, delay, crash_remain, kind } => {
+                let tick = vec![TickMeaning::AffectPossessor { kind: kind.clone()}].into();
                 *self = Self::DelayedEffect {
                             kind: crash_kind.clone(),
                             remaining: crash_remain.clone(),
                             delay: delay.clone()
                         };
-                true
+                tick
             }
             
             // Tick-tock goes the clock…
             Self::DelayedEffect { delay: Some(x), ..}    |
-            Self::DelayedEffect { remaining: Some(x),..} |
-            Self::Effect { remaining: Some(x),.. }       |
-            Self::HardcorePending { remaining: Some(x) } |
-            Self::RushNCrash { remaining: Some(x),.. }   => { *x = x.saturating_sub(1); true },
+            Self::HardcorePending { remaining: Some(x) } => {
+                *x = x.saturating_sub(1);
+                general_tick!()
+            }
+            
+            Self::Effect { remaining: Some(x), kind }       |
+            Self::RushNCrash { remaining: Some(x), kind,.. }=> {
+                *x = x.saturating_sub(1);
+                vec![TickMeaning::AffectPossessor { kind: kind.clone() }].into()
+            },
 
             // Placeholder(s)…
-            Self::Expired => false,
+            Self::Expired => None,
 
             _ => unreachable!("Ouch!")
         }
@@ -159,34 +167,34 @@ mod affect_tests {
         assert!(!r.dormant());
         assert!(!r.expired());
         for _ in 0..2 {
-            r.tick().await;
+            r.tick();
             log::debug!(">   {r:?}");
             assert!(!r.dormant());
             assert!(!r.expired());
         }
-        r.tick().await;
+        r.tick();
         log::debug!("r = {r:?}");
         assert!(r.dormant());
         assert!(!r.expired());
         assert!(matches!(r, Affect::DelayedEffect {..}));
         for _ in 0..2 {
-            r.tick().await;
+            r.tick();
             log::debug!(">   {r:?}");
             assert_eq!(true, r.dormant());
             assert_eq!(false, r.expired());
         }
-        r.tick().await;
+        r.tick();
         log::debug!("r = {r:?}");
         assert!(!r.dormant());
         assert!(!r.expired());
         assert!(matches!(r, Affect::Effect {..}));
         for _ in 0..2 {
-            r.tick().await;
+            r.tick();
             log::debug!(">   {r:?}");
             assert_eq!(false, r.dormant());
             assert_eq!(false, r.expired());
         }
-        r.tick().await;
+        r.tick();
         assert!(matches!(r, Affect::Expired));
         assert_eq!(true, r.dormant());
         assert_eq!(true, r.expired());

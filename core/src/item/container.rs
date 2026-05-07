@@ -7,7 +7,7 @@ use cosmic_garden_pm::{IdentityMut, ItemizedMut, OwnedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, Itemized, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED}, traits::{Reflector, Tickable}};
+use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, Itemized, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED}, traits::{Reflector, TickMeaning, Tickable}};
 
 pub mod storage; pub use storage::StorageSpace;
 pub mod variants; pub use variants::bulk_transfer;
@@ -348,15 +348,13 @@ impl<'a> IntoIterator for &'a ContainerSpec {
 
 #[async_trait]
 impl Tickable for ContainerSpec {
-    async fn tick(&mut self) -> bool {
-        let mut ticked = false;
+    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+        let mut ticked = vec![];
         for i in self.contents.values_mut() {
-            let t = i.tick().await;
-            if t { ticked = true; }
+            if let Some(t) = i.tick() {
+                ticked.extend(t);
+            }
         }
-        #[cfg(debug_assertions)]{
-            if ticked {log::debug!("{} contents ticked.", self.id)}
-        }
-        ticked
+        ticked.into()
     }
 }

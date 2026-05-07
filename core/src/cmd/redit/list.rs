@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, string::styling::MAX_DESCRIPTION_LINES, tell_user, validate_access, world::room_list};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, string::styling::MAX_DESCRIPTION_LINES, err_tell_user, tell_user, validate_access, world::room_list};
 
 pub struct ListCommand;
 
@@ -29,24 +29,29 @@ impl Command for ListCommand {
 
         let mut report = String::from("<c green>--- The Existing Reality ---</c>\n");
         let (total_found, total_pages) = {
-            let mut rooms = room_list(&ctx.world, term).await;
+            let mut rooms = room_list(&ctx.world, term.clone()).await;
+            if rooms.is_empty() {
+                err_tell_user!(ctx.writer, "{:?}? Nah, not found… Refine your search?\n", term);
+            }
             let r_len = rooms.len();
+
             let total_pages = (r_len + (ENT_PER_PAGE - 1)) / ENT_PER_PAGE;
             page_num = page_num.min(total_pages).saturating_sub(1);
-            let mut entry = 0;
-            let total_found = rooms.len();
             if page_num > 0 {
+                // drain away the skipped pages.
                 rooms.drain(0..(ENT_PER_PAGE * page_num) - 1);
             };
+            
+            let mut entries = 0;
             for (m_id, arc) in &rooms {
                 let lock = arc.read().await;
                 report.push_str(&format!("  <c yellow>{:>20}</c> <c gray>:</c> {} <c gray>:</c> <c cyan>{}</c>\n", m_id, lock.id(), lock.title()));
-                entry += 1;
-                if entry >= ENT_PER_PAGE { break; }
+                entries += 1;
+                if entries >= ENT_PER_PAGE { break; }
             }
-            (total_found, total_pages)
+            (r_len, total_pages)
         };
-        tell_user!(ctx.writer, "{report}\nTotal: {} matches ({} of {} pages).\n", total_found, page_num+1, total_pages);
+        tell_user!(ctx.writer, "{report}\nTotal: {} matches (@ {} of {} pages).\n", total_found, page_num+1, total_pages);
     }
 }
 
@@ -77,7 +82,7 @@ mod cmd_redit_list {
             lock.insert_room(r).await.ok();
         }
         drop(lock);
-        state = ctx!(state, ListCommand, "40", s,c,w,|out:&str| out.contains("matches (40"));
+        state = ctx!(state, ListCommand, "40", s,c,w,|out:&str| out.contains("matches (@ 40"));
         state = ctx!(state, ListCommand, "^o-40$", s,c,w,|out:&str| out.contains("Room #40") && out.contains("Total: 1 m") && !out.contains("#404"));
         state = ctx!(state, ListCommand, "^o-40", s,c,w,|out:&str| out.contains("Room #40") && out.contains("Total: 2 m") && out.contains("#404"));
         state = ctx!(state, ListCommand, "21$", s,c,w,|out:&str| out.contains("Room #21") && out.contains("Total: 10 m")
@@ -91,5 +96,7 @@ mod cmd_redit_list {
             && out.contains("#821")
             && out.contains("#921")
         );
+        state = ctx!(state, ListCommand, "1$ 2", s,c,w,|out:&str| out.contains("(@ 2 of 5") && out.contains("101 matches"));
+        _ = ctx!(state, ListCommand, "foobar",s,c,w,|out:&str| out.contains("not found"));
     }
 }
