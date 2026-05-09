@@ -6,7 +6,7 @@ alias = ["abort"]
 contents = """
 Aborts any underway edits.
 
-WARNING: this command is irreversible.
+<x warn>WARNING:</x> this command is irreversible.
          All edits, unless 'weave'd, are irrecovably purged.
 """
 usage = ["abort"]
@@ -83,11 +83,11 @@ title = "hedit"
 alias = ["hedit", "edit-help", "help editor"]
 access = "any_builder"
 contents = """
-Invokes <c cyan>HEdit</c> (help editor) to edit a help entry. If an entry exists in
+Invokes <x info>HEdit</x> (help editor) to edit a help entry. If an entry exists in
 library, you get a copy to tinker with. If there is no existing document,
-create a new one with 'hedit new <topic>'.
+create a new one with <x ex>hedit new <topic></x>.
 
-To persist your edits, use 'weave' command.
+To persist your edits, use <x info>weave</x> command.
 """
 see_also = ["abort","desc","hedit-set","title","usage","weave"]
 usage = [
@@ -417,16 +417,17 @@ usage = [
 [[help_pages]]
 id = "shutdown"
 title = "shutdown"
-access = "admin"
 alias = ["shutdown"]
 contents = """
-'shutdown' instructs the server to wind down and switch off the lights in a
-graceful and orderly manner.
+<x warn>Admin-only command</x>, but info about what 'shutdown' means is hereby public.
 
-Shutdown isn't instantaneous, it'll take a moment to pack the bags and save
-the files...
+<x info>'shutdown'</x> instructs the server to wind down and switch off the lights in a
+graceful and orderly manner.
 """
-usage = ["shutdown"]
+usage = [
+    "shutdown now    <c gray>;; tells the server to wind down ASAP",
+    "shutdown <sec>  <c gray>;; will delay for <sec> seconds"
+]
 [[help_pages]]
 id = "attack"
 title = "attack"
