@@ -1,10 +1,10 @@
 //! Tellyportaling.
 
-use std::sync::Arc;
+use std::{rc::Weak, sync::Arc};
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, combat::Combatant, err_tell_user, identity::{IdentityQuery, MachineIdentity}, mob::EntityArc, player::{PlayerArc, PlayerWeak}, room::RoomArc, roomloc_or_bust, show_help_if_needed, tell_user, translocate, validate_access, world::WorldArc};
+use crate::{cmd::{Command, CommandCtx}, combat::Combatant, err_tell_user, identity::{IdentityQuery, MachineId, MachineIdentity}, mob::EntityArc, player::{PlayerArc, PlayerWeak}, room::RoomArc, roomloc_or_bust, show_help_if_needed, tell_user, translocate, validate_access, world::WorldArc};
 
 pub struct TeleportCommand;
 
@@ -61,8 +61,28 @@ impl Command for TeleportCommand {
                             }
                             TeleType::Room(r) => r.clone()
                         };
-                        // acquire targets and start warping the spacetime…
-                        let players = loc.read().await.who.values().cloned().collect::<Vec<PlayerWeak>>();
+
+                        // We've already determined the 'here' and 'there' for everything,
+                        // and thus we'll use translocate!() directly.
+                        //
+                        // Acquire player targets and start warping the spacetime:
+                        for (id, pl) in {
+                            let mut rw = loc.write().await;
+                            rw.who.drain().collect::<Vec<(String,PlayerWeak)>>()
+                        } {
+                            // we translocate just those which actually exist right now…
+                            if let Some(arc) = pl.upgrade() {
+                                translocate!(arc, id, loc, t_loc);
+                            }
+                        }
+                        // …and then the entities, if any:
+                        for (id, arc) in
+                            {   let mut w = loc.write().await;
+                                w.entities.drain().collect::<Vec<(MachineId,EntityArc)>>()
+                            }
+                        {
+                            translocate!(ent arc, id, t_loc);
+                        }
                     }
                 }
             }
@@ -245,6 +265,9 @@ async fn translocate(ctx: &mut CommandCtx<'_>, initiator: PlayerArc, what: TeleT
 
         // Room + Entity combination *summons* the entity from designated room to you, if possible.
         (TeleType::Room(from), TeleType::Entity(ent)) => {
+            if Arc::ptr_eq(&ini_loc, &from) {
+                err_tell_user!(ctx.writer, "They're already here…\n");
+            }
             let mut here = ini_loc.write().await;
             let mut there = from.write().await;
             let lock = ent.write().await;
@@ -272,7 +295,7 @@ mod cmd_teleport_tests {
 
     use tokio::sync::RwLock;
 
-    use crate::{cmd::{teleport::TeleportCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityMut, player::Player, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, teleport::TeleportCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityMut, player::Player, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn teleport_self() {
@@ -294,7 +317,7 @@ mod cmd_teleport_tests {
         let p2_id = "p2".to_string();
         p2.set_id(&p2_id, false).ok();
         p2.set_title("Player#2");
-        p2.set_location(&r2).await;
+        p2.set_location(&r2).await.ok();
         let p2 = Arc::new(RwLock::new(p2));
         r2.write().await.who.insert(p2_id.clone(), Arc::downgrade(&p2));
         w.write().await.players_by_id.insert(p2_id.clone(), p2);
@@ -313,7 +336,8 @@ mod cmd_teleport_tests {
         state = ctx!(sup state,TeleportCommand,"p2 boglin",s,c,w,|out:&str| out.contains("Shucks"));
         state = ctx!(state,TeleportCommand,"p2 goblin",s,c,w);
         // room + ent transports ent from designated room (instead of trying to warp spacetime by transporting the room…)
-        _ = ctx!(state,TeleportCommand,"r-2 goblin",s,c,w);
+        state = ctx!(state,TeleportCommand,"r-2 goblin",s,c,w);
+        _ = ctx!(state,LookCommand,"",s,c,w);
 
         stabilize_threads!(100);
     }
