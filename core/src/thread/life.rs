@@ -93,6 +93,12 @@ impl Default for BattleStage {
 }
 
 impl BattleStage {
+    fn clear(&mut self) {
+        self.active.clear();
+        self.atk.clear();
+        self.vct.clear();
+    }
+
     async fn remove(&mut self, battle_key: MachineId) {
         // first the vct …
         if let Some(atks) = self.vct.remove(&battle_key) {
@@ -308,11 +314,12 @@ pub(crate) async fn life(
             //
             _ = battle_interval.tick() => {
                 if bs.active.is_empty() { continue; }
-                let mut deathrow: Vec<usize> = vec![];
+                let mut end_fight_for: Vec<usize> = vec![];
 
                 // navigate the aggro swamp…
                 for (a_key, vcts) in &bs.atk {
                     if let Some((atk, room_arc)) = bs.active.get(&a_key) {
+                        // TODO: get 1st victim in line for now, until AoE etc. get brainstormed.
                         if let Some(v_key) = vcts.get(0) {
                             if let Some((vct, _)) = bs.active.get(&v_key) {
                                 let resolution = punt(atk.combatant.clone(), vct.combatant.clone(), &room_arc).await;
@@ -323,40 +330,44 @@ pub(crate) async fn life(
                                 }).ok();
                                 #[cfg(all(test,feature = "stresstest"))]{log::debug!("resolution = {resolution:?}");}
                                 match resolution {
-                                    Resolution::AtkRetreat => { deathrow.push(*a_key);},
+                                    Resolution::AtkRetreat => { end_fight_for.push(*a_key);},
                                     Resolution::AtkVictory {..} => {
-                                        deathrow.push(*v_key);
+                                        end_fight_for.push(*v_key);
                                         vct.loot_pinata(&world).await;
                                     }
-                                    Resolution::VctRetreat => { deathrow.push(*v_key);},
+                                    Resolution::VctRetreat => { end_fight_for.push(*v_key);},
                                     Resolution::VctVictory {..} => {
-                                        deathrow.push(*a_key);
+                                        end_fight_for.push(*a_key);
                                         atk.loot_pinata(&world).await;
                                     },
                                     Resolution::BothDead => {
-                                        deathrow.push(*a_key);
-                                        deathrow.push(*v_key);
+                                        end_fight_for.push(*a_key);
+                                        end_fight_for.push(*v_key);
                                         vct.loot_pinata(&world).await;
                                         atk.loot_pinata(&world).await;
                                     },
+                                    // Resolution::Abort => {
+                                    //     end_fight_for.push(*a_key);
+                                    //     end_fight_for.push(*v_key);
+                                    // }
                                     Resolution::Inconclusive {..} => ()
                                 }
                             } else {
                                 // no v_key in battle stage? … weird.
-                                deathrow.push(*v_key);
+                                end_fight_for.push(*v_key);
                             }
                         } else {
                             // was no opponents, kthxbye.
-                            deathrow.push(*a_key);
+                            end_fight_for.push(*a_key);
                         }
                     } else {
                         // not in active list? WTF?
-                        deathrow.push(*a_key);
+                        end_fight_for.push(*a_key);
                     }
 
                 }
 
-                for d in deathrow {
+                for d in end_fight_for {
                     bs.remove(d).await;
                 }
             }
@@ -388,16 +399,36 @@ pub(crate) async fn life(
                             }
                             spawn_out = None;
                         }
-                        #[cfg(feature = "stresstest")]
-                        {
-                            if spawn_count % 1_000 == 0 {
-                                log::info!("Spawns to go: {spawn_count}");
-                            }
+                        if spawn_count % 1_000 == 0 {
+                            log::info!("Spawns to go: {spawn_count}");
                         }
                     }
 
                     let ok = spawn_something(&out, what, &room, &world).await;
                     if let Some(out) = reply {
+                        out.send(ok).ok();
+                    }
+                }
+
+                // Spawn `num` [Entity]s in a batch. Seldom used, but…
+                SystemSignal::SpawnBatch {what, room, num, reply} => {
+                    #[cfg(test)]
+                    {
+                        spawn_count = spawn_count.saturating_sub(1);
+                        if spawn_count == 0 {
+                            if let Some(out) = spawn_out {
+                                out.send(()).ok();
+                            }
+                            spawn_out = None;
+                        }
+                        if spawn_count % 1_000 == 0 {
+                            log::info!("Spawns to go: {spawn_count}");
+                        }
+                    }
+
+                    let ok = spawn_something_batch(&out, what, num, &room, &world).await;
+                    if let Some(out) = reply {
+                        log::debug!("Sending {ok:?} about {num} spawns.");
                         out.send(ok).ok();
                     }
                 }
@@ -471,9 +502,9 @@ pub(crate) async fn life(
 
                 // Abort battle for `who`.
                 SystemSignal::AbortBattleNow { who } => bs.remove_b(&who).await,
+                SystemSignal::AbortAllBattle => bs.clear(),
                 
-                #[cfg(test)]
-                SystemSignal::CountSpawns { num, out } => {
+                #[cfg(test)] SystemSignal::CountSpawns { num, out } => {
                     spawn_count = num;
                     spawn_out = Some(out);
                     log::warn!("Preparing to count spawns down from {num}…");
@@ -521,7 +552,22 @@ async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &Roo
             if let Some(r_arc) = w.get_room_by_m_id(room.id().await.as_m_id()) {
                 let r_arc = r_arc.clone();
                 drop(w);
-                direct_spawn_something(out, what, &r_arc, world).await
+                direct_spawn_something(out, what, 1, &r_arc, world).await
+            } else {
+                log::error!("Ayy! We don't have room '{}' to spawn '{id}' at!", room.id().await);
+                false
+            }
+        },_=> false
+    }
+}
+async fn spawn_something_batch(out: &SignalSenderChannels, what: SpawnType, num: usize, room: &RoomPayload, world: &WorldArc) -> bool {
+    match &what {
+        SpawnType::Mob { id } => {
+            let w = world.read().await;
+            if let Some(r_arc) = w.get_room_by_m_id(room.id().await.as_m_id()) {
+                let r_arc = r_arc.clone();
+                drop(w);
+                direct_spawn_something(out, what, num, &r_arc, world).await
             } else {
                 log::error!("Ayy! We don't have room '{}' to spawn '{id}' at!", room.id().await);
                 false
@@ -538,7 +584,7 @@ async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &Roo
 /// 
 /// # Returns
 /// Spawned?
-async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_arc: &RoomArc, world: &WorldArc) -> bool
+async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, num: usize, r_arc: &RoomArc, world: &WorldArc) -> bool
 {
     static mut C: usize = 0;
     match what {
@@ -546,20 +592,28 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, r_a
             let (oneshot, recv) = oneshot::channel::<Option<Entity>>();
             if let Ok(_) = out.librarian.send(SystemSignal::EntityBlueprintReq { id: id.clone(), out: oneshot }) {
                 if let Ok(reply) = recv.await {
-                    if let Some(mut mob) = reply {
-                        mob.set_id(&mob.id().re_uuid(), true).ok();
-                        let mob_id = mob.id().to_string();
-                        *(mob.location_mut()) = Arc::downgrade(&r_arc);
-                        let mob_arc = mob.into();
-                        {
-                            let mut w = world.write().await;
+                    if let Some(bp_mob) = reply {
+                        let mut mobs = Vec::with_capacity(num);
+                        let mut w = world.write().await;
+                        let mut r = r_arc.write().await;
+                        for _ in 0..num {
+                            let mut mob = bp_mob.clone();
+                            mob.set_id(&bp_mob.id().re_uuid(), true).ok();
+                            *(mob.location_mut()) = Arc::downgrade(&r_arc);
+                            mobs.push(mob);
+                            unsafe { C += 1; }
+                        }
+                        log::debug!("Generated {num} entities…");
+                        for mob in mobs {
+                            let mob_id = mob.id().to_string();
+                            let mob_m_id = mob_id.as_m_id();
+                            let mob_arc = mob.into();
                             // tell the world 1st…
-                            w.entities.insert(mob_id.as_m_id(), Arc::downgrade(&mob_arc));
+                            w.entities.insert(mob_m_id, Arc::downgrade(&mob_arc));
                             // …then the room itself.
-                            r_arc.write().await.entities.insert(mob_id.as_m_id(), mob_arc);
-                        }// drop 'w' now…
-                        // log::trace!("Life has spawned #{} '{mob_id}' at '{}'", unsafe {C}, r_arc.read().await.id());
-                        unsafe { C += 1; }
+                            r.entities.insert(mob_m_id, mob_arc);
+                        }
+                        log::debug!("Spawned {num} entit{}.", if num==1{"y"} else {"ies"});
                         return true;
                     } else {
                         log::warn!("There's no record of '{id}' in the entity catalogue…");
@@ -614,34 +668,34 @@ async fn punt(atk: Battler, vct: Battler, _room: &RoomArc) -> Resolution {
 
 /// Register Ok'd battle.
 async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: RoomArc, bs: &mut BattleStage) {
-                    let a_key = lock2key!(arc &atk.combatant);
-                    let v_key = lock2key!(arc &vct.combatant);
-                    {
-                        let mut a_lock = atk.combatant.write().await;
-                        let mut v_lock = vct.combatant.write().await;
-                        a_lock.alter_brain_freeze(true);
-                        v_lock.alter_brain_freeze(true);
-                    }
-                    bs.active.insert(a_key, (atk, room.clone()));
-                    bs.active.insert(v_key, (vct, room.clone()));
-                    if let Some(a) = bs.atk.get_mut(&a_key) {
-                        if !a.contains(&v_key) {
-                            a.push(v_key);
-                        }
-                    } else {
-                        log::trace!("New attacker: {a_key}");
-                        bs.atk.insert(a_key, vec![v_key]);
-                    }
-                    if let Some(v) = bs.vct.get_mut(&v_key) {
-                        if !v.contains(&a_key) {
-                            v.push(a_key);
-                        }
-                    } else {
-                        log::trace!("New victim: {v_key}");
-                        bs.vct.insert(v_key, vec![a_key]);
-                    }
-                    log::debug!("LifeworkerSignal::BattleOk!");
-                }
+    let a_key = lock2key!(arc &atk.combatant);
+    let v_key = lock2key!(arc &vct.combatant);
+    {
+        let mut a_lock = atk.combatant.write().await;
+        let mut v_lock = vct.combatant.write().await;
+        a_lock.alter_brain_freeze(true);
+        v_lock.alter_brain_freeze(true);
+    }
+    bs.active.insert(a_key, (atk, room.clone()));
+    bs.active.insert(v_key, (vct, room.clone()));
+    if let Some(a) = bs.atk.get_mut(&a_key) {
+        if !a.contains(&v_key) {
+            a.push(v_key);
+        }
+    } else {
+        log::trace!("New attacker: {a_key}");
+        bs.atk.insert(a_key, vec![v_key]);
+    }
+    if let Some(v) = bs.vct.get_mut(&v_key) {
+        if !v.contains(&a_key) {
+            v.push(a_key);
+        }
+    } else {
+        log::trace!("New victim: {v_key}");
+        bs.vct.insert(v_key, vec![a_key]);
+    }
+    log::debug!("LifeworkerSignal::BattleOk!");
+}
 
 #[cfg(test)]
 mod life_tests {
@@ -650,7 +704,7 @@ mod life_tests {
     use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
-    async fn goblin_ocean() {
+    async fn goblin_1_1_ocean() {
         #[cfg(feature = "stresstest")]
         const MILLION_GOBBOS: usize = 1_000_000;
         #[cfg(not(feature = "stresstest"))]
@@ -672,6 +726,35 @@ mod life_tests {
         let _ = orx.await;
         stabilize_threads!(10_000); // see for 10s what spams...
         let work_duration = start_work.elapsed();
+        let spawns_per_sec = MILLION_GOBBOS as f64 / work_duration.as_secs_f64();
+        let r1 = w.read().await.get_room_by_id("r-1").unwrap();
+        let spawn_c = r1.read().await.entities.len();
+
+        log::debug!("--terminated--");
+        log::debug!("Duration: {work_duration:?} | Throughput: {spawns_per_sec:.2} ent/sec | Entities: {spawn_c}");
+    }
+
+    #[tokio::test]
+    async fn goblin_ocean_batch() {
+        #[cfg(feature = "stresstest")]
+        const MILLION_GOBBOS: usize = 1_000_000;
+        #[cfg(not(feature = "stresstest"))]
+        const MILLION_GOBBOS: usize = 60_000;// just 1,000 if not stresstesting...
+
+        let (w,c,_,j) = get_operational_mock_world().await;
+        get_operational_mock_janitor!(c,w,j.0);
+        get_operational_mock_life!(c,w);
+        get_operational_mock_librarian!(c,w);
+        let c = c.out;// we don't need the c.recv part anymore here…
+        stabilize_threads!();
+        let start_work = std::time::Instant::now();
+        let (otx,orx) = tokio::sync::oneshot::channel::<bool>();
+        c.life.send(SystemSignal::SpawnBatch { what: SpawnType::Mob { id: "goblin".into() }, num: MILLION_GOBBOS, room: "r-1".into(), reply: otx.into() }).ok();
+        // let the dust settle…
+        let _ = orx.await;
+        log::debug!("Dust?");
+        let work_duration = start_work.elapsed();
+        stabilize_threads!(3_000); // see for 1s what spams...
         let spawns_per_sec = MILLION_GOBBOS as f64 / work_duration.as_secs_f64();
         let r1 = w.read().await.get_room_by_id("r-1").unwrap();
         let spawn_c = r1.read().await.entities.len();
