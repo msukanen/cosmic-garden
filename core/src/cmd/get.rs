@@ -101,7 +101,7 @@ mod cmd_get_tests {
                 title: "apple".into(),
                 owner: Owner::no_one(),
                 size: 7,
-                nutrition: EffectType::Heal { stat: StatType::HP, drain: 5.0 },
+                nutrition: EffectType::StatDelta { stat: StatType::HP, drain: 5.0 },
                 desc: "It's… an apple!".into(),
                 matter_state: MatterState::Solid,
                 uses: Some(3),

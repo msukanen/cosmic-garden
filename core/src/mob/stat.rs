@@ -409,9 +409,9 @@ impl Tickable for Stat {
         if self.capped() && drain > 0.0 {
             return None;
         }
-        let old = self.current();
+        //let old = self.current();
         self.add_assign(drain);
-        (self.current() - old).abs() > 0.001;
+        //(self.current() - old).abs() > 0.001;
         None
     }
 }

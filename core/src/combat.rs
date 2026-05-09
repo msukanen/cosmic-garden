@@ -12,7 +12,6 @@ pub trait Damager {
     fn dmg(&self) -> StatValue;
 }
 
-
 #[cfg(test)]
 mod combatant_tests {
     use std::io::Cursor;

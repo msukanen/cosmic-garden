@@ -139,8 +139,8 @@ mod affect_tests {
 
     #[test]
     fn affect_stacking() {
-        let a = Affect::Effect { kind: EffectType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
-        let b = Affect::Effect { kind: EffectType::Heal { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
+        let a = Affect::Effect { kind: EffectType::StatDelta { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
+        let b = Affect::Effect { kind: EffectType::StatDelta { stat: StatType::HP, drain: 1.0 }, remaining: Some(3) };
         let mut stash = HashMap::new();
         stack_affect("item", &a, &mut stash);
         assert!(stash.contains_key("item"));

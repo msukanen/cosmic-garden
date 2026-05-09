@@ -11,7 +11,7 @@ use tokio::{net::TcpListener, sync::RwLock};
 use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{DATA, WORLD}, thread::{life::{BATTLE_HZ, CORE_HZ}, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
 
 mod cmd;
-pub mod combat;
+pub(crate) mod combat;
 mod r#const;
 mod edit;
 mod error;

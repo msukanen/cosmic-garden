@@ -13,8 +13,8 @@ pub enum EffectType {
     /// It's from McDonalds. Don't try eat it - opt for crayons instead.
     NotEdible,
     /// Healing (or damaging with negative `drain`) property.
-    Heal { stat: StatType, drain: StatValue },
-    MultiHeal { stat_n_drain: HashMap<StatType, StatValue> }
+    StatDelta { stat: StatType, drain: StatValue },
+    MultistatDelta { stat_n_drain: HashMap<StatType, StatValue> }
 }
 
 impl Default for EffectType {
@@ -27,8 +27,8 @@ impl Display for EffectType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::NotEdible => write!(f, "inedible"),
-            Self::Heal { stat, drain } => write!(f, "Heal({} {:+.2})", stat, drain),
-            Self::MultiHeal { stat_n_drain } =>
+            Self::StatDelta { stat, drain } => write!(f, "Heal({} {:+.2})", stat, drain),
+            Self::MultistatDelta { stat_n_drain } =>
                 write!(f, "MultiHeal({})",
                         stat_n_drain
                             .iter()
@@ -108,7 +108,7 @@ impl Reflector for ConsumableMatter {
 impl Affector for ConsumableMatter {
     fn as_affect(&self) -> Option<Affect> {
         match self.nutrition {
-            EffectType::Heal { .. } =>
+            EffectType::StatDelta { .. } =>
                 Some(Affect::Effect { kind: self.nutrition.clone(), remaining: self.affect_ticks.clone() }),
             _ => None
         }
