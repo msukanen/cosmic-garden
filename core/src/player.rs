@@ -197,7 +197,7 @@ impl Player {
     }
 
     /// Apply ± on a stat.
-    pub fn apply_stat_change(&mut self, stat: StatType, drain: StatValue) {
+    fn apply_stat_change(&mut self, stat: StatType, drain: StatValue) {
         match stat {
             StatType::Brn => *(self.brn_mut()) += drain,
             StatType::HP  => *(self.hp_mut())  += drain,
@@ -207,6 +207,31 @@ impl Player {
             StatType::San => *(self.san_mut()) += drain,
             StatType::Str => *(self.str_mut()) += drain,
             StatType::Rep => *(self.rep_mut()) += drain,
+        }
+    }
+
+    /// Apply [effect][EffectType]s, if any.
+    #[inline]
+    pub fn apply_effects(&mut self, effects: Vec<EffectType>) {
+        for kind in effects {
+            self.apply_effect(kind);
+        }
+    }
+
+    /// Apply [effect][EffectType]s, if any.
+    pub fn apply_effect(&mut self, effect: EffectType) {
+        match effect {
+            EffectType::NotEdible => {}
+            
+            EffectType::StatDelta { stat, drain } => {
+                self.apply_stat_change(stat, drain);
+            }
+            
+            EffectType::MultistatDelta { stat_n_drain } => {
+                for (stat, drain) in stat_n_drain {
+                    self.apply_stat_change(stat, drain);
+                }
+            }
         }
     }
 
@@ -239,9 +264,14 @@ impl Player {
         set
     }
 
-    pub(crate) async fn set_location(&mut self, arc: &RoomArc) {
-        self.location_id = arc.read().await.id().to_string();
+    /// Set current location.
+    /// 
+    /// NOTE: to avoid deadlock, ensure that `arc` isn't write locked before calling this!
+    pub(crate) async fn set_location(&mut self, arc: &RoomArc) -> Result<(), tokio::sync::TryLockError> {
+        let r = arc.try_read()?;
+        self.location_id = r.id().to_string();
         self.location = Arc::downgrade(arc);
+        Ok(())
     }
 }
 
@@ -308,25 +338,12 @@ impl Tickable for Player {
         self.san_mut().tick();
         let old_affects = std::mem::take(&mut self.affects);
         let mut survivors = HashMap::new();
-        let mut changes: Vec<_> = Vec::new();
         for (id, mut affect) in old_affects {
             if affect.expired() { continue; }
             {
                 // apply any and all suitable effects…
                 if let Affect::Effect { ref kind, .. } = affect {
-                    match kind {
-                        EffectType::NotEdible => {}
-                        
-                        EffectType::Heal { stat, drain } => {
-                            changes.push((*stat, *drain));
-                        }
-                        
-                        EffectType::MultiHeal { stat_n_drain } => {
-                            for (stat, drain) in stat_n_drain {
-                                changes.push((*stat, *drain));
-                            }
-                        }
-                    }
+                    self.apply_effect(kind.clone());
                 }
             }
             let hc = matches!(affect, Affect::HardcorePending { .. });
@@ -342,27 +359,26 @@ impl Tickable for Player {
         }
         // overwrite old affects with those that survived their ticks…
         self.affects = survivors;
-        for (stat, amount) in &changes {
-            self.apply_stat_change(*stat, *amount);
-        }
-        // any stat changes?
-        let _ch_t = !changes.is_empty();
+        
         // inventory ticks?
-        let mut eff = vec![];
-        if let Some(inv_t) = self.inventory.tick() {
-            for it in inv_t {
-                match it {
-                    TickMeaning::EnvironmentEffect => eff.push(it),
+        let bubbles = if let Some(mut eff) = self.inventory.tick() {
+            eff.retain(|e| {
+                match e {
+                    // we care only about direct possessor effects:
                     TickMeaning::AffectPossessor { kind } => {
-                        todo!("Hurt Holder")
+                        self.apply_effect(kind.clone());
+                        false
                     },
-                    _ => (/*let evaporate*/)
+                    TickMeaning::EnvironmentEffect => true,
+                    _ => false
                 }
-            }
-        }
-        // we let only EnvironmentEffect to pass thro.
-        eff.retain(|e| matches!(e, TickMeaning::EnvironmentEffect));
-        if eff.is_empty() { None } else { eff.into() }
+            });
+            if eff.is_empty() { None } else { eff.into() }
+        } else {
+            None
+        };
+
+        bubbles
     }
 }
 
