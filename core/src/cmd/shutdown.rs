@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, tell_user, validate_access};
+use crate::{cmd::{Command, CommandCtx}, show_help, show_help_if_needed, tell_user, validate_access};
 
 pub struct ShutdownCommand;
 
@@ -10,12 +10,28 @@ pub struct ShutdownCommand;
 impl Command for ShutdownCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
         let _ = validate_access!(ctx, admin);
-        tell_user!(ctx.writer, "Broadcasting shutdown…\nBrace for impact…\n");
-        ctx.state = crate::io::ClientState::Logout;
-        ctx.out.broadcast.send(crate::io::Broadcast::Shutdown).ok();
-        ctx.out.shutdown().await;
+        show_help_if_needed!(ctx, "shutdown");
+
+        match ctx.args.to_lowercase().as_str() {
+            "now" => {
+                tell_user!(ctx.writer, "Broadcasting shutdown…\nBrace for impact…\n");
+                ctx.state = crate::io::ClientState::Logout;
+                ctx.out.janitor.send(crate::thread::SystemSignal::TimedShutdown { delay: 0 }).ok();
+            }
+
+            when => {
+                let Ok(delay) = when.parse::<usize>() else {
+                    tell_user!(ctx.writer, "<x warn>Close</x>… but no dice…\n");
+                    show_help!(ctx, "u shutdown");
+                };
+
+                ctx.out.janitor.send(crate::thread::SystemSignal::TimedShutdown { delay }).ok();
+            }
+        }
     }
 }
+
+
 
 #[cfg(test)]
 mod cmd_shutdown_tests {
@@ -31,7 +47,7 @@ mod cmd_shutdown_tests {
         let life_t = get_operational_mock_life!(c,w);
         let lib_t = get_operational_mock_librarian!(c,w);
         
-        let mut autoshutdown = tokio::time::interval(Duration::from_secs(2));
+        let mut autoshutdown = tokio::time::interval(Duration::from_secs(3));
         let mut autoshutdown_1st_tick = false;
         loop {
             tokio::select! {
@@ -40,7 +56,7 @@ mod cmd_shutdown_tests {
                         p.write().await.access = Access::Admin;
                         state = ctx!(state, ShutdownCommand, "", s,c.out,w);
                     } else {
-                        log::debug!("Autoshutdown should happen in 10 seconds…");
+                        log::debug!("Autoshutdown should happen in 3 seconds…");
                         autoshutdown_1st_tick = true;
                     }
                 }

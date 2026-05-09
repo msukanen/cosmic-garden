@@ -23,6 +23,8 @@ pub enum SystemSignal {
     LostAndFound,
     /// Save a [Room].
     SaveRoom { arc: RoomArc },
+    /// Prepare for delayed shutdown.
+    TimedShutdown { delay: usize },
 
     //
     //--- Librarian ---
@@ -74,10 +76,24 @@ pub enum SystemSignal {
         room: RoomPayload,
         reply: Option<tokio::sync::oneshot::Sender<bool>>,
     },
+    /// Notion to spawn something en masse…
+    SpawnBatch {
+        what: SpawnType,
+        room: RoomPayload,
+        num: usize,
+        reply: Option<tokio::sync::oneshot::Sender<bool>>,
+    },
+    /// Attack call!
     Attack { atk_arc: Battler, vct_arc: Battler },
+    /// Player logging out…
     PlayerLogout { player: PlayerArc },
+    /// Player requesting transport…
     WantTransportFromTo { who: PlayerArc, from: RoomArc, to: RoomArc, via: Direction },
+    /// "Halt!" the fite.
     AbortBattleNow { who: Battler },
+    /// Abort all combat whatsoever.
+    AbortAllBattle,
+    
     #[cfg(test)]
     CountSpawns { num: usize, out: tokio::sync::oneshot::Sender<()> },
 }

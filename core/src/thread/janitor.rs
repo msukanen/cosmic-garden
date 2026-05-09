@@ -28,7 +28,7 @@ macro_rules! get_operational_mock_janitor {
 /// in (relative) sync.
 /// 
 pub(crate) async fn janitor(
-    (_out, mut incoming): (SignalSenderChannels, SigReceiver),
+    (out, mut incoming): (SignalSenderChannels, SigReceiver),
     world: WorldArc,
     args: Option<Cli>,
     done_tx: tokio::sync::oneshot::Sender<()>
@@ -40,6 +40,7 @@ pub(crate) async fn janitor(
     let mut world_save_interval = time::interval(Duration::from_mins(2));
     let mut room_save_interval = time::interval(Duration::from_secs(30));
     let mut lost_and_found_interval = time::interval(Duration::from_mins(2));
+    let mut timing_out = false;
 
     log::trace!("Janitor in the house! \"Time to keep this place tidy…\"");
 
@@ -56,6 +57,24 @@ pub(crate) async fn janitor(
             // Anything in mailbox?
             Some(sig) = incoming.recv() => match sig {
                 SystemSignal::Shutdown => break,
+                SystemSignal::TimedShutdown { mut delay } => {
+                    if timing_out {
+                        log::warn!("Multiple shutdown commands issued at the same time.");
+                        continue;
+                    }
+                    timing_out = true;
+                    let tsd_out = out.clone();
+                    tokio::spawn(async move {
+                        while delay > 0 {
+                            tsd_out.broadcast.send(crate::io::Broadcast::TimedShutdown { seconds: delay }).ok();
+                            delay /= 2;
+                            tokio::time::sleep(Duration::from_secs(delay as u64)).await;
+                        }
+                        tsd_out.broadcast.send(crate::io::Broadcast::Shutdown).ok();
+                        tsd_out.life.send(crate::thread::SystemSignal::AbortAllBattle).ok();
+                        tsd_out.shutdown().await;
+                    });
+                }
 
                 SystemSignal::SaveWorld => {save_the_whales(world.clone(), true).await;}
                 SystemSignal::LostAndFound => lost_and_found(world.clone()).await,
@@ -74,6 +93,8 @@ pub(crate) async fn janitor(
         }
     }
 
+    // re-send shutdown just in case...
+    out.shutdown().await;
     // Ok, lights out …!
     lost_and_found(world.clone()).await; // drain LOST_AND_FOUND queue just in case…
     save_the_whales(world.clone(), true).await;// save the whales!
@@ -187,5 +208,6 @@ async fn lost_and_found(world: WorldArc) {
     }
 
     // Force world save so that current L'n'F is stored along the world file.
+    // This is separately called during wind down, too, but…
     save_the_whales(world.clone(), true).await;
 }

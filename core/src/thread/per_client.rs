@@ -250,9 +250,13 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                         },
 
                         Broadcast::Shutdown => {
-                            tell_user!(&mut writer, "\n<c red>---[ SERVER SHUTTING DOWN ]---</c>\n");
+                            tell_user!(&mut writer, "\n<x err>---[ SERVER SHUTTING DOWN ]---</x>\n");
                             state = ClientState::Logout
                         },
+
+                        Broadcast::TimedShutdown { seconds } => {
+                            tell_user!(&mut writer, "\n<x warn>---[ SERVER SHUTTING DOWN: {}s ]---</x>\n", seconds);
+                        }
 
                         Broadcast::Message { to, message } => {
                             if !Arc::ptr_eq(&player, &to) { continue; }// not for us

@@ -75,6 +75,7 @@ pub enum Broadcast {
     },
 
     Shutdown,
+    TimedShutdown { seconds: usize },
 }
 
 #[derive(Debug, Clone)]
