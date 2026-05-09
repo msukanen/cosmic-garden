@@ -167,16 +167,16 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
         loop {
         match what {
             "heal" => match nuts {
-                EffectType::NotEdible  => {*nuts = EffectType::Heal { stat: StatType::HP, drain: 0.0 }; continue; },
-                EffectType::Heal { stat, drain }=> {
-                    *nuts = EffectType::MultiHeal { stat_n_drain: {
+                EffectType::NotEdible  => {*nuts = EffectType::StatDelta { stat: StatType::HP, drain: 0.0 }; continue; },
+                EffectType::StatDelta { stat, drain }=> {
+                    *nuts = EffectType::MultistatDelta { stat_n_drain: {
                         let mut m = HashMap::new();
                         m.insert(stat.clone(), *drain);
                         m
                     } };
                     continue;
                 },
-                EffectType::MultiHeal { stat_n_drain } =>
+                EffectType::MultistatDelta { stat_n_drain } =>
                     // set nut multi <stat-type> <value>
                     {
                         let (maybe_rm, arg) = value.split_once(' ').unwrap_or((value, ""));
@@ -201,7 +201,7 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                                 } else if stat_n_drain.len() == 1 {
                                     // fall back to Heal
                                     let (s,d) = stat_n_drain.iter().next().unwrap();
-                                    *nuts = EffectType::Heal { stat: s.clone(), drain: *d };
+                                    *nuts = EffectType::StatDelta { stat: s.clone(), drain: *d };
                                 }
                                 tell_user!(ctx.writer, "Item set as {}\n", *nuts);
                                 return ;
@@ -227,7 +227,7 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                                     } else if stat_n_drain.len() == 1 {
                                         // fall back to Heal
                                         let (s,d) = stat_n_drain.iter().next().unwrap();
-                                        *nuts = EffectType::Heal { stat: s.clone(), drain: *d };
+                                        *nuts = EffectType::StatDelta { stat: s.clone(), drain: *d };
                                     }
                                     tell_user!(ctx.writer, "Item set as {}\n", *nuts);
                                     return ;
@@ -236,7 +236,7 @@ async fn go_nuts(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
                                 if stat_n_drain.len() == 1 {
                                     // fall back to Heal
                                     let (s,d) = stat_n_drain.iter().next().unwrap();
-                                    *nuts = EffectType::Heal { stat: s.clone(), drain: *d };
+                                    *nuts = EffectType::StatDelta { stat: s.clone(), drain: *d };
                                 }
                                 tell_user!(ctx.writer, "Item set as: {}\n", *nuts);
                             },
