@@ -2,10 +2,10 @@
 
 use std::{fmt::Display, ops::{Div, Mul}};
 
-use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
+use cosmic_garden_pm::{DescribableMut, IdentityMut, VolumeMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{combat::Damager, r#const::{HUGE_ITEM, LARGE_ITEM, MEDIUM_ITEM, SIZE_BALANCE, SMALL_ITEM, TINY_ITEM}, item::{container::storage::StorageSpace, ownership::Owner}, mob::StatValue, identity::uniq::Uuid, traits::Reflector};
+use crate::{combat::{DamageType, Damager}, r#const::{HUGE_ITEM, LARGE_ITEM, MEDIUM_ITEM, SIZE_BALANCE, SMALL_ITEM, TINY_ITEM}, identity::uniq::Uuid, item::{container::storage::StorageSpace, ownership::Owner}, mob::StatValue, traits::Reflector};
 
 /// Weapons tend to come in various sizes, which carries to how they're used + other specs.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
@@ -68,7 +68,7 @@ impl Display for WeaponSize {
 }
 
 /// Weapon specs…
-#[derive(Debug, Clone, Serialize, Deserialize, IdentityMut, OwnedMut, ItemizedMut, DescribableMut)]
+#[derive(Debug, Clone, Serialize, Deserialize, IdentityMut, OwnedMut, VolumeMut, DescribableMut)]
 pub struct WeaponSpec {
     pub(crate) id: String,
     #[identity(title)]
@@ -80,12 +80,21 @@ pub struct WeaponSpec {
     pub(crate) weapon_size: WeaponSize, // gives fixed minimum size for the weapon, with no upper limit though.
     /// The weapon's base dmg.
     pub(crate) base_dmg: StatValue,
+    pub(crate) dmg_type: DamageType,
 }
 
 impl Damager for WeaponSpec {
-    /// Get the dmg the weapon does. This involves some randomness…
+    /// Get the amount of dmg the weapon (theoretically) does.
+    //
+    // TODO involve some randomness…
+    //
     fn dmg(&self) -> StatValue {
         self.base_dmg
+    }
+
+    /// Get dmg [type][DamageType] of the weapon.
+    fn dmg_type(&self) -> DamageType {
+        self.dmg_type
     }
 }
 
