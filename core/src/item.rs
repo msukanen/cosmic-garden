@@ -4,7 +4,7 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{IdentityMut, Volumed, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::{IdentityQuery, uniq::Uuid}, item::{consumable::ConsumableMatter, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut}, traits::{Reflector, TickMeaning, Tickable}, util::{Volumed, VolumeMut}};
+use crate::{identity::{IdentityQuery, uniq::Uuid}, item::{consumable::ConsumableMatter, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, room::environ::{SpecialEnvironment, Terrain}, string::{Describable, DescribableMut}, traits::{Reflector, TickMeaning, Tickable}, util::{VolumeMut, Volumed}};
 pub use container::StorageSpace;
 
 pub mod blueprint; pub use blueprint::BlueprintLibrary;
@@ -296,12 +296,12 @@ impl Metamorphize for Item {
 
 #[async_trait]
 impl Tickable for Item {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         match self {
-            Self::Consumable(c)   => c.tick(),
+            Self::Consumable(c)   => c.tick(room_env, None),
             Self::Container(loot) |
-            Self::Corpse { loot,..} => loot.tick(),
-            Self::Primordial(c)     => c.tick(),
+            Self::Corpse { loot,..} => loot.tick(room_env, None),
+            Self::Primordial(c)     => c.tick(room_env, None),
             _ => None
         }
     }

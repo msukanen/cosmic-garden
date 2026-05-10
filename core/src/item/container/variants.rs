@@ -5,16 +5,11 @@ use serde::{Deserialize, Serialize};
 pub mod corpse; pub use corpse::{CorpseSpec, bulk_transfer};
 
 use crate::{
-    r#const::SIZE_BALANCE,
-    identity::uniq::Uuid,
-    item::{
-        Item, Volumed, VolumeMut,
-        container::{
+    r#const::SIZE_BALANCE, identity::uniq::Uuid, item::{
+        Item, VolumeMut, Volumed, container::{
             ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageMut, StorageSpace
-        },
-    },
-    string::{Describable, DescribableMut},
-    traits::{Reflector, TickMeaning, Tickable},
+        }
+    }, room::environ::{SpecialEnvironment, Terrain}, string::{Describable, DescribableMut}, traits::{Reflector, TickMeaning, Tickable}
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -212,15 +207,15 @@ impl<'a> IntoIterator for &'a ContainerVariant {
 
 #[async_trait]
 impl Tickable for ContainerVariant {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         match self {
             Self::PlayerInventory(spec)|
             Self::Backpack(spec) |
             Self::Chest(spec)    |
             Self::Pouch(spec)    |
-            Self::Room(spec)     => spec.tick(),
+            Self::Room(spec)     => spec.tick(room_env, None),
             Self::Corpse(CorpseSpec { spec,.. })=> {
-                if let Some(mut t) = spec.tick() {
+                if let Some(mut t) = spec.tick(room_env, None) {
                     t.retain(|e| !matches!(e, TickMeaning::General));
                     t.into()
                 } else { None }

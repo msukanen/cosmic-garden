@@ -5,7 +5,7 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, VolumeMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::uniq::Uuid, item::{container::StorageSpace, matter::{Matter, MatterState}, ownership::Owner}, mob::{StatType, StatValue, affect::{Affect, Affector}}, traits::{Reflector, TickMeaning, Tickable}};
+use crate::{identity::uniq::Uuid, item::{container::StorageSpace, matter::{Matter, MatterState}, ownership::Owner}, mob::{StatType, StatValue, affect::{Affect, Affector}}, room::environ::{SpecialEnvironment, Terrain}, traits::{Reflector, TickMeaning, Tickable}};
 
 /// Various nutrition types (plus not edible).
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
@@ -117,7 +117,7 @@ impl Affector for ConsumableMatter {
 
 #[async_trait]
 impl Tickable for ConsumableMatter {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         if let Some(t) = &mut self.rots_in_ticks {
             *t = t.saturating_sub(1);
             #[cfg(debug_assertions)]{

@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, VolumeMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{combat::DamageType, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, StorageError, StorageQueryError, Volumed, consumable::{ConsumableMatter, EffectType}, container::{ContainerSpec, MaxSpaceSpec, StorageSpace, storage::{Storage, StorageMut}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, mob::StatValue, string::Describable, traits::{Reflector, TickMeaning, Tickable}};
+use crate::{combat::DamageType, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, StorageError, StorageQueryError, Volumed, consumable::{ConsumableMatter, EffectType}, container::{ContainerSpec, MaxSpaceSpec, StorageSpace, storage::{Storage, StorageMut}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, mob::StatValue, room::environ::{SpecialEnvironment, Terrain}, string::Describable, traits::{Reflector, TickMeaning, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -322,7 +322,7 @@ impl Metamorphize for PrimordialItem {
 
 #[async_trait]
 impl Tickable for PrimordialItem {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, _: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         #[cfg(all(debug_assertions, feature = "stresstest"))]{
             use crate::general_tick;
 

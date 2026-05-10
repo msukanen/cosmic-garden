@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use dicebag::InclusiveRandomRange;
 
-use crate::{r#const::SIZE_BALANCE, item::{container::storage::StorageSpace, weapon::WeaponSize}, traits::{TickMeaning, Tickable}, util::approx::ApproxI32};
+use crate::{r#const::SIZE_BALANCE, item::{container::storage::StorageSpace, weapon::WeaponSize}, room::environ::{SpecialEnvironment, Terrain}, traits::{TickMeaning, Tickable}, util::approx::ApproxI32};
 
 pub const MAX_STAT_VALUE: StatValue = 1000.0;
 // TODO: convert raw TICKS_BETWEEN_DRAIN into some runtime calibrateable type.
@@ -14,6 +14,7 @@ pub const TICKS_BETWEEN_DRAIN: StatValue = 10 as StatValue;
 const UNC_THRESHOLD: StatValue = 1.0;//    HP 1
 pub const DED_THRESHOLD: StatValue = -10.0;//  HP -10
 const SMR_THRESHOLD: StatValue = -100.0;// HP -100
+const DRAIN_EPSILON: StatValue = 0.001;
 
 /// Various [Stat] related error states.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -111,11 +112,11 @@ pub enum Stat {
     /// Stamina.
     SN { curr: StatValue, max: StatValue, drain: StatValue },
     /// Braininess, IQ, etc.
-    Brn { curr: StatValue, max: StatValue },
+    Brn { curr: StatValue, max: StatValue, env_bonus: StatValue },
     /// Strength.
-    Str { curr: StatValue, max: StatValue },
+    Str { curr: StatValue, max: StatValue, env_bonus: StatValue },
     /// Nimbleness, dexterity, etc.
-    Nim { curr: StatValue, max: StatValue },
+    Nim { curr: StatValue, max: StatValue, env_bonus: StatValue },
     /// Reputation. Rep doesn't have max value, but it does clamp to -100 at bottom range.
     Rep { curr: StatValue },
 }
@@ -123,10 +124,10 @@ pub enum Stat {
 impl Stat {
     pub fn new(typ: StatType) -> Self {
         match typ {
-            StatType::Brn => Self::Brn { curr: 100.0, max: 100.0 },
+            StatType::Brn => Self::Brn { curr: 100.0, max: 100.0, env_bonus: 0.0 },
             StatType::HP  => Self::HP { curr: 100.0, max: 100.0 },
-            StatType::Nim => Self::Nim { curr: 100.0, max: 100.0 },
-            StatType::Str => Self::Str { curr: 100.0, max: 100.0 },
+            StatType::Nim => Self::Nim { curr: 100.0, max: 100.0, env_bonus: 0.0 },
+            StatType::Str => Self::Str { curr: 100.0, max: 100.0, env_bonus: 0.0 },
             StatType::Rep => Self::Rep { curr: 100.0 },
             StatType::MP  => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
             StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0 },
@@ -356,16 +357,16 @@ impl Display for Stat {
         match self {
             // HP: (12/34)
             Self::HP { curr, max } => write!(f, "HP: ({:.0}/{:.0})", curr, max),
-            Self::Brn { curr, max } => write!(f, "BRN: ({:.0}/{:.0})", curr, max),
-            Self::Nim { curr, max } => write!(f, "NIM: ({:.0}/{:.0})", curr, max),
-            Self::Str { curr, max } => write!(f, "STR: ({:.0}/{:.0})", curr, max),
+            Self::Brn { curr, max,.. } => write!(f, "BRN: ({:.0}/{:.0})", curr, max),
+            Self::Nim { curr, max,.. } => write!(f, "NIM: ({:.0}/{:.0})", curr, max),
+            Self::Str { curr, max,.. } => write!(f, "STR: ({:.0}/{:.0})", curr, max),
 
             // REP: (+100.0)
             Self::Rep { curr } => write!(f, "REP: ({:+.1})", curr),
             
             // MP: (12/34)[-1.1]
             // MP: (12/34)
-            Self::MP { curr, max, drain } => if *drain != 0.0 {
+            Self::MP { curr, max, drain } => if drain.abs() > DRAIN_EPSILON {
                 write!(f, "MP: ({:.0}/{:.0})[{:+.1}/t]", curr, max, drain)
             } else {
                 write!(f, "MP: ({:.0}/{:.0})", curr, max)
@@ -373,7 +374,7 @@ impl Display for Stat {
 
             // SN: (12/34)[-1.1]
             // SN: (12/34)
-            Self::SN { curr, max, drain } => if *drain != 0.0 {
+            Self::SN { curr, max, drain } => if drain.abs() > DRAIN_EPSILON {
                 write!(f, "SN: ({:.0}/{:.0})[{:+.1}/t]", curr, max, drain)
             } else {
                 write!(f, "SN: ({:.0}/{:.0})", curr, max)
@@ -397,7 +398,7 @@ impl Display for Stat {
 #[async_trait]
 impl Tickable for Stat {
     // NOTE stat ticks don't have global effects…
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         let Ok(drain) = self.drain() else {
             // no drain, nothing to tick
             return None;
@@ -418,7 +419,7 @@ impl Tickable for Stat {
 
 impl PartialEq<StatValue> for Stat {
     fn eq(&self, other: &StatValue) -> bool {
-        (self.current() - other).abs() < 0.001
+        (self.current() - other).abs() < DRAIN_EPSILON
     }
 }
 

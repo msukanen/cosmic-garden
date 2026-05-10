@@ -407,7 +407,7 @@ impl Room {
         for p_weak in self.who.values() {
             if let Some(p_arc) = p_weak.upgrade() {
                 if let Ok(mut p) = p_arc.try_write() {
-                    _ = p.tick();
+                    _ = p.tick(self.special_environment, self.terrain);
                 }
             }
         }
@@ -415,16 +415,18 @@ impl Room {
         for e in self.entities.values() {
             let sem_clone = Arc::clone(&sem);
             let e_clone = e.clone();
+            let r_env = self.special_environment;
+            let r_ter = self.terrain.clone();
             join_set.spawn(async move {
                 let _permit = sem_clone.acquire_owned().await.unwrap();
                 if let Ok(mut e) = e_clone.try_write() {
-                    _ = e.tick();
+                    _ = e.tick(r_env, r_ter);
                 }
             });
         }
 
         // no reaction yet to "positive" tick(s)
-        let _ = self.contents.tick();
+        let _ = self.contents.tick(self.special_environment, self.terrain);
         #[cfg(all(debug_assertions,feature = "stresstest"))]{
             log::debug!("Room '{}' ticked.", self.id);
         }

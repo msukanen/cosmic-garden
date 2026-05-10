@@ -12,7 +12,7 @@ use crate::{
         Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
     },
     mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}},
-    room::RoomWeak,
+    room::{RoomWeak, environ::{SpecialEnvironment, Terrain}},
     string::UNNAMED,
     thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels},
     traits::{TickMeaning, Tickable}
@@ -269,13 +269,13 @@ impl Damager for Entity {
 
 #[async_trait]
 impl Tickable for Entity {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
-        self.hp_mut().tick();
-        self.mp_mut().tick();
-        self.sn_mut().tick();
-        self.san_mut().tick();
+    fn tick(&mut self, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+        self.hp_mut().tick(room_env, room_terrain);
+        self.mp_mut().tick(room_env, room_terrain);
+        self.sn_mut().tick(room_env, room_terrain);
+        self.san_mut().tick(room_env, room_terrain);
         // TODO self-effects of inv
-        self.inventory.tick()
+        self.inventory.tick(room_env, room_terrain)
     }
 }
 
@@ -316,7 +316,7 @@ mod entity_tests {
             e.mp_mut().set_curr(next_val);
             while next_val > 0.0 {
                 next_val -= 1.0;
-                if e.tick().is_none() {
+                if e.tick(0,None).is_none() {
                     panic!("No tick?!");
                 }
                 assert_eq!(next_val, e.mp());

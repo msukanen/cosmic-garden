@@ -2,11 +2,11 @@
 
 use async_trait::async_trait;
 
-use crate::item::consumable::EffectType;
+use crate::{item::consumable::EffectType, room::environ::{SpecialEnvironment, Terrain}};
 
 #[async_trait]
 pub trait Tickable {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>>;
+    fn tick(&mut self, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>>;
 }
 
 /// - "What it means, what it means?"
@@ -16,7 +16,7 @@ pub trait Tickable {
 pub enum TickMeaning {
     General,
     AffectPossessor { kind: EffectType },
-    EnvironmentEffect,// TODO environment effects
+    EnvironmentEffect,// TODO bubble up environment effects
 }
 
 #[macro_export]

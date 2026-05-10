@@ -5,7 +5,7 @@ use std::collections::HashMap;
 use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 
-use crate::{general_tick, identity::uniq::Uuid, item::consumable::EffectType, traits::{TickMeaning, Tickable}};
+use crate::{general_tick, identity::uniq::Uuid, item::consumable::EffectType, room::environ::{SpecialEnvironment, Terrain}, traits::{TickMeaning, Tickable}};
 
 /// All sorts of affects from good to bad to something else…
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -25,7 +25,7 @@ impl Affect {
 
 #[async_trait]
 impl Tickable for Affect {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         match self {
             // Decays:
             Self::Effect { remaining: Some(1), kind } => {
@@ -167,34 +167,34 @@ mod affect_tests {
         assert!(!r.dormant());
         assert!(!r.expired());
         for _ in 0..2 {
-            r.tick();
+            r.tick(0,None);
             log::debug!(">   {r:?}");
             assert!(!r.dormant());
             assert!(!r.expired());
         }
-        r.tick();
+        r.tick(0,None);
         log::debug!("r = {r:?}");
         assert!(r.dormant());
         assert!(!r.expired());
         assert!(matches!(r, Affect::DelayedEffect {..}));
         for _ in 0..2 {
-            r.tick();
+            r.tick(0,None);
             log::debug!(">   {r:?}");
             assert_eq!(true, r.dormant());
             assert_eq!(false, r.expired());
         }
-        r.tick();
+        r.tick(0,None);
         log::debug!("r = {r:?}");
         assert!(!r.dormant());
         assert!(!r.expired());
         assert!(matches!(r, Affect::Effect {..}));
         for _ in 0..2 {
-            r.tick();
+            r.tick(0,None);
             log::debug!(">   {r:?}");
             assert_eq!(false, r.dormant());
             assert_eq!(false, r.expired());
         }
-        r.tick();
+        r.tick(0,None);
         assert!(matches!(r, Affect::Expired));
         assert_eq!(true, r.dormant());
         assert_eq!(true, r.expired());

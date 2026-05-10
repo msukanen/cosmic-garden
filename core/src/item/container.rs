@@ -7,7 +7,7 @@ use cosmic_garden_pm::{IdentityMut, VolumeMut, OwnedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, Volumed, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED}, traits::{Reflector, TickMeaning, Tickable}};
+use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, Volumed, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, room::environ::{SpecialEnvironment, Terrain}, string::{Describable, DescribableMut, UNNAMED}, traits::{Reflector, TickMeaning, Tickable}};
 
 pub mod storage; pub use storage::StorageSpace;
 pub mod variants; pub use variants::bulk_transfer;
@@ -348,10 +348,10 @@ impl<'a> IntoIterator for &'a ContainerSpec {
 
 #[async_trait]
 impl Tickable for ContainerSpec {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         let mut ticked = vec![];
         for i in self.contents.values_mut() {
-            if let Some(t) = i.tick() {
+            if let Some(t) = i.tick(room_env, None) {
                 ticked.extend(t);
             }
         }

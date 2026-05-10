@@ -7,7 +7,7 @@ use cosmic_garden_pm::{CombatantMut, Factioned, IdentityMut, Mob};
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
-use crate::{combat::{Combatant, CombatantMut, DamageType, Damager}, error::CgError, help::HelpPage, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::Mob}, room::{Room, RoomArc, RoomWeak}, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
+use crate::{combat::{Combatant, CombatantMut, DamageType, Damager}, error::CgError, help::HelpPage, identity::IdentityQuery, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::Mob}, room::{Room, RoomArc, RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ActivityType {
@@ -332,11 +332,11 @@ impl Accessor for Player {
 
 #[async_trait]
 impl Tickable for Player {
-    fn tick(&mut self) -> Option<Vec<TickMeaning>> {
-        self.hp_mut().tick();
-        self.mp_mut().tick();
-        self.sn_mut().tick();
-        self.san_mut().tick();
+    fn tick(&mut self, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+        self.hp_mut().tick(room_env, room_terrain);
+        self.mp_mut().tick(room_env, room_terrain);
+        self.sn_mut().tick(room_env, room_terrain);
+        self.san_mut().tick(room_env, room_terrain);
         let old_affects = std::mem::take(&mut self.affects);
         let mut survivors = HashMap::new();
         for (id, mut affect) in old_affects {
@@ -348,7 +348,7 @@ impl Tickable for Player {
                 }
             }
             let hc = matches!(affect, Affect::HardcorePending { .. });
-            affect.tick();
+            affect.tick(room_env, room_terrain);
             if affect.expired() && hc {
                 if let Some(false) = self.hardcore {
                     self.hardcore = None;
@@ -362,22 +362,23 @@ impl Tickable for Player {
         self.affects = survivors;
         
         // inventory ticks?
-        let bubbles = if let Some(mut eff) = self.inventory.tick() {
-            eff.retain(|e| {
-                match e {
-                    // we care only about direct possessor effects:
-                    TickMeaning::AffectPossessor { kind } => {
-                        self.apply_effect(kind.clone());
-                        false
-                    },
-                    TickMeaning::EnvironmentEffect => true,
-                    _ => false
-                }
-            });
-            if eff.is_empty() { None } else { eff.into() }
-        } else {
-            None
-        };
+        let bubbles =
+            if let Some(mut eff)= self.inventory.tick(room_env, room_terrain) {
+                eff.retain(|e| {
+                    match e {
+                        // we care only about direct possessor effects:
+                        TickMeaning::AffectPossessor { kind } => {
+                            self.apply_effect(kind.clone());
+                            false
+                        },
+                        TickMeaning::EnvironmentEffect => true,
+                        _ => false
+                    }
+                });
+                if eff.is_empty() { None } else { eff.into() }
+            } else {
+                None
+            };
 
         bubbles
     }
