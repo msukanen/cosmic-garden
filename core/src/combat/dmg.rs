@@ -12,6 +12,7 @@ pub enum DamageType {
     Crush,
     Cut,
     Impale,
+    Suffocate,
     Thermal(ThermalType),
 }
 
@@ -22,6 +23,7 @@ impl Display for DamageType {
             Self::Crush => "crush",
             Self::Cut => "cut",
             Self::Impale => "impale",
+            Self::Suffocate => "suffocate",
             Self::Thermal(t) => return write!(f, "thermal ({})", match t {
                 ThermalType::Cold       |
                 ThermalType::DeepFreeze |
