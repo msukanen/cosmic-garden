@@ -146,7 +146,7 @@ pub fn format_color<S: Display>(input: S) -> String {
                             style_stack.push(new_style);
                         }
                     }
-                    ,_=> log::warn!("Unknown tag <{}{actual_tag}>", if is_closing {"/"} else {""})
+                    ,_=> ()//log::warn!("Unknown tag <{}{actual_tag}>", if is_closing {"/"} else {""})
                 }
             }
 
