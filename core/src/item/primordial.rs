@@ -3,10 +3,10 @@
 use std::{collections::HashMap, fmt::Display};
 
 use async_trait::async_trait;
-use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
+use cosmic_garden_pm::{DescribableMut, IdentityMut, VolumeMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, Itemized, StorageError, StorageQueryError, consumable::{ConsumableMatter, EffectType}, container::{ContainerSpec, MaxSpaceSpec, StorageSpace, storage::{Storage, StorageMut}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, mob::StatValue, string::Describable, traits::{Reflector, TickMeaning, Tickable}};
+use crate::{combat::DamageType, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, StorageError, StorageQueryError, Volumed, consumable::{ConsumableMatter, EffectType}, container::{ContainerSpec, MaxSpaceSpec, StorageSpace, storage::{Storage, StorageMut}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, mob::StatValue, string::Describable, traits::{Reflector, TickMeaning, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -74,7 +74,7 @@ impl PotentialItemType {
 /// Entirely "primordial soup" for creating anything and everything.
 /// 
 /// What anything becomes, depends on what the `potential` is set upon 'weave'.
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, DescribableMut, OwnedMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, VolumeMut, DescribableMut, OwnedMut)]
 pub struct PrimordialItem {
     pub id: String,
     pub title: String,
@@ -97,6 +97,7 @@ pub struct PrimordialItem {
     // Item::Weapon -specific:
     pub weapon_size: Option<WeaponSize>,
     pub base_dmg: Option<StatValue>,
+    pub dmg_type: Option<DamageType>,
 }
 
 impl Default for PrimordialItem {
@@ -116,6 +117,7 @@ impl Default for PrimordialItem {
             matter_state: None,
             weapon_size: None,
             base_dmg: None,
+            dmg_type: None,
         }
     }
 }
@@ -163,6 +165,7 @@ impl From<&ConsumableMatter> for PrimordialItem {
         owner: matter.owner.clone(),
         weapon_size: None,
         base_dmg: None,
+        dmg_type: None,
     }}
 }
 impl From<ConsumableMatter> for PrimordialItem {
@@ -186,7 +189,8 @@ impl From<&WeaponSpec> for PrimordialItem {
         rots_in_ticks: None,
         matter_state: None,
         weapon_size: value.weapon_size.into(),
-        base_dmg: value.base_dmg.into()
+        base_dmg: value.base_dmg.into(),
+        dmg_type: value.dmg_type.into(),
     }}
 }
 impl From<WeaponSpec> for PrimordialItem {
@@ -302,6 +306,11 @@ impl Metamorphize for PrimordialItem {
                             log::warn!("Builder: weapon '{}' lacks base_dmg. Going \"safe\" with 0.0.", self.id);
                             0.0
                         }),
+                        dmg_type: self.dmg_type.unwrap_or_else(|| {
+                            let dmg_type = DamageType::Crush;
+                            log::warn!("Builder: weapon '{}' lacks dmg_type. Going \"safe\" with {dmg_type}.", self.id);
+                            dmg_type
+                        })
                     }),
                 
                 PotentialItemType::Key |

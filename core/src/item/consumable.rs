@@ -2,7 +2,7 @@
 use std::{collections::HashMap, fmt::Display};
 
 use async_trait::async_trait;
-use cosmic_garden_pm::{DescribableMut, IdentityMut, ItemizedMut, OwnedMut};
+use cosmic_garden_pm::{DescribableMut, IdentityMut, VolumeMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
 use crate::{identity::uniq::Uuid, item::{container::StorageSpace, matter::{Matter, MatterState}, ownership::Owner}, mob::{StatType, StatValue, affect::{Affect, Affector}}, traits::{Reflector, TickMeaning, Tickable}};
@@ -40,7 +40,7 @@ impl Display for EffectType {
 }
 
 /// Consumable matter. Be it edible stuff or from McDonalds…
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, DescribableMut, OwnedMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, VolumeMut, DescribableMut, OwnedMut)]
 pub struct ConsumableMatter {
     pub(crate) id: String,
     pub(crate) title: String,

@@ -3,11 +3,11 @@
 use std::{cmp::Ordering, collections::HashMap};
 
 use async_trait::async_trait;
-use cosmic_garden_pm::{IdentityMut, ItemizedMut, OwnedMut};
+use cosmic_garden_pm::{IdentityMut, VolumeMut, OwnedMut};
 use lazy_static::lazy_static;
 use serde::{Deserialize, Serialize};
 
-use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, Itemized, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED}, traits::{Reflector, TickMeaning, Tickable}};
+use crate::{r#const::{HUGE_ITEM, SMALL_ITEM, TINY_ITEM}, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, Volumed, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::{ContainerVariant, CorpseSpec}}, ownership::Owner}, string::{Describable, DescribableMut, UNNAMED}, traits::{Reflector, TickMeaning, Tickable}};
 
 pub mod storage; pub use storage::StorageSpace;
 pub mod variants; pub use variants::bulk_transfer;
@@ -99,7 +99,7 @@ lazy_static! {
 }
 
 /// Container specs dwell here…
-#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, ItemizedMut, OwnedMut)]
+#[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, VolumeMut, OwnedMut)]
 pub struct ContainerSpec {
     pub(super) id: String,
     #[identity(title)]

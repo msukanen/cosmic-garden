@@ -1,10 +1,11 @@
 //! Items dwell here…
 
 use async_trait::async_trait;
-use cosmic_garden_pm::{IdentityMut, Itemized, OwnedMut};
+use cosmic_garden_pm::{IdentityMut, Volumed, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::{IdentityQuery, uniq::Uuid}, item::{consumable::ConsumableMatter, container::{StorageSpace, storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut}, traits::{Reflector, TickMeaning, Tickable}};
+use crate::{identity::{IdentityQuery, uniq::Uuid}, item::{consumable::ConsumableMatter, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError}, variants::ContainerVariant}, ownership::Owner, primordial::{Metamorphize, PrimordialItem}, weapon::WeaponSpec}, string::{Describable, DescribableMut}, traits::{Reflector, TickMeaning, Tickable}, util::{Volumed, VolumeMut}};
+pub use container::StorageSpace;
 
 pub mod blueprint; pub use blueprint::BlueprintLibrary;
 pub mod consumable;
@@ -16,14 +17,6 @@ pub mod primordial;
 pub mod tool;
 pub mod weapon;
 
-pub trait Itemized {
-    fn size(&self) -> StorageSpace;
-}
-
-pub trait ItemizedMut {
-    fn set_size(&mut self, sz: StorageSpace) -> bool;
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, OwnedMut)]
 pub struct TemporaryStructToAppeaseAnalyzerDuringWIP {
     pub(crate) id:String,
@@ -31,12 +24,12 @@ pub struct TemporaryStructToAppeaseAnalyzerDuringWIP {
     pub(crate) owner:Owner,
 }
 
-impl Itemized for TemporaryStructToAppeaseAnalyzerDuringWIP {
+impl Volumed for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn size(&self) -> StorageSpace {
         1
     }
 }
-impl ItemizedMut for TemporaryStructToAppeaseAnalyzerDuringWIP {
+impl VolumeMut for TemporaryStructToAppeaseAnalyzerDuringWIP {
     fn set_size(&mut self, _: StorageSpace) -> bool {
         false
     }
@@ -254,7 +247,7 @@ impl DescribableMut for Item {
     }
 }
 
-impl Itemized for Item {
+impl Volumed for Item {
     fn size(&self) -> StorageSpace {
         match self {
             Self::Consumable(v) => v.size(),
@@ -268,7 +261,7 @@ impl Itemized for Item {
     }
 }
 
-impl ItemizedMut for Item {
+impl VolumeMut for Item {
     fn set_size(&mut self, sz: StorageSpace) -> bool {
         match self {
             Self::Consumable(v) => v.set_size(sz),

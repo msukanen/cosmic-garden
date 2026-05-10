@@ -241,14 +241,14 @@ pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
     })
 }
 
-/// Generate r/o [Itemized]'s token stream.
-fn generate_itemized_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
+/// Generate r/o [Volumed]'s token stream.
+fn generate_volumed_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
         Data::Enum(data) => {
             let sizes = gen_container_match(&data, &format_ident!("size"), 0);
             quote! {
-                impl crate::item::Itemized for #name {
+                impl crate::util::Volumed for #name {
                     fn size(&self) -> crate::item::StorageSpace { match self {#(#sizes),*}}
                 }
             }
@@ -257,7 +257,7 @@ fn generate_itemized_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
         Data::Struct(data) => {
             let size = get_tagged_ident!(data, "measurement", "size");
             quote! {
-                impl crate::item::Itemized for #name {
+                impl crate::util::Volumed for #name {
                     fn size(&self) -> crate::item::StorageSpace { self.#size }
                 }
             }
@@ -267,26 +267,26 @@ fn generate_itemized_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     }
 }
 
-/// Query [Itemized] derive.
-#[proc_macro_derive(Itemized, attributes(measurement))]
-pub fn itemized_derive(input: TokenStream) -> TokenStream {
+/// Query [Volumed] derive.
+#[proc_macro_derive(Volumed, attributes(measurement))]
+pub fn volumed_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
-    TokenStream::from(generate_itemized_impl(&input))
+    TokenStream::from(generate_volumed_impl(&input))
 }
 
-/// Mutating [ItemizedMut] and [Itemized] in one.
-#[proc_macro_derive(ItemizedMut, attributes(measurement))]
-pub fn itemized_mut_derive(input: TokenStream) -> TokenStream {
+/// Mutating [VolumeMut] and [Volumed] in one.
+#[proc_macro_derive(VolumeMut, attributes(measurement))]
+pub fn volume_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
     let name = &input.ident;
-    let base_impl = generate_itemized_impl(&input);
+    let base_impl = generate_volumed_impl(&input);
     let mut_impl = match &input.data
     {
         Data::Enum(data) => {
             let set_sizes = gen_container_match(&data, &format_ident!("set_size"), 1);
 
             quote! {
-                impl crate::item::ItemizedMut for #name {
+                impl crate::util::VolumeMut for #name {
                     fn set_size(&mut self, a: crate::item::StorageSpace) -> bool { match self {#(#set_sizes),*}}
                 }
             }
@@ -295,7 +295,7 @@ pub fn itemized_mut_derive(input: TokenStream) -> TokenStream {
         Data::Struct(data) => {
             let size = get_tagged_ident!(data, "measurement", "size");
             quote! {
-                impl crate::item::ItemizedMut for #name {
+                impl crate::util::VolumeMut for #name {
                     fn set_size(&mut self, a: crate::item::StorageSpace) -> bool { self.#size = a; true }
                 }
             }

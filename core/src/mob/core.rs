@@ -8,10 +8,8 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 
 use crate::{
-    combat::{Combatant, CombatantMut, Damager}, error::CgError, identity::{IdentityQuery, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
-        Item,
-        container::variants::{ContainerVariant, ContainerVariantType},
-        weapon::{WeaponSize, str_based_dmg_mul}
+    combat::{Combatant, CombatantMut, DamageType, Damager}, error::CgError, identity::{IdentityQuery, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
+        Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
     },
     mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}},
     room::RoomWeak,
@@ -44,6 +42,20 @@ impl EntitySize {
             3 => 0.3, // ridonkylous, tiny pixie with a huge polearm
             4 => 0.1, // …near impossible
             _ => 0.05 // …quite impossible
+        }
+    }
+}
+
+impl From<&EntitySize> for StorageSpace {
+    fn from(value: &EntitySize) -> Self {
+        match value {
+            EntitySize::Gargantuan => 1_000,
+            EntitySize::Huge => 500,
+            EntitySize::Large => 200,
+            EntitySize::Medium => 100,
+            EntitySize::Small => 50,
+            EntitySize::Tiny => 25,
+            EntitySize::VeryTiny => 10,
         }
     }
 }
@@ -247,6 +259,11 @@ impl Damager for Entity {
     fn dmg(&self) -> StatValue {
         let Some(Item::Weapon(w)) = &self.equipped_weapon else { return 1.0 * self.str() / 100.0 };
         w.base_dmg * str_based_dmg_mul(self.str().current(), true) * (self.size.rel_vs_weapon(&w.weapon_size))
+    }
+
+    fn dmg_type(&self) -> crate::combat::DamageType {
+        let Some(Item::Weapon(w)) = &self.equipped_weapon else { return DamageType::Crush; };
+        w.dmg_type()
     }
 }
 

@@ -8,7 +8,7 @@ use crate::{
     r#const::SIZE_BALANCE,
     identity::uniq::Uuid,
     item::{
-        Item, Itemized, ItemizedMut,
+        Item, Volumed, VolumeMut,
         container::{
             ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageMut, StorageSpace
         },
@@ -153,7 +153,7 @@ impl Reflector for ContainerVariant {
     }
 }
 
-impl Itemized for ContainerVariant {
+impl Volumed for ContainerVariant {
     fn size(&self) -> StorageSpace {
         match self {
             Self::PlayerInventory(spec) |
@@ -166,7 +166,7 @@ impl Itemized for ContainerVariant {
     }
 }
 
-impl ItemizedMut for ContainerVariant {
+impl VolumeMut for ContainerVariant {
     fn set_size(&mut self, sz: StorageSpace) -> bool {
         match self {
             Self::PlayerInventory(_) |

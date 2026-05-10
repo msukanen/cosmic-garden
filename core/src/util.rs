@@ -8,3 +8,4 @@ pub mod ed;
 pub(crate) mod escape_hatch;
 //pub mod intentqueue; pub use intentqueue::*;
 pub mod translocate;
+pub mod volume; pub use volume::{Volumed, VolumeMut};
