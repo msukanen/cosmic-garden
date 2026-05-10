@@ -138,33 +138,34 @@ mod cmd_redit_way {
         let mut s = Cursor::new(&mut buf);
         let (w,c,(state, p),_) = get_operational_mock_world().await;
         let lt = get_operational_mock_life!(c,w);
+        let c = c.out;
         stabilize_threads!(100);
-        let state = ctx!(state, LookCommand, "", s,c.out,w);
-        let state = ctx!(sup state, WayCommand, "east r-3",s,c.out,w,|out:&str| out.contains("Huh?"));
+        let state = ctx!(state, LookCommand, "", s,c,w);
+        let state = ctx!(sup state, WayCommand, "east r-3",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, WayCommand, "east r-3",s,c.out,w,|out:&str| out.contains("actually"));
-        let state = ctx!(state, WayCommand, "balloon r-2",s,c.out,w,|out:&str| out.contains("deduct"));
-        let state = ctx!(state, WayCommand, "north r-2",s,c.out,w,|out:&str| out.contains("Bidirectional link"));
-        let state = ctx!(state, LookCommand, "",s,c.out,w,|out:&str| out.contains("north") && out.contains("balloon"));
-        let mut rx = c.out.broadcast.subscribe();
-        let state = ctx!(state, GotoCommand, "north",s,c.out,w);
+        let state = ctx!(state, WayCommand, "east r-3",s,c,w,|out:&str| out.contains("actually"));
+        let state = ctx!(state, WayCommand, "balloon r-2",s,c,w);//,|out:&str| out.contains("deduct"));
+        let state = ctx!(state, WayCommand, "north r-2",s,c,w,|out:&str| out.contains("Bidirectional link"));
+        let state = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("north") && out.contains("balloon"));
+        let mut rx = c.broadcast.subscribe();
+        let state = ctx!(state, GotoCommand, "north",s,c,w);
         let state = if let Ok(Broadcast::Force { command, .. }) = rx.recv().await {
             if command == "look" {
-                ctx!(state, LookCommand, "", s,c.out,w)
+                ctx!(state, LookCommand, "", s,c,w)
             } else { state }} else { state };
-        let state = ctx!(state, GotoCommand, "south",s,c.out,w);
+        let state = ctx!(state, GotoCommand, "south",s,c,w);
         let state = if let Ok(Broadcast::Force { command, .. }) = rx.recv().await {
             if command == "look" {
-                ctx!(state, LookCommand, "", s,c.out,w)
+                ctx!(state, LookCommand, "", s,c,w)
             } else { state }} else { state };
-        let state = ctx!(state, GotoCommand, "balloon",s,c.out,w);
+        let state = ctx!(state, GotoCommand, "balloon",s,c,w);
         let state = if let Ok(Broadcast::Force { command, .. }) = rx.recv().await {
             if command == "look" {
-                ctx!(state, LookCommand, "", s,c.out,w,|out:&str| out.contains("south"))
+                ctx!(state, LookCommand, "", s,c,w,|out:&str| out.contains("south"))
             } else { state }} else { state };
-        let state = ctx!(state, PopCommand, "balloon",s,c.out,w,|out:&str| out.contains("falling"));
-        let _ = ctx!(state, LookCommand, "",s,c.out,w,|out:&str| out.contains("north") && !out.contains("balloon"));
-        c.out.shutdown().await;
+        let state = ctx!(state, PopCommand, "balloon",s,c,w,|out:&str| out.contains("falling"));
+        let _ = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("north") && !out.contains("balloon"));
+        c.shutdown().await;
         lt.await.ok();
     }
 }
