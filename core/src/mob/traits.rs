@@ -6,7 +6,6 @@ use crate::{combat::{Combatant, CombatantMut}, identity::IdentityQuery, item::we
 pub trait Mob : IdentityQuery + Combatant {
     /// Get maximum weapon size the combatant can wield.
     fn max_weapon_size(&self) -> WeaponSize;
-    fn size(&self) -> EntitySize;
 }
 
 /// Mutable variant of [Mob].

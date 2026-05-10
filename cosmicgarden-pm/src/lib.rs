@@ -182,23 +182,16 @@ fn generate_mob_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
 
-    let mwsz = maybe_field!(data, "max_weapon_size");
-    let entsz = maybe_field!(data, "size");
-    
-    if mwsz.is_some() && entsz.is_some() {
-        let max_weapon_size = mwsz.unwrap();
-        let ent_size = entsz.unwrap();
+    if let Some(mwsz) = maybe_field!(data, "max_weapon_size") {
         quote! {
             impl crate::mob::traits::Mob for #name {
-                fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { self.#max_weapon_size }
-                fn size(&self) -> crate::mob::core::EntitySize { self.#ent_size }
+                fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { self.#mwsz }
             }
         }
     } else {
         quote! {
             impl crate::mob::traits::Mob for #name {
                 fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { crate::item::weapon::WeaponSize::Large }
-                fn size(&self) -> crate::mob::core::EntitySize { crate::mob::core::EntitySize::Medium }
             }
         }
     }
@@ -660,7 +653,11 @@ fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let str_field = req_field!(data, "strn");
     let nim_field = req_field!(data, "nim");
     let loc_field = req_field!(data, "location");
-
+    let sz_content = if let Some(sz_field) = maybe_field!(data, "size") {
+        quote! { self.#sz_field }
+    } else {
+        quote! { crate::mob::core::EntitySize::Medium }
+    };
     quote! {
         impl crate::combat::Combatant for #name {
             fn hp(&self) -> &crate::mob::stat::Stat { &self.#hp_field }
@@ -671,6 +668,7 @@ fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
             fn brn(&self) -> &crate::mob::stat::Stat { &self.#brn_field }
             fn str(&self) -> &crate::mob::stat::Stat { &self.#str_field }
             fn location(&self) -> std::sync::Weak<tokio::sync::RwLock<crate::room::Room>> { self.#loc_field.clone() }
+            fn size(&self) -> crate::mob::core::EntitySize { #sz_content }
         }
     }
 }

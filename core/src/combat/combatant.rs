@@ -1,9 +1,9 @@
 //! "Combatant" traits.
 
-use crate::{identity::IdentityQuery, item::container::variants::ContainerVariant, mob::{Stat, StatError, StatValue}, room::RoomWeak};
+use crate::{combat::Damager, identity::IdentityQuery, item::container::variants::ContainerVariant, mob::{Stat, StatError, StatValue, core::EntitySize}, room::RoomWeak};
 
 /// A trait for all "combatants".
-pub trait Combatant: IdentityQuery + super::Damager {
+pub trait Combatant: IdentityQuery + Damager {
     /// Get current HP (health points)
     fn hp<'a>(&'a self) -> &'a Stat;
     /// Get current MP (mental points)
@@ -39,6 +39,7 @@ pub trait Combatant: IdentityQuery + super::Damager {
     /// Is the [Combatant] dead?
     fn is_dead(&self) -> bool { self.hp().is_dead().ok().unwrap() }
     fn location(&self) -> RoomWeak;
+    fn size(&self) -> EntitySize;
 }
 
 /// Mutable trait for all "combatants".
