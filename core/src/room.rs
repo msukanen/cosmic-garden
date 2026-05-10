@@ -6,15 +6,10 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::locking::{Exit, ExitState}, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::{environ::{MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SpecialEnvironment, Terrain}, locking::{Exit, ExitState}}, traits::Tickable, util::direction::Direction, world::World};
 
+pub mod environ;
 pub mod locking;
-
-#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
-pub enum MemoryFog {
-    Jail,
-    Mystic,
-}
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -99,7 +94,12 @@ pub struct Room {
     pub entities: HashMap<usize, EntityArc>,
 
     #[serde(default)]
-    pub memory_fog: Option<MemoryFog>,
+    pub special_environment: SpecialEnvironment,
+    #[serde(default)]
+    memory_fog: Option<MemoryFogType>,
+
+    #[serde(default)]
+    pub terrain: Option<Terrain>,
 }
 /// Room arc type.
 pub type RoomArc = Arc<RwLock<Room>>;
@@ -225,7 +225,9 @@ impl Room {
                 raw_exits: HashMap::new(),
                 contents: room_inventory(),
                 entities: HashMap::new(),
+                special_environment: SPECIAL_ENVIRONMENT_DEFAULT,
                 memory_fog: None,
+                terrain: None,
             }
             }
         };
@@ -285,7 +287,9 @@ impl Room {
             who: HashMap::new(),
             contents: room_inventory(),
             entities: HashMap::new(),
+            special_environment: self.special_environment,
             memory_fog: self.memory_fog.clone(),
+            terrain: self.terrain.clone(),
         }
     }
 
@@ -296,7 +300,9 @@ impl Room {
         self.desc = source.desc;
         self.exits = source.exits;
         self.raw_exits = source.raw_exits;
+        self.special_environment = source.special_environment;
         self.memory_fog = source.memory_fog;
+        self.terrain = source.terrain;
     }
 
     /// Convenience function to try insert `item` directly into the [Room]'s contents.
@@ -340,13 +346,27 @@ impl Room {
     }
 
     /// Get the [Room]'s [memory fog][MemoryFog], if any.
-    pub fn memory_fog(&self) -> Option<MemoryFog> {
+    /// 
+    // NOTE: Although one of the many special environments,
+    //       MemoryFog "needs" a bit different treatment when
+    //       dealing with e.g. city jail exits.
+    pub fn memory_fog(&self) -> Option<MemoryFogType> {
         self.memory_fog.clone()
     }
 
     /// Check if we have an [Exit] at [`dir`][Direction].
     pub fn contains_exit(&self, dir: &Direction) -> bool {
         self.exits.contains_key(dir)
+    }
+
+    /// Get special env bitmask.
+    pub fn special_env_bitmask(&self) -> SpecialEnvironment {
+        self.special_environment
+    }
+
+    /// Set special env bit`mask`.
+    pub fn set_special_env_bitmask(&mut self, mask: SpecialEnvironment) {
+        self.special_environment = mask;
     }
 }
 
