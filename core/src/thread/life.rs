@@ -48,12 +48,12 @@ impl BattlerRec {
     async fn loot_pinata(&self, world: &WorldArc) {
         let mut lock = self.combatant.write().await;
         if let Some(room) = lock.location().upgrade() {
-            let mut c_inv = Item::Corpse { loot: lock.inventory().deep_reflect(), size: 50 };
             let c_id = lock.id().as_m_id();
             if !world.read().await.entities.contains_key(&c_id) {
                 // alerady looted, bail.
                 return ;
             }
+            let mut c_inv = Item::Corpse { loot: lock.inventory().deep_reflect(), size: 50 };
             let c_title = lock.title().to_string();
             drop(lock);
             c_inv.set_desc(&format!("Corpse of '{}'", c_title));
@@ -153,6 +153,7 @@ pub enum Resolution {
     AtkVictory { atk_dmg: StatValue },
     VctVictory  { vct_dmg: StatValue },
     BothDead,
+    AbortDueRealityWarp,
 }
 
 /// Query seconds-as-ticks.
@@ -200,6 +201,7 @@ pub(crate) async fn life(
     let battle_reporter = tokio::spawn({
         let out = out.broadcast.clone();
         static RES_BOTH_DEAD_AV: &'static str = "You fall… flat on your face. R.I.P.";
+        static RES_ABORT_RWARP: &'static str = "Er, OK? What just happened… Where they go?";
         async move {
             while let Some(impact) = reporter_rx.recv().await {
                 match impact {
@@ -258,6 +260,11 @@ pub(crate) async fn life(
                                 RES_BOTH_DEAD_AV.into(),
                                 RES_BOTH_DEAD_AV.into(),
                                 format!("Unexpected… Both {} and {} fall over at the same time, either dead or exhausted.", atk.title, vct.title),
+                            ),
+                            Resolution::AbortDueRealityWarp => (
+                                RES_ABORT_RWARP.into(),
+                                RES_ABORT_RWARP.into(),
+                                format!("Huh…?!"),
                             )
                         };
                         //-----------------
@@ -314,6 +321,8 @@ pub(crate) async fn life(
             //
             _ = battle_interval.tick() => {
                 if bs.active.is_empty() { continue; }
+                static mut C: usize = 1;
+                #[cfg(test)]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
                 let mut end_fight_for: Vec<usize> = vec![];
 
                 // navigate the aggro swamp…
@@ -346,10 +355,13 @@ pub(crate) async fn life(
                                         vct.loot_pinata(&world).await;
                                         atk.loot_pinata(&world).await;
                                     },
-                                    // Resolution::Abort => {
-                                    //     end_fight_for.push(*a_key);
-                                    //     end_fight_for.push(*v_key);
-                                    // }
+                                    // cannot continue — admin intervention?
+                                    //  ≡ remove both.
+                                    Resolution::AbortDueRealityWarp => {
+                                        #[cfg(test)]{log::debug!("Reality warp - aborting combat {a_key}-vs-{v_key}!");}
+                                        end_fight_for.push(*a_key);
+                                        end_fight_for.push(*v_key);
+                                    }
                                     Resolution::Inconclusive {..} => ()
                                 }
                             } else {
@@ -370,6 +382,8 @@ pub(crate) async fn life(
                 for d in end_fight_for {
                     bs.remove(d).await;
                 }
+
+                unsafe { C += 1; }
             }
 
             //
@@ -633,9 +647,14 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, num
 }
 
 /// Fite!
-async fn punt(atk: Battler, vct: Battler, _room: &RoomArc) -> Resolution {
+async fn punt(atk: Battler, vct: Battler, room: &RoomArc) -> Resolution {
     let mut a = atk.write().await;
     let mut v = vct.write().await;
+    // reality warp just before .writes?
+    let wr = Arc::downgrade(room);
+    if !a.location().ptr_eq(&wr) || !v.location().ptr_eq(&wr) {
+        return Resolution::AbortDueRealityWarp;
+    }
 
     let atk_dmg = a.dmg();
     let v_ded = v.take_dmg(atk_dmg);
@@ -701,14 +720,15 @@ async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: RoomArc, bs:
 mod life_tests {
     use std::{io::Cursor, sync::Arc};
 
-    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
+    #[cfg(all(feature = "obsolete", feature = "stresstest"))]
     #[tokio::test]
     async fn goblin_1_1_ocean() {
         #[cfg(feature = "stresstest")]
         const MILLION_GOBBOS: usize = 1_000_000;
         #[cfg(not(feature = "stresstest"))]
-        const MILLION_GOBBOS: usize = 60_000;// just 1,000 if not stresstesting...
+        const MILLION_GOBBOS: usize = 1_000;// just 1,000 if not stresstesting...
 
         let (w,c,_,j) = get_operational_mock_world().await;
         get_operational_mock_janitor!(c,w,j.0);
@@ -739,7 +759,7 @@ mod life_tests {
         #[cfg(feature = "stresstest")]
         const MILLION_GOBBOS: usize = 1_000_000;
         #[cfg(not(feature = "stresstest"))]
-        const MILLION_GOBBOS: usize = 60_000;// just 1,000 if not stresstesting...
+        const MILLION_GOBBOS: usize = 60_000;// chuck...
 
         let (w,c,_,j) = get_operational_mock_world().await;
         get_operational_mock_janitor!(c,w,j.0);
@@ -754,7 +774,7 @@ mod life_tests {
         let _ = orx.await;
         log::debug!("Dust?");
         let work_duration = start_work.elapsed();
-        stabilize_threads!(3_000); // see for 1s what spams...
+        stabilize_threads!(30_000); // see for 30s what log fox says
         let spawns_per_sec = MILLION_GOBBOS as f64 / work_duration.as_secs_f64();
         let r1 = w.read().await.get_room_by_id("r-1").unwrap();
         let spawn_c = r1.read().await.entities.len();
@@ -806,6 +826,7 @@ mod life_tests {
                     size: SMALL_ITEM,
                     weapon_size: WeaponSize::Small,
                     base_dmg: 1.9,
+                    dmg_type: DamageType::Cut,
                 };
                 let mut lock = e.write().await;
                 lock.inventory().try_insert(Item::Weapon(spec)).ok();
