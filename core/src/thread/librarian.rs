@@ -331,3 +331,22 @@ pub(crate) async fn search_coworker(list: Vec<String>, term: Option<String>, out
     results.sort_unstable();
     out.send(results).ok();
 }
+
+#[cfg(test)]
+mod librarian_tests {
+    use crate::{stabilize_threads, world::world_tests::get_operational_mock_world};
+
+    /// Bootstrap librarian.
+    /// 
+    /// NOTE: this test *has to* be called before real tests can be executed in case
+    ///       a complete test directory wipe has been done.  This ensures that no
+    ///       further test fails due overlapping bootstrap executions.
+    #[tokio::test]
+    async fn librarian_bootstrap() {
+        // let mut b: Vec<u8> = vec![];
+        // let mut s = Cursor::new(&mut b);
+        let (w,c,_,_) = get_operational_mock_world().await;
+        get_operational_mock_librarian!(c,w);
+        stabilize_threads!(1000);
+    }
+}
