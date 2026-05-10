@@ -14,6 +14,7 @@ mod cmd;
 pub(crate) mod combat;
 mod r#const;
 mod edit;
+mod environ;
 mod error;
 mod help;
 mod identity;

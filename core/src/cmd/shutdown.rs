@@ -54,7 +54,7 @@ mod cmd_shutdown_tests {
                 _ = autoshutdown.tick() => {
                     if autoshutdown_1st_tick {
                         p.write().await.access = Access::Admin;
-                        state = ctx!(state, ShutdownCommand, "", s,c.out,w);
+                        state = ctx!(state, ShutdownCommand, "now", s,c.out,w);
                     } else {
                         log::debug!("Autoshutdown should happen in 3 seconds…");
                         autoshutdown_1st_tick = true;

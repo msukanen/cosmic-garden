@@ -4,7 +4,7 @@ use std::net::SocketAddr;
 
 use tokio::net::tcp::OwnedWriteHalf;
 
-use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery, uniq::UuidValidator}, player::{Player, PlayerArc}, string::prompt::PromptType, tell_user, thread::signal::SignalSenderChannels, user::UserInfo, world::{World, WorldArc}};
+use crate::{cmd::{CommandCtx, parse_and_exec}, edit::EditorMode, err_tell_user, error::CgError, get_prompt, identity::{IdentityMut, IdentityQuery, uniq::UuidValidator}, player::{Player, PlayerArc}, string::prompt::PromptType, tell_user, thread::signal::SignalSenderChannels, user::UserInfo, world::{World, WorldArc}};
 
 pub mod broadcast; pub use broadcast::*;
 pub mod file; pub use file::*;
@@ -161,8 +161,7 @@ impl ClientState {
                     let num = num.saturating_sub(1);
                     if num >= info.players.len() {
                         // out of bounds, clearly…
-                        tell_user!(&mut writer, "{}: ", get_prompt!(world, PromptType::PlayerChooserOOB));
-                        return self;
+                        err_tell_user!(self; &mut writer, "{}: ", get_prompt!(world, PromptType::PlayerChooserOOB));
                     }
 
                     // Get character ID by (the adjusted) index...
