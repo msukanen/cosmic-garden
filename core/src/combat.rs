@@ -3,6 +3,7 @@
 use crate::mob::StatValue;
 
 pub mod combatant; pub use combatant::*;
+pub mod dmg; pub use dmg::*;
 
 /// Generic "battler" type.
 pub type Battler = std::sync::Arc<tokio::sync::RwLock<dyn CombatantMut + Send + Sync>>;
@@ -10,13 +11,14 @@ pub type Battler = std::sync::Arc<tokio::sync::RwLock<dyn CombatantMut + Send + 
 pub trait Damager {
     /// Get (current) dmg per attack.
     fn dmg(&self) -> StatValue;
+    fn dmg_type(&self) -> DamageType;
 }
 
 #[cfg(test)]
 mod combatant_tests {
-    use std::io::Cursor;
+    use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, translocate, world::world_tests::get_operational_mock_world};
 
     /// Simulate 100 players' "gank squad" vs 1 (tough) goblin.
     /// 
@@ -141,7 +143,7 @@ mod combatant_tests {
 
     #[tokio::test]
     async fn player_vanish_midcombat() {
-        let (w,c,(state, _),d) = get_operational_mock_world().await;
+        let (w,c,(mut state,p),d) = get_operational_mock_world().await;
         let jt = get_operational_mock_janitor!(c,w,d.0);
         let gt = get_operational_mock_life!(c,w);
         let lt = get_operational_mock_librarian!(c,w);
@@ -149,7 +151,6 @@ mod combatant_tests {
         stabilize_threads!();
         c.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
-        stabilize_threads!(150);
         let mut rx = c.broadcast.subscribe();
         tokio::spawn(async move {
             loop {
@@ -164,21 +165,33 @@ mod combatant_tests {
             }
         });
 
-        tokio::spawn({async move {
-            let mut b: Vec<u8> = vec![];
-            let mut s = Cursor::new(&mut b);
-            log::debug!("1st LookCommand warming up...");
-            let state = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("goblin is here"));
-            let state = ctx!(state, GetCommand, "knife", s,c,w,|out:&str| out.contains("nab"));
-            let state = ctx!(state, WieldCommand, "knife", s,c,w,|out:&str| out.contains("wield"));
-            log::debug!("AttackCommand warming up...");
-            let _ = ctx!(state, AttackCommand, "goblin",s,c,w);
-            log::debug!("AttackCommand fired.");
-            stabilize_threads!(250);
-            c.shutdown().await;
-            log::debug!("Shutdown initiated.");
-            return;
-        }});
+        // Get combat rolling…
+        tokio::spawn({
+            let combat_w = w.clone();
+            async move {
+                let mut b: Vec<u8> = vec![];
+                let mut s = Cursor::new(&mut b);
+                log::debug!("1st LookCommand warming up...");
+                stabilize_threads!(100);// give life a moment, Just in Case™
+                state = ctx!(state, LookCommand, "",s,c,combat_w,|out:&str| out.contains("goblin is here"));
+                state = ctx!(state, GetCommand, "knife", s,c,combat_w,|out:&str| out.contains("nab"));
+                state = ctx!(state, WieldCommand, "knife", s,c,combat_w,|out:&str| out.contains("wield"));
+                log::debug!("AttackCommand warming up...");
+                _ = ctx!(state, AttackCommand, "goblin",s,c,combat_w);
+                log::debug!("Combat max <2500ms, but expected to get interrupted much sooner.");
+                stabilize_threads!(2500);
+                c.shutdown().await;
+            }
+        });
+
+        let r1 = w.read().await.get_room_by_id("r-1").clone().unwrap();
+        let r2 = w.read().await.get_room_by_id("r-2").clone().unwrap();
+        // Prep yanker…
+        tokio::time::sleep(Duration::from_millis(250)).await;// 250ms should be enough of fite
+        log::debug!("Yoink!");
+        translocate!(p,r1,r2);
+        log::debug!("Lets let dust settle…");
+        tokio::time::sleep(Duration::from_millis(1000)).await;// 1000ms should be enough a wait
 
         _ = d.1.await;
         lt.await.ok();
