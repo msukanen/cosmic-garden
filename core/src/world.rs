@@ -381,21 +381,22 @@ pub(crate) mod world_tests {
     ){
         use std::io::Write;
         let _ = env_logger::
-             Builder::from_default_env()
-             .format(|buf, record| {
-                 let chunk = record.args().to_string();
-                 let mut msg = chunk.split('\n');
-                 if let Some(x) = msg.next() {
-                     writeln!(buf, "{}", cformat!("<c white>[<c yellow>{}</c> <c cyan>{}</c>]</c> {x}", record.level(), record.module_path().unwrap_or_default()))?;
-                 }
+            Builder::from_default_env()
+            // Mimic visuals of ol' Telnet end-point to major degree
+            .format(|buf, record| {
+                let chunk = record.args().to_string();
+                let mut msg = chunk.split('\n');
+                if let Some(x) = msg.next() {
+                    writeln!(buf, "{}", cformat!("<c white>[<c yellow>{}</c> <c cyan>{}</c>]</c> {x}", record.level(), record.module_path().unwrap_or_default()))?;
+                }
 
-                 for line in msg {
-                     writeln!(buf, "{}", cformat!("<bg gray>    </bg>{}", line))?;
-                 }
+                for line in msg {
+                    writeln!(buf, "{}", cformat!("<bg gray>    </bg>{}", line))?;
+                }
 
-                 Ok(())
-                
-             }).
+                Ok(())
+            
+            }).
             try_init();
         DISK_VERIFIED.call_once(|| {
             let _ = crate::DATA.get_or_init(|| "data".into());

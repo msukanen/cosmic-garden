@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, item::weapon::WeaponSize, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, core::{Entity, EntitySize, EntitySizeError}, faction::{EntityFaction, EntityFactionError, FactionMut, Factioned}, traits::{Mob, MobMut}}, show_help, show_help_if_needed, tell_user, validate_access, validate_editor_mode};
+use crate::{cmd::{Command, CommandCtx}, combat::Combatant, err_tell_user, item::weapon::WeaponSize, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, core::{Entity, EntitySize, EntitySizeError}, faction::{EntityFaction, EntityFactionError, FactionMut, Factioned}, traits::{Mob, MobMut}}, show_help, show_help_if_needed, tell_user, validate_access, validate_editor_mode};
 
 pub struct SetCommand;
 

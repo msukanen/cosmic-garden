@@ -45,7 +45,8 @@ impl TryFrom<&str> for GenderType {
             None => return Err(GenderError::VoidGender),
             Some(c) => match c {
                 'b'|'B'|// boy, etc.
-                'm'|'M' // male, man, etc.
+                'm'|'M'|// male, man, etc.; finnish: mies
+                'p'|'P' // finnish: poika, etc.
                     => Self::Male,
                 
                 'w'|'W'|// woman, etc.
