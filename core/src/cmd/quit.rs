@@ -9,8 +9,8 @@ pub struct QuitCommand;
 #[async_trait]
 impl Command for QuitCommand {
     async fn exec(&self, ctx: &mut CommandCtx<'_>) {
-        ctx.state = ClientState::Logout;// regardless if they're in the world (yet), Logout.
         let plr = player_or_bust!(ctx);
+        ctx.state = ClientState::Logout;// regardless if they're in the world (yet), Logout.
         let (room, p_title) = {
             let p = plr.read().await;
             (p.location.upgrade(), p.title().to_string())
