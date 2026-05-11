@@ -24,10 +24,22 @@ impl Command for ReditCommand {
             let p = plr.read().await;
             (p.access.clone(), p.id().to_string(), p.location.upgrade())
         };
-        show_help_if_needed!(ctx, "redit");
+        
+        let args = if plr.read().await.redit_buffer.is_some() {
+            // already something in buffer? Go edit it.
+            {   let mut w = plr.write().await;
+                w.activity_type = ActivityType::Building;
+            }
+            ctx.state = ClientState::Editing { player: plr.clone(), mode: EditorMode::Redit{ dirty: true } };
+            tell_user!(ctx.writer, "Resuming REdit session…\n");
+            return;
+        } else {
+            show_help_if_needed!(ctx, "redit");
+            ctx.args
+        };
         
         // a bit of shortcuts:
-        let lc = ctx.args.to_lowercase();
+        let lc = args.to_lowercase();
         let room = match lc.as_str() {
             "--dig"|
             "here" |
