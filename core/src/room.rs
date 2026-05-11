@@ -3,10 +3,11 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, fs as sync_fs, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
+use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::{environ::{MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SpecialEnvironment, Terrain}, locking::{Exit, ExitState}}, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::{environ::{MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SpecialEnvironment, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
 pub mod environ;
 pub mod locking;
@@ -80,10 +81,10 @@ pub struct Room {
     pub who: HashMap<String, PlayerWeak>,
 
     #[serde(default, skip)]
-    pub exits: HashMap<Direction, Exit>,
+    pub exits: HashMap<Direction, Exit, BuildNoHashHasher<Direction>>,
     
     #[serde(default)]
-    raw_exits: HashMap<Direction, ExitLike>,
+    raw_exits: HashMap<Direction, ExitLike, BuildNoHashHasher<Direction>>,
 
     #[serde(default = "room_inventory")]
     contents: ContainerVariant,
@@ -209,7 +210,7 @@ impl Room {
     /// # Args
     /// - `id` of the new (or loaded) [Room].
     /// - *[[potential]]* `title` of the new [Room]. This is ignored if [Room] gets loaded.
-    pub async fn new(id: &str, title: &str) -> Result<RoomArc, CgError> {
+    pub async fn new(id: &str, title: &str, bootstrap: bool) -> Result<RoomArc, CgError> {
         // check if there is pre-existing file...
         let loaded = Room::load_sync(id);
         let room = match loaded {
@@ -217,12 +218,12 @@ impl Room {
             _ => {
             log::info!("No archælogy possible, thus creating new room '{}'", id);
             Self {
-                id: id.as_id()?,
+                id: if bootstrap { id.slug()? } else { id.as_id()? },
                 title: title.into(),
                 desc: empty_room_desc(),
                 who: HashMap::new(),
-                exits: HashMap::new(),
-                raw_exits: HashMap::new(),
+                exits: HashMap::default(),
+                raw_exits: HashMap::default(),
                 contents: room_inventory(),
                 entities: HashMap::new(),
                 special_environment: SPECIAL_ENVIRONMENT_DEFAULT,
@@ -294,12 +295,30 @@ impl Room {
     }
 
     /// Extract specific internals of `source`.
-    pub fn scavenge(&mut self, source: Self) {
+    pub async fn scavenge(&mut self, source: Self, world: &Arc<RwLock<World>>) {
         self.id = source.id;
         self.title = source.title;
         self.desc = source.desc;
-        self.exits = source.exits;
         self.raw_exits = source.raw_exits;
+        let mut exits = HashMap::default();
+        let wr = world.read().await;
+        for (dir, exitlike) in self.raw_exits.clone() {
+            if let Some(t_id) = exitlike.room_id.clone() {
+                if let Some(t_arc) = wr.get_room_by_id(&t_id) {
+                    // proper room at receiving end
+                    let exit = Exit::from_arc(exitlike, t_arc);
+                    exits.insert(dir, exit);
+                } else {
+                    // old target room evaporated meanwhile …
+                    exits.insert(dir, Exit::from(exitlike, Weak::new()));
+                }
+            } else {
+                // mirage
+                exits.insert(dir, Exit::from(exitlike, Weak::new()));
+            }
+        }
+        drop(wr);
+        self.exits = exits;
         self.special_environment = source.special_environment;
         self.memory_fog = source.memory_fog;
         self.terrain = source.terrain;
