@@ -298,6 +298,8 @@ impl World {
 
 impl World {
     pub async fn tick(&mut self) {
+        #[allow(dead_code)] static mut WC: usize = 0;
+        
         let max_par = CPU_CORES;
         let sem = Arc::new(Semaphore::new(max_par));
         let mut join_set = JoinSet::new();
@@ -311,6 +313,15 @@ impl World {
                 r.tick().await;
             });
         }
+        
+        #[cfg(feature = "stresstest")]{
+        unsafe {
+            WC += 1;
+            let wc = WC;
+            if wc % 1_000 == 0 {
+                log::debug!("World cycle: {wc}");
+            }
+        }}
     }
 
     fn room_list(&self, term: Option<String>, out: tokio::sync::oneshot::Sender<Vec<(MachineId, RoomArc)>>) {

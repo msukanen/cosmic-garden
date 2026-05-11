@@ -31,6 +31,8 @@ impl Command for SpawnCommand {
                     }
                     ,_=> unreachable!("stem != empty")
                 }
+                #[cfg(feature = "localtest")]
+                'o' => spawn_goblin_ocean(ctx, loc, stem).await,
                 _ => {
                     tell_user!(ctx.writer, "'{}' is no known selector…\n\n", op);
                     show_help!(ctx, "u spawn");
@@ -51,6 +53,24 @@ async fn spawn_entity(ctx: &mut CommandCtx<'_>, loc: RoomArc, args: &str) {
     }).ok();
     if let Ok(true) = recv.await {
         tell_user!(ctx.writer, "One '{}' has manifested!\n", args);
+        LookCommand.exec({ctx.args = "q"; ctx}).await;
+    } else {
+        tell_user!(ctx.writer, "Mmm… that didn't seem to work. Maybe try some other entity name…?\n");
+    }
+}
+
+#[cfg(feature = "localtest")]
+/// Request an ocean of goblins to be spawned at `loc`.
+async fn spawn_goblin_ocean(ctx: &mut CommandCtx<'_>, loc: RoomArc, args: &str) {
+    let (out, recv) = tokio::sync::oneshot::channel::<bool>();
+    ctx.out.life.send(SystemSignal::SpawnBatch {
+        what: SpawnType::Mob { id: args.into() },
+        room: RoomPayload::Arc(loc.clone()),
+        num: 1_000_000,
+        reply: Some(out),
+    }).ok();
+    if let Ok(true) = recv.await {
+        tell_user!(ctx.writer, "1_000_000 '{}s' has manifested!\n", args);
         LookCommand.exec({ctx.args = "q"; ctx}).await;
     } else {
         tell_user!(ctx.writer, "Mmm… that didn't seem to work. Maybe try some other entity name…?\n");

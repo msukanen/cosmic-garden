@@ -3,9 +3,8 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, fs as sync_fs, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
-use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
-use tokio::{sync::RwLock, fs as async_fs};
+use tokio::{fs as async_fs, sync::{RwLock, Semaphore}};
 
 use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
@@ -63,6 +62,10 @@ impl RoomPayload {
 
 fn empty_room_desc() -> String { "A room.".into() }
 fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
+fn room_sem_default() -> Arc<Semaphore> {
+    const MAX_PAR: usize = crate::world::CPU_CORES;
+    Arc::new(Semaphore::new(MAX_PAR))
+}
 
 type DirectionHasher = std::collections::hash_map::RandomState;
 
@@ -96,6 +99,7 @@ pub struct Room {
     #[serde(default)] pub terrain: Option<Terrain>,
     /// Room's general type.
     #[serde(default)] pub room_type: RoomType,
+    #[serde(skip, default = "room_sem_default")] sem: Arc<Semaphore>,
 }
 /// Room arc type.
 pub type RoomArc = Arc<RwLock<Room>>;
@@ -230,6 +234,7 @@ impl Room {
                     memory_fog: None,
                     terrain: None,
                     room_type: RoomType::default(),
+                    sem: room_sem_default(),
                 }
             }
         };
@@ -301,6 +306,7 @@ impl Room {
             memory_fog: self.memory_fog.clone(),
             terrain: self.terrain.clone(),
             room_type: self.room_type.clone(),
+            sem: self.sem.clone(),
         }
     }
 
@@ -452,10 +458,7 @@ impl StorageMut for Room {
 
 impl Room {
     pub async fn tick(&mut self) {
-        let max_par = crate::world::CPU_CORES;
-        let sem = Arc::new(tokio::sync::Semaphore::new(max_par));
-        let mut join_set = tokio::task::JoinSet::new();
-
+        // Deal with players first…
         for p_weak in self.who.values() {
             if let Some(p_arc) = p_weak.upgrade() {
                 if let Ok(mut p) = p_arc.try_write() {
@@ -464,18 +467,39 @@ impl Room {
             }
         }
 
-        for e in self.entities.values() {
-            let sem_clone = Arc::clone(&sem);
-            let e_clone = e.clone();
+        // …then entitites…
+        const BATCH_SIZE: usize = 5_000;
+        let mut join_set = tokio::task::JoinSet::new();
+        let mut curr_ent_batch = Vec::with_capacity(BATCH_SIZE);
+        for (_, e) in &self.entities {
+            curr_ent_batch.push(e.clone());
+            if curr_ent_batch.len() == BATCH_SIZE {
+                let batch = std::mem::take(&mut curr_ent_batch);
+                let sem_clone = Arc::clone(&self.sem);
+                let r_env = self.special_environment;
+                let r_ter = self.terrain.clone();
+                join_set.spawn(async move {
+                    let _permit = sem_clone.acquire_owned().await.unwrap();
+                    for e in batch {
+                        e.write().await.tick(r_env, r_ter);
+                    }
+                });
+            }
+        }
+        // …any stragglers?
+        if !curr_ent_batch.is_empty() {
+            let sem_clone = Arc::clone(&self.sem);
             let r_env = self.special_environment;
             let r_ter = self.terrain.clone();
             join_set.spawn(async move {
                 let _permit = sem_clone.acquire_owned().await.unwrap();
-                if let Ok(mut e) = e_clone.try_write() {
-                    _ = e.tick(r_env, r_ter);
+                for e in curr_ent_batch {
+                    e.write().await.tick(r_env, r_ter);
                 }
             });
         }
+
+        while let Some(_) = join_set.join_next().await {}
 
         // no reaction yet to "positive" tick(s)
         let _ = self.contents.tick(self.special_environment, self.terrain);

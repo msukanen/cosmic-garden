@@ -718,9 +718,11 @@ async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: RoomArc, bs:
 
 #[cfg(test)]
 mod life_tests {
-    use std::{io::Cursor, sync::Arc};
+    use std::{io::Cursor, sync::Arc, time::Duration};
 
-    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use sysinfo::System;
+
+use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(all(feature = "obsolete", feature = "stresstest"))]
     #[tokio::test]
@@ -762,6 +764,36 @@ mod life_tests {
         const MILLION_GOBBOS: usize = 60_000;// chuck...
 
         let (w,c,_,j) = get_operational_mock_world().await;
+    // Live RSS reporting:
+    let mut rss_report_interval = tokio::time::interval(Duration::from_secs(2));
+    let mut sys = System::new_all();
+    let pid = sysinfo::get_current_pid().expect("Unable to determine PID?!");
+    let mut peak_mem_kb: u64 = 0;
+    let mut peak_counted = 0;
+    tokio::spawn(async move {
+        loop {
+        tokio::select! {
+            _ = rss_report_interval.tick() => {
+                sys.refresh_memory();
+                if let Some(process) = sys.process(pid) {
+                    peak_counted += 1;
+                    let curr_mem_use = process.memory();
+                    let kib = peak_mem_kb as f64 / 1024.0;
+                    let mib = kib / 1024.0;
+                    let gib = mib / 1024.0;
+                    if curr_mem_use > peak_mem_kb {
+                        peak_mem_kb = curr_mem_use;
+                        log::info!("[TELEMETRY] peak mem usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
+                        if gib > 40.0 {
+                            log::warn!("[CRITICAL] Garden is occupying >40GB RAM.");
+                        }
+                    } else {
+                        if peak_counted % 2 == 0 {
+                            log::trace!("[MEM] usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
+                        }
+                    }
+                }
+            }}}});
         get_operational_mock_janitor!(c,w,j.0);
         get_operational_mock_life!(c,w);
         get_operational_mock_librarian!(c,w);
