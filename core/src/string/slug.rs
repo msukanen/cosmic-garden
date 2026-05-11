@@ -10,21 +10,13 @@ pub trait Slugger {
     fn slugify(&self) -> String;
     /// Reduce repetitive non-alphanum to singular entries.
     fn reduce_noise(&self) -> Result<String, IdError>;
+    fn slug(&self) -> Result<String, IdError>;
 }
 
-impl Slugger for String {
+impl Slugger for str {
     #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
     #[inline] fn slugify(&self) -> String { slugify(self) }
-}
-
-impl Slugger for &String {
-    #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
-    #[inline] fn slugify(&self) -> String { slugify(self) }
-}
-
-impl Slugger for &str {
-    #[inline] fn reduce_noise(&self) -> Result<String, IdError> { reduce_noise(self) }
-    #[inline] fn slugify(&self) -> String { slugify(self) }
+    #[inline] fn slug(&self) -> Result<String, IdError> { slug(self) }
 }
 
 /// Overwrite all non-alphabet with underscores.
@@ -39,6 +31,51 @@ fn slugify(input: &str) -> String {
             else {'_'}
         })
         .collect()
+}
+
+/// Get representation as file/hash ready `id`, if possible…
+/// 
+/// # Args
+/// - `input` to be sanitized.
+fn slug(input: &str) -> Result<String, IdError> {
+    let mut out = [0u8;MAX_ID_LEN];
+    let mut last_was_junk = false;
+    let mut pos = 0;
+
+    for ch in input.trim().to_lowercase().nfd() {
+        if ch.is_ascii_alphanumeric() {
+            out[pos] = ch as u8;
+            pos += 1;
+            last_was_junk = false;
+            continue;
+        }
+
+        if !last_was_junk && !out.is_empty() {
+            out[pos] = match ch {
+                '-' => '-',
+                _ if ch.is_whitespace() => '-',
+                _ => '_'
+            } as u8;
+            pos += 1;
+            last_was_junk = true;
+        }
+
+        // let's not process any further, mkay…
+        if pos >= MAX_ID_LEN - 1 {
+            return Err(IdError::TooLong);
+        }
+    }
+
+    // ≅ .trim_end_matches(..)
+    while pos > 0 {
+        let last_byte = out[pos - 1];
+        match last_byte {
+            b'-'|b'_' => pos -= 1,
+            _ => break
+        }
+    }
+
+    Ok(unsafe { std::str::from_utf8_unchecked(&out[..pos]) }.into())
 }
 
 /// Reduce repetitive non-alphanum to singular entries.
