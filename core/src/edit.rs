@@ -2,6 +2,11 @@
 
 pub mod mode; pub use mode::*;
 
+/// Validate editor mode.
+/// 
+/// # Args
+/// - `ctx`
+/// - `mode` editor mode…
 #[macro_export]
 macro_rules! validate_editor_mode {
     ($ctx:ident, $mode:literal) => {{

@@ -7,10 +7,11 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{sync::RwLock, fs as async_fs};
 
-use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::{environ::{MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SpecialEnvironment, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::Tickable, util::direction::Direction, world::World};
 
 pub mod environ;
 pub mod locking;
+pub mod types;      pub use types::{ RoomType, RoomSubtype };
 
 #[derive(Debug, Clone)]
 pub enum RoomError {
@@ -94,13 +95,13 @@ pub struct Room {
     #[serde(default, with = "arc_n_t_transform")]
     pub entities: HashMap<usize, EntityArc>,
 
-    #[serde(default)]
-    pub special_environment: SpecialEnvironment,
-    #[serde(default)]
-    memory_fog: Option<MemoryFogType>,
-
-    #[serde(default)]
-    pub terrain: Option<Terrain>,
+    /// Special environment bitmask.
+    #[serde(default)] pub special_environment: SpecialEnvironment,
+    #[serde(default)] memory_fog: Option<MemoryFogType>,
+    /// Terrain, if not "typical"(≡`None`).
+    #[serde(default)] pub terrain: Option<Terrain>,
+    /// Room's general type.
+    #[serde(default)] pub room_type: RoomType,
 }
 /// Room arc type.
 pub type RoomArc = Arc<RwLock<Room>>;
@@ -216,20 +217,21 @@ impl Room {
         let room = match loaded {
             Ok(room) => room,
             _ => {
-            log::info!("No archælogy possible, thus creating new room '{}'", id);
-            Self {
-                id: if bootstrap { id.slug()? } else { id.as_id()? },
-                title: title.into(),
-                desc: empty_room_desc(),
-                who: HashMap::new(),
-                exits: HashMap::default(),
-                raw_exits: HashMap::default(),
-                contents: room_inventory(),
-                entities: HashMap::new(),
-                special_environment: SPECIAL_ENVIRONMENT_DEFAULT,
-                memory_fog: None,
-                terrain: None,
-            }
+                log::info!("No archælogy possible, thus creating new room '{}'", id);
+                Self {
+                    id: if bootstrap { id.slug()? } else { id.as_id()? },
+                    title: title.into(),
+                    desc: empty_room_desc(),
+                    who: HashMap::new(),
+                    exits: HashMap::default(),
+                    raw_exits: HashMap::default(),
+                    contents: room_inventory(),
+                    entities: HashMap::new(),
+                    special_environment: SPECIAL_ENVIRONMENT_DEFAULT,
+                    memory_fog: None,
+                    terrain: None,
+                    room_type: RoomType::default(),
+                }
             }
         };
 
@@ -291,6 +293,7 @@ impl Room {
             special_environment: self.special_environment,
             memory_fog: self.memory_fog.clone(),
             terrain: self.terrain.clone(),
+            room_type: self.room_type.clone(),
         }
     }
 
@@ -322,6 +325,7 @@ impl Room {
         self.special_environment = source.special_environment;
         self.memory_fog = source.memory_fog;
         self.terrain = source.terrain;
+        self.room_type = source.room_type;
     }
 
     /// Convenience function to try insert `item` directly into the [Room]'s contents.
@@ -384,8 +388,30 @@ impl Room {
     }
 
     /// Set special env bit`mask`.
-    pub fn set_special_env_bitmask(&mut self, mask: SpecialEnvironment) {
-        self.special_environment = mask;
+    /// 
+    /// # Args
+    /// - `mask` to set.
+    /// - `override` old setting(s) in entirety?
+    #[must_use = "Gravity anomalies may result in `Err`."]
+    pub fn set_special_env_bitmask(&mut self, mask: SpecialEnvironment, r#override: bool) -> Result<(), SpecialEnvironmentError> {
+        match ((mask | self.special_environment) & (GRAVITY_ANOMALY_HIGH_H|GRAVITY_ANOMALY_LOW_H|SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY)).count_ones() {
+            0 => (), // normal g
+            1 => return Err(SpecialEnvironmentError::GravityModelMissing),
+            2 => if mask & SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY == 0 { return Err(SpecialEnvironmentError::GravityClash) },
+            _ => return Err(SpecialEnvironmentError::GravityClash)
+        }
+
+        if r#override {
+            self.special_environment = mask;
+        } else {
+            self.special_environment |= mask;
+        }
+        Ok(())
+    }
+
+    /// Wipe environmental bitmask.
+    pub fn clear_env_bitmask(&mut self) {
+        self.special_environment = SPECIAL_ENVIRONMENT_DEFAULT;
     }
 }
 

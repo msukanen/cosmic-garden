@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use dicebag::InclusiveRandomRange;
 
-use crate::{r#const::SIZE_BALANCE, item::{container::storage::StorageSpace, weapon::WeaponSize}, room::environ::{SpecialEnvironment, Terrain}, traits::{TickMeaning, Tickable}, util::approx::ApproxI32};
+use crate::{r#const::SIZE_BALANCE, item::{container::storage::StorageSpace, weapon::WeaponSize}, room::environ::{SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_LOUD, SPECIAL_ENVIRONMENT_STINKY, SpecialEnvironment, Terrain}, traits::{TickMeaning, Tickable}, util::approx::ApproxI32};
 
 pub const MAX_STAT_VALUE: StatValue = 1000.0;
 // TODO: convert raw TICKS_BETWEEN_DRAIN into some runtime calibrateable type.
@@ -110,13 +110,13 @@ pub enum Stat {
     /// Sanity, or insanity…
     San { curr: StatValue, max: StatValue, drain: StatValue },
     /// Stamina.
-    SN { curr: StatValue, max: StatValue, drain: StatValue },
+    SN { curr: StatValue, max: StatValue, drain: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
     /// Braininess, IQ, etc.
-    Brn { curr: StatValue, max: StatValue, env_bonus: StatValue },
+    Brn { curr: StatValue, max: StatValue, room_env: SpecialEnvironment },
     /// Strength.
-    Str { curr: StatValue, max: StatValue, env_bonus: StatValue },
+    Str { curr: StatValue, max: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
     /// Nimbleness, dexterity, etc.
-    Nim { curr: StatValue, max: StatValue, env_bonus: StatValue },
+    Nim { curr: StatValue, max: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
     /// Reputation. Rep doesn't have max value, but it does clamp to -100 at bottom range.
     Rep { curr: StatValue },
 }
@@ -124,14 +124,14 @@ pub enum Stat {
 impl Stat {
     pub fn new(typ: StatType) -> Self {
         match typ {
-            StatType::Brn => Self::Brn { curr: 100.0, max: 100.0, env_bonus: 0.0 },
+            StatType::Brn => Self::Brn { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT },
             StatType::HP  => Self::HP { curr: 100.0, max: 100.0 },
-            StatType::Nim => Self::Nim { curr: 100.0, max: 100.0, env_bonus: 0.0 },
-            StatType::Str => Self::Str { curr: 100.0, max: 100.0, env_bonus: 0.0 },
+            StatType::Nim => Self::Nim { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
+            StatType::Str => Self::Str { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
             StatType::Rep => Self::Rep { curr: 100.0 },
             StatType::MP  => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
             StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0 },
-            StatType::SN  => Self::SN { curr: 100.0, max: 100.0, drain: 0.0 },
+            StatType::SN  => Self::SN { curr: 100.0, max: 100.0, drain: 0.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
         }
     }
 
@@ -214,10 +214,18 @@ impl Stat {
             Self::Rep { .. } => ()
         }
 
-        if self.current() > self.max() {
+        if !self.capped() {
             self.set_curr(self.max());
-        } else if delta > 0.0 {
-            self.set_curr(self.current() + delta);
+        } else if delta.abs() > DRAIN_EPSILON {
+            self.set_curr(match &self {
+                Self::Brn { curr, ..} |
+                Self::HP { curr, ..}  |
+                Self::MP { curr, ..}  |
+                Self::Nim { curr, ..} |
+                Self::Rep { curr }    |
+                Self::SN { curr, ..}  |
+                Self::San { curr, ..} |
+                Self::Str { curr, ..} => *curr } + delta);
         }
 
         self
@@ -235,6 +243,8 @@ impl Stat {
     /// - `value` to be used as the new drain figure.
     /// 
     pub fn set_drain(&mut self, value: StatValue) -> &mut Self {
+        if value.abs() < DRAIN_EPSILON { return self; }
+
         match self {
             Self::MP { drain, max, ..} |
             Self::San { max, drain, ..}|
@@ -257,12 +267,12 @@ impl Stat {
     pub fn set_curr(&mut self, value: StatValue) -> &mut Self{
         match self {
             Self::HP { curr, max }    => *curr = value.clamp(SMR_THRESHOLD, *max),
-            Self::MP { curr, max, ..} |
-            Self::San { curr, max, ..}|
-            Self::SN { curr, max, ..} |
-            Self::Str { curr, max, ..}|
-            Self::Brn { curr, max, ..}|
-            Self::Nim { curr, max, ..}=> *curr = value.clamp(0.0, *max),
+            Self::MP { curr, max, ..}  |
+            Self::San { curr, max, ..} |
+            Self::SN { curr, max, ..}  |
+            Self::Str { curr, max, ..} |
+            Self::Brn { curr, max, ..} |
+            Self::Nim { curr, max, ..} => *curr = value.clamp(0.0, *max),
             Self::Rep { curr } => *curr = value.max(-100.0),
         }
         self
@@ -284,21 +294,47 @@ impl Stat {
 
     /// We're already capped?
     pub fn capped(&self) -> bool {
-        self.current() >= self.max()
+        (match self {
+            Self::Brn { curr, ..} |
+            Self::HP { curr, ..}  |
+            Self::MP { curr, ..}  |
+            Self::Nim { curr, ..} |
+            Self::Rep { curr }    |
+            Self::SN { curr, ..}  |
+            Self::San { curr, ..} |
+            Self::Str { curr, ..} => *curr }) >= self.max()
     }
 
-    /// Get [Stat] current value.
+    /// Get [Stat] current (effective) value.
+    //
+    // This takes into account currently applied environmental effects, etc.
+    //
     pub fn current(&self) -> StatValue {
-        match self {
-            Self::HP { curr, ..} |
-            Self::MP { curr, ..} |
-            Self::Brn { curr, ..}|
-            Self::Nim { curr, ..}|
-            Self::SN { curr, ..} |
-            Self::Str { curr, ..}|
-            Self::Rep { curr}    |
-            Self::San { curr, ..}=> *curr
-        }
+        (match self {
+            Self::HP { curr, ..}  |
+            Self::MP { curr, ..}  |
+            Self::Brn { curr, ..} |
+            Self::Nim { curr, ..} |
+            Self::SN { curr, ..}  |
+            Self::Str { curr, ..} |
+            Self::Rep { curr}     |
+            Self::San { curr, ..} => *curr
+        }) + (match self {
+            Self::Brn { room_env, ..} => 
+                (if (*room_env) & SPECIAL_ENVIRONMENT_LOUD != 0 { -15.0 } else { 0.0 })
+                    +
+                (if (*room_env) & SPECIAL_ENVIRONMENT_STINKY != 0 { -5.0 } else { 0.0 }),
+            Self::Nim { room_env, room_ter, ..} => {
+                0.0 // TODO how environ affects Nim
+            },
+            Self::SN { room_env, room_ter, ..} => {
+                0.0 // TODO how environ affects SN
+            },
+            Self::Str { room_env, room_ter, ..} => {
+                0.0 // TODO how environ affects Str
+            }
+            _ => 0.0
+        })
     }
 
     /// Get [Stat] drain value, if applicable.
@@ -374,7 +410,7 @@ impl Display for Stat {
 
             // SN: (12/34)[-1.1]
             // SN: (12/34)
-            Self::SN { curr, max, drain } => if drain.abs() > DRAIN_EPSILON {
+            Self::SN { curr, max, drain,.. } => if drain.abs() > DRAIN_EPSILON {
                 write!(f, "SN: ({:.0}/{:.0})[{:+.1}/t]", curr, max, drain)
             } else {
                 write!(f, "SN: ({:.0}/{:.0})", curr, max)
@@ -398,7 +434,21 @@ impl Display for Stat {
 #[async_trait]
 impl Tickable for Stat {
     // NOTE stat ticks don't have global effects…
-    fn tick(&mut self, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, r_env: SpecialEnvironment, r_ter: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+        // apply environment and terrain effects, if any (for this [Stat]).
+        match self {
+            Self::Brn {room_env,..} => *room_env = r_env,
+
+            Self::Nim {room_env, room_ter, ..} |
+            Self::Str {room_env, room_ter, ..} |
+            Self::SN {room_env, room_ter, ..}  => { *room_env = r_env; *room_ter = r_ter.clone() },
+            
+            Self::Rep {..} |
+            Self::HP {..}  |
+            Self::MP {..}  |
+            Self::San {..} => ()
+        }
+
         let Ok(drain) = self.drain() else {
             // no drain, nothing to tick
             return None;

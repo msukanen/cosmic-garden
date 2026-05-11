@@ -15,6 +15,12 @@ fn apply_semantic_theme(style: Style, payload: Option<&&str>) -> Style {
         "usage" => style.fg(Colour::Green),
         "ex"|"example" => style.fg(Colour::Yellow),
         "title" => style.fg(Colour::Green).bold(),
+        // bullets
+        "*" => style.fg(Colour::Blue),
+        "-" => style.fg(Colour::White).dimmed(),
+        // command usage related
+        "cmd" => style.fg(Colour::Yellow),
+        "opt" => style.fg(Colour::Cyan),
         // unknown?
         _ => style
     }
@@ -208,12 +214,9 @@ mod ansi_tests {
         let now = std::time::Instant::now();
         let input_string = "This is <c yellow>Yellow text <bg cyan>on cyan bg</bg> which continues as yellow</c>, until it doesn't.";
         
-        // log::debug!("--- Input String ---");
-        // log::debug!("{}", input_string);
-        
-        // log::debug!("\n--- Formatted Output ---");
+        log::debug!("\n--- Input String ---\n{input_string}");
         let fmt = super::format_color(input_string);
-        // log::debug!("{fmt}");
+        log::debug!("\n--- Formatted Output ---\n{fmt}");
 
         let tricky_strings = [
             "<c green>Usage:</c> force <c blue>[-]</c> <c cyan><TARGET> <COMMAND <c blue>[ARGS]</c>></c>",
@@ -223,7 +226,7 @@ mod ansi_tests {
         // log::debug!("\n--- Tricky String ---");
         tricky_strings.iter().for_each(|s| {
             let fmt = super::format_color(s);
-            // log::debug!("{fmt}");
+            log::debug!("{fmt}");
         });
         let elapsed = now.elapsed();
         log::debug!("Elapsed {elapsed:?}");

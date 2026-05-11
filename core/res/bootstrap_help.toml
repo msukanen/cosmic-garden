@@ -572,12 +572,12 @@ access = "any_builder"
 title = "spawn"
 alias = ["spawn", "materialize"]
 contents = """
-'spawn' an Entity or Item by blueprint.
+<x cmd>'spawn'</x> an <x info>Entity</x> or <x info>Item</x> by blueprint.
 
 A spawned entity may or may not be hostile toward occupants of the room it
 gets spawned in...
 
-To get list of spawnable stuff, use <c yellow>spawn list ..</c>. The optional
+To get list of spawnable stuff, use <x cmd>spawn list ..</x>. The optional
 <term> can be used to narrow down search on large lists.
 """
 usage = [
@@ -586,3 +586,43 @@ usage = [
     "spawn list entity <c gray>[<term>]</c>",
     "spawn list item <c grat>[<term>]</c>"
 ]
+[[help_pages]]
+id = "redit-set"
+alias = ["redit-set"]
+access = "any_builder"
+title = "set"
+contents = """
+'set'
+"""
+usage = [
+    "set <var> <val>"
+]
+[[help_pages]]
+id = "special-environment"
+alias = ["special-environment", "spec-env", "room environment"]
+access = "any_builder"
+title = "special environments"
+contents = """
+List of <c brown>special environments</c>:
+
+<x *>*</x> <x info>co</x> <x ->-</x> corrosive
+   <x info>ac</x> <x ->-</x> acidic <c gray>;; technically same as 'corrosive'.</c>
+<x *>*</x> <x info>fo</x> <x ->-</x> foggy atmosphere
+<x *>*</x> <x info>fr</x> <x ->-</x> freezing/frozen surroundings
+<x *>*</x> <x info>ga</x> <x ->-</x> gas trap
+   <x info>gt</x> <x ->  -"-</x>
+<x *>*</x> <x info>hi</x> <x ->-</x> gravity: HIGH
+   <x info>hg</x> <x ->  -"-</x>
+<x *>*</x> <x info>lg</x> <x ->-</x> gravity: LOW
+   <x info>low</x> <x -> -"-</x>
+<x *>*</x> <x info>in</x> <x ->-</x> infernal (e.g. volcanic)
+   <x info>vh</x> <x ->  -"-</x>
+<x *>*</x> <x info>lo</x> <x ->-</x> very loud environment
+<x *>*</x> <x info>ob</x> <x ->-</x> obstructed visibility <c gray>(dense woods, etc.)</c>.
+   <x info>ov</x> <x ->  -"-</x>
+<x *>*</x> <x info>sm</x> <x ->-</x> gut wrenching stench...
+   <x info>st</x> <x ->  -"-</x>
+<x *>*</x> <x info>to</x> <x ->-</x> toxic
+   <x info>tx</x> <x ->  -"-</x>
+"""
+see_also = ["redit-set"]
