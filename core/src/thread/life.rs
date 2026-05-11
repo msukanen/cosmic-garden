@@ -447,7 +447,7 @@ pub(crate) async fn life(
                     }
                 }
 
-                // Attack! From e.g. AttackCommand from player to start a fight.
+                // Attack! From e.g. AttackCommand from player to initiate a fight.
                 SystemSignal::Attack {atk_arc, vct_arc} => {
                     // We might be busy, let a worker handle the initial hurdle.
                     tokio::spawn({

@@ -107,19 +107,6 @@ lazy_static! {
         
         reserved
     };
-
-    pub static ref CONFIG_RESERVED: Arc<RwLock<HashSet<String>>> = {
-        let mut s = HashSet::new();
-        if let Ok(buf) = fs::read_to_string(reserved_names_fp()) {
-            let words = buf.split(';').map(|w| w.trim()).collect::<Vec<&str>>();
-            for w in words {
-                s.insert(w.into());
-            }
-        } else {
-            log::trace!("No 'reserved.names' to process.");
-        }
-        Arc::new(RwLock::new(s))
-    };
 }
 
 /// ImmutablePath to appease lazy-init file system access…

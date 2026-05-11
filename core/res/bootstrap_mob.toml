@@ -30,14 +30,17 @@ drain = 0.0
 [mobs.brn.Brn]
 curr = 100.0
 max = 100.0
+env_bonus = 0.0
 
 [mobs.nim.Nim]
 curr = 100.0
 max = 100.0
+env_bonus = 0.0
 
 [mobs.strn.Str]
 curr = 100.0
 max = 100.0
+env_bonus = 0.0
 
 [inventory.Corpse.spec]
 id = "corpse-inventory-a92f991e-8338-481d-879e-500a68ce037a"

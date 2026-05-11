@@ -433,7 +433,7 @@ mod cmd_iedit_set_tests {
         let state = ctx!(state, IexCommand, "", s,b,w);
         let state = ctx!(state, WeaveCommand, "persist", s,b,w);
         p.write().await.access = Access::Admin;
-        let _ = ctx!(state, ShutdownCommand, "", s,b,w);
+        let _ = ctx!(state, ShutdownCommand, "now", s,b,w);
         let _ = d.1.await;
         lt.await.ok();
         ht.await.ok();

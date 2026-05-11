@@ -399,7 +399,7 @@ usage = [
     "list <srch-term> [<page-num>]"
 ]
 [[help_pages]]
-id = "redit-way"
+id = "way"
 title = "way"
 alias = ["redit-way", "way"]
 access = "any_builder"
@@ -581,7 +581,8 @@ To get list of spawnable stuff, use <c yellow>spawn list ..</c>. The optional
 <term> can be used to narrow down search on large lists.
 """
 usage = [
-    "spawn <id-stem>",
-    "spawn list entity [<term>]",
-    "spawn list item [<term>]"
+    "spawn entity <x info><id-stem></x>",
+    "spawn item <x info><id-stem></x>",
+    "spawn list entity <c gray>[<term>]</c>",
+    "spawn list item <c grat>[<term>]</c>"
 ]

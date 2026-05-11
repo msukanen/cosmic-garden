@@ -82,7 +82,7 @@ mod cmd_wield_tests {
         log::debug!("Got the knife!");
         let state = ctx!(state, WieldCommand, "knife", s,c,w,|out:&str| out.contains("wield"));
         p.write().await.access = Access::Admin;
-        let _ = ctx!(state, ShutdownCommand, "", s,c,w);
+        let _ = ctx!(state, ShutdownCommand, "now", s,c,w);
         _ = d.1.await;
     }
 }

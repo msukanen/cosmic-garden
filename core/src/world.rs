@@ -51,8 +51,8 @@ pub type WorldArc = Arc<RwLock<World>>;
 impl World {
     #[cfg(test)]
     pub async fn dummy() -> Self {
-        let root_room = Some(Room::new("r-1", "Incineration Chamber").await.unwrap());
-        let room_2 = Some(Room::new("r-2", "Waterfall").await.unwrap());
+        let root_room = Some(Room::new("r-1", "Incineration Chamber", false).await.unwrap());
+        let room_2 = Some(Room::new("r-2", "Waterfall", false).await.unwrap());
         Self {
             name: "Test World".into(),
             port: 8080,
@@ -83,8 +83,14 @@ mod room_id_sieve {
     pub fn serialize<S>(rooms: &HashMap<MachineId, RoomArc, BuildNoHashHasher<MachineId>>, s: S) -> Result<S::Ok, S::Error>
     where S: Serializer {
         let mut seq = s.serialize_seq(Some(rooms.len()))?;
-        for id in rooms.keys() {
-            seq.serialize_element(id)?;
+        for arc in rooms.values() {
+            loop {
+                if let Ok(r) = arc.try_read() {
+                    seq.serialize_element(r.id())?;
+                    break;
+                }
+                std::thread::yield_now();
+            }
         }
         seq.end()
     }
@@ -130,11 +136,11 @@ impl World {
                     rooms: {
                         let mut rooms = HashMap::default();
                         
-                        let r1 = Room::new(default_root_room_id().as_str(), "Room #1").await?;
+                        let r1 = Room::new(default_root_room_id().as_str(), "Room #1", true).await?;
                         let r1_id = r1.read().await.id().to_string();
                         rooms.insert(r1_id.as_m_id(), r1.clone());
 
-                        let r2 = Room::new("room 2!", "Room #2").await?;
+                        let r2 = Room::new("room 2!", "Room #2", true).await?;
                         let r2_id = r2.read().await.id().to_string();
                         rooms.insert(r2_id.as_m_id(), r2.clone());                       
                         {

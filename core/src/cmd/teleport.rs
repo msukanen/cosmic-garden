@@ -1,6 +1,6 @@
 //! Tellyportaling.
 
-use std::{rc::Weak, sync::Arc};
+use std::sync::Arc;
 
 use async_trait::async_trait;
 
