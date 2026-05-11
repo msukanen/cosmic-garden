@@ -2,6 +2,7 @@
 
 use std::fmt::Display;
 
+use nohash_hasher::IsEnabled;
 use serde::{Deserialize, Serialize};
 
 /// Directions
@@ -14,6 +15,8 @@ pub enum Direction {
     /// Custom directions, e.g. portals, trapdoors, etc.
     Custom(String)
 }
+
+impl IsEnabled for Direction {}
 
 /// Direction related error(s).
 #[derive(Debug)]
