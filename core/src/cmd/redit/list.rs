@@ -77,7 +77,7 @@ mod cmd_redit_list {
             let id = format!("{}-{i}", alphabet[i % alphalen]);
             let t = format!("Room #{i}");
             let d = format!("This would be the room #{i}");
-            let r = Room::new(&id, &t).await.ok().unwrap();
+            let r = Room::new(&id, &t, false).await.ok().unwrap();
             r.write().await.desc = d;
             lock.insert_room(r).await.ok();
         }
