@@ -20,23 +20,22 @@ impl Command for DigCommand {
             tell_user!(ctx.writer, "Destination ID?\n");
             show_help!(ctx, "u dig");
         };
-        let Ok(dest_id) = dest.as_id() else {
-            tell_user!(ctx.writer, "'{}' doesn't work as an ID. Try again…\n", dest);
-            return ;
-        };
-
         // dir will be either a cardinal direction or Custom(..)
         let dir = Direction::from(dir);
 
         // does the world already know `dest_id`?
         let mut pre_existing = false;
-        let d_arc = if let Some(d_arc) = ctx.world.read().await.get_room_by_id(&dest_id).clone() {
+        let d_arc = if let Some(d_arc) = ctx.world.read().await.get_room_by_id(dest).clone() {
             pre_existing = true;
             d_arc
         } else {
+            let Ok(dest_id) = dest.as_id() else {
+                err_tell_user!(ctx.writer, "'{}' doesn't work as an ID. Try again…\n", dest);
+            };
+
             // make a new room, no `dest_id` present yet.
             let new_title = format!("New Room ({})", dest_id);
-            match Room::new(&dest_id, &new_title).await {
+            match Room::new(&dest_id, &new_title, false).await {
                 Ok(d_arc) => {
                     // try tell the World about us!
                     let mut w = ctx.world.write().await;
@@ -58,35 +57,44 @@ impl Command for DigCommand {
         let opp = dir.opposite();
         // symmetric dig…?
         if pre_existing {
-            if opp.is_err() {
-                err_tell_user!(ctx.writer, "Exit to <c cyan>{}</c> grafted, but it's <c red>unidirectional</c>.\nIf wanted/needed, go <c yellow>dig</c> or <c yellow>way</c> a return route manually.\n", dest_id);
-            }
+            let mut uni = if opp.is_err() {
+                tell_user!(ctx.writer, "Exit to <c cyan>{}</c> grafted, but it's <c red>unidirectional</c>.\nIf wanted/needed, go <c yellow>dig</c> or <c yellow>way</c> a return route manually.\n", dest);
+                true
+            } else { false };
             let opp = opp.unwrap();
             // lets not overwrite already existing exit…
             {
                 let mut d = d_arc.write().await;
                 if d.contains_exit(&opp) {
-                    err_tell_user!(ctx.writer, "Exit '<c cyan>{}</c>' grafted, but <c cyan>{}</c>'s corresponding <c cyan>{}</c> is already occupied.\nYou need to sort out return direction manually there, if needed.\n", dir, dest_id, opp);
+                    uni = true;
+                    tell_user!(ctx.writer, "Exit '<c cyan>{}</c>' grafted, but <c cyan>{}</c>'s corresponding <c cyan>{}</c> is already occupied.\nYou need to sort out return direction manually there, if needed.\n", dir, dest, opp);
                 }
                 let exit = Exit::Free { room: Arc::downgrade(&origin_arc) };
                 d.assign_exit(opp.clone(), exit).await;
             }
+            let exit = Exit::Free { room: Arc::downgrade(&d_arc) };
+            if !uni {
+                tell_user!(ctx.writer, "Bidirectional exit {} ↔ {} grafted.\n", dir, opp);
+            }
+            origin_arc.write().await.assign_exit(dir, exit).await;
+            ctx.out.janitor.send(SystemSignal::SaveRoom { arc: origin_arc }).ok();
             ctx.out.janitor.send(SystemSignal::SaveRoom { arc: d_arc }).ok();
-            tell_user!(ctx.writer, "Bidirectional exit {} ↔ {} grafted.\n", dir, opp);
             return;
         }
 
         if let Ok(opp) = opp {
             let exit = Exit::Free { room: Arc::downgrade(&origin_arc) };
+            ctx.out.janitor.send(SystemSignal::SaveRoom { arc: origin_arc.clone() }).ok();
             tell_user!(ctx.writer, "Bidirectional exit {} ↔ {} grafted.\n\n", dir, opp);
             d_arc.write().await.assign_exit(opp, exit).await;
         } else {
-            tell_user!(ctx.writer, "Custom <c red>unidirectional</c> exit <c cyan>{}</c> has no direct opposite.\nYou need to make one manually at <c cyan>{}</c> …\n", dir, dest_id);
+            tell_user!(ctx.writer, "Custom <c red>unidirectional</c> exit <c cyan>{}</c> has no direct opposite.\nYou need to make one manually at <c cyan>{}</c> …\n", dir, dest);
         }
 
         // bypass life-thread judgement and just in case wires got tangled, abort combat…:
         ctx.out.life.send(SystemSignal::AbortBattleNow { who: plr.clone() as Battler }).ok();
         translocate!(plr, origin_arc, d_arc);
+        ctx.out.janitor.send(SystemSignal::SaveRoom { arc: d_arc }).ok();
         plr.write().await.last_goto = None;
         ReditCommand.exec({ctx.args = "--dig";ctx}).await;
     }
