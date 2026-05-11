@@ -296,12 +296,12 @@ impl Metamorphize for Item {
 
 #[async_trait]
 impl Tickable for Item {
-    fn tick(&mut self, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         match self {
-            Self::Consumable(c)   => c.tick(room_env, None),
+            Self::Consumable(c)   => c.tick(curr_tick, room_env, None),
             Self::Container(loot) |
-            Self::Corpse { loot,..} => loot.tick(room_env, None),
-            Self::Primordial(c)     => c.tick(room_env, None),
+            Self::Corpse { loot,..} => loot.tick(curr_tick, room_env, None),
+            Self::Primordial(c)     => c.tick(curr_tick, room_env, None),
             _ => None
         }
     }

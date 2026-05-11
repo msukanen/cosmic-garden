@@ -5,7 +5,7 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::{RwLock, Semaphore}, task::JoinSet};
 
-use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity}, io::world_fp, item::Item, mob::EntityWeak, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity}, io::{Broadcast, world_fp}, item::Item, mob::EntityWeak, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 pub(crate) const CPU_CORES: usize = 16;// adjust to whatever number of cores your server has…
 
@@ -229,7 +229,7 @@ impl World {
     }
 
     /// Establish links between [Room(s)][Room].
-    pub async fn link_rooms(&mut self) {
+    pub async fn link_rooms(&mut self, broadcast: tokio::sync::broadcast::Sender<Broadcast>) {
         let rooms = self.rooms.clone();
         for room_arc in rooms.values() {
             let mut room = room_arc.write().await;
@@ -240,6 +240,7 @@ impl World {
                 log::trace!("Welding '{}' as root room.", room.id());
                 self.root_room = room_arc.clone().into();
             }
+            room.out = broadcast.clone();
         }
 
         if self.root_room.is_none() {
@@ -297,7 +298,7 @@ impl World {
 }
 
 impl World {
-    pub async fn tick(&mut self) {
+    pub async fn tick(&mut self, curr_tick: usize) {
         #[allow(dead_code)] static mut WC: usize = 0;
         
         let max_par = CPU_CORES;
@@ -307,10 +308,11 @@ impl World {
         for r in self.rooms.values() {
             let sem_clone = Arc::clone(&sem);
             let r_clone = r.clone();
+            let r_curr_tick = curr_tick;
             join_set.spawn(async move {
                 let _permit = sem_clone.acquire_owned().await.unwrap();
                 let mut r = r_clone.write().await;
-                r.tick().await;
+                r.tick(r_curr_tick, r_clone.clone()).await;
             });
         }
         

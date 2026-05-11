@@ -30,6 +30,9 @@ pub const SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY: SpecialEnvironment = 1 << 7;// ge
     pub const GRAVITY_ANOMALY_LOW_H: SpecialEnvironment  = SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY + 1 << 9;
 pub const SPECIAL_ENVIRONMENT_OBSTRUCTED_VISIBILITY: SpecialEnvironment = 1 << 10;
 pub const SPECIAL_ENVIRONMENT_FOGGED_VISIBILITY: SpecialEnvironment     = 1 << 11;
+// Weather stuff…
+pub const WEATHER_RAIN: SpecialEnvironment = 1 << 32;
+pub const WEATHER_CLEAR: SpecialEnvironment = 1 << 33;
 
 /// Unusual/mentionable terrain types.
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]

@@ -434,7 +434,7 @@ impl Display for Stat {
 #[async_trait]
 impl Tickable for Stat {
     // NOTE stat ticks don't have global effects…
-    fn tick(&mut self, r_env: SpecialEnvironment, r_ter: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, _: usize, r_env: SpecialEnvironment, r_ter: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         // apply environment and terrain effects, if any (for this [Stat]).
         match self {
             Self::Brn {room_env,..} => *room_env = r_env,
@@ -460,9 +460,7 @@ impl Tickable for Stat {
         if self.capped() && drain > 0.0 {
             return None;
         }
-        //let old = self.current();
         self.add_assign(drain);
-        //(self.current() - old).abs() > 0.001;
         None
     }
 }

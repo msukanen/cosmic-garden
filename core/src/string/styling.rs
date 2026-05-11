@@ -190,7 +190,7 @@ pub fn format_color<S: Display>(input: S) -> String {
 ///
 /// Maybe 's', based on `num`.
 /// 
-pub const fn maybe_plural(num: i32) -> &'static str { if num == 1 {""} else {"s"}}
+pub const fn maybe_plural(num: i64) -> &'static str { if num == 1 {""} else {"s"}}
 
 pub trait Truthy {
     fn true_false(&self) -> bool;

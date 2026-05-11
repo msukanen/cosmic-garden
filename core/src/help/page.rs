@@ -315,7 +315,7 @@ impl HelpLibrary {
         let alen = self.alias.len();
         let ilen = self.items.len();
         log::info!("Re-index complete. Librarian now knows {alen} path{} to {ilen} document{}.",
-            maybe_plural(alen as i32), maybe_plural(ilen as i32));// the document number highly unlikely ever exceeds i32::MAX …
+            maybe_plural(alen as i64), maybe_plural(ilen as i64));// the document number highly unlikely ever exceeds i32::MAX …
     }
 
     /// Shelve a document.

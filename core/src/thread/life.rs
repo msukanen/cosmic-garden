@@ -302,7 +302,7 @@ pub(crate) async fn life(
                 let tick_start = Instant::now();
                 {
                     let mut w = world.write().await;
-                    w.tick().await;
+                    w.tick(tick).await;
                 }
                 tick += 1;
                 let elapsed = tick_start.elapsed();
@@ -310,10 +310,11 @@ pub(crate) async fn life(
                 if elapsed > Duration::from_millis(10) {
                     log::warn!("Slow tick: {tick} took {elapsed:?}?!");
                 }
+                #[cfg(debug_assertions)]{
                 if tick % 1000 == 0 {
                     let total_elapsed = start_time.elapsed().as_secs_f64();
                     log::debug!("{tick} ticks… {total_elapsed:.2}s | drift {drift:?} | expected {}s", tick / 100);
-                }
+                }}
             }
 
             //
@@ -321,8 +322,8 @@ pub(crate) async fn life(
             //
             _ = battle_interval.tick() => {
                 if bs.active.is_empty() { continue; }
-                static mut C: usize = 1;
-                #[cfg(test)]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
+                #[allow(dead_code)] static mut C: usize = 1;
+                #[cfg(all(test, feature = "stresstest"))]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
                 let mut end_fight_for: Vec<usize> = vec![];
 
                 // navigate the aggro swamp…
@@ -383,6 +384,7 @@ pub(crate) async fn life(
                     bs.remove(d).await;
                 }
 
+                #[cfg(test)]
                 unsafe { C += 1; }
             }
 
@@ -547,7 +549,7 @@ pub(crate) async fn life(
     }
 
     battle_reporter.await.ok();
-    log::info!("Lifeline checking out after {tick} tick{}. Bye now!", maybe_plural(tick));
+    log::info!("Lifeline checking out after {tick} tick{}. Bye now!", maybe_plural(tick as i64));// `tick` most likely doesn't overflow i64…, like ever.
 }
 
 /// Spawn a [Mob] or [Item] at given [Room] (by ID).

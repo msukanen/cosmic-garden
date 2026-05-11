@@ -207,15 +207,15 @@ impl<'a> IntoIterator for &'a ContainerVariant {
 
 #[async_trait]
 impl Tickable for ContainerVariant {
-    fn tick(&mut self, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         match self {
             Self::PlayerInventory(spec)|
             Self::Backpack(spec) |
             Self::Chest(spec)    |
             Self::Pouch(spec)    |
-            Self::Room(spec)     => spec.tick(room_env, None),
+            Self::Room(spec)     => spec.tick(curr_tick, room_env, None),
             Self::Corpse(CorpseSpec { spec,.. })=> {
-                if let Some(mut t) = spec.tick(room_env, None) {
+                if let Some(mut t) = spec.tick(curr_tick, room_env, None) {
                     t.retain(|e| !matches!(e, TickMeaning::General));
                     t.into()
                 } else { None }

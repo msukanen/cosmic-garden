@@ -67,6 +67,7 @@ async fn main() {
         log::info!("Command aliases instantiated.");
     };
 
+    let priv_chs = SignalChannels::default();
     let mut world = World
         ::load_or_bootstrap(&args).await
         .unwrap_or_else(|err| {
@@ -74,10 +75,9 @@ async fn main() {
             panic!("World dead or in fire?! See logs…");
         });
     // connect some dots…
-    world.link_rooms().await;
+    world.link_rooms(priv_chs.out.broadcast.clone()).await;
 
     // Establish system thread interconnection channels.
-    let priv_chs = SignalChannels::default();
     let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
     world.channels = Some(priv_chs.out.clone());
 

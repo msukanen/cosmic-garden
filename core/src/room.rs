@@ -6,7 +6,7 @@ use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use serde::{Deserialize, Serialize};
 use tokio::{fs as async_fs, sync::{RwLock, Semaphore}};
 
-use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::room_fp, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::EntityArc, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::Tickable, util::direction::Direction, world::World};
+use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World};
 
 pub mod environ;
 pub mod locking;
@@ -100,6 +100,7 @@ pub struct Room {
     /// Room's general type.
     #[serde(default)] pub room_type: RoomType,
     #[serde(skip, default = "room_sem_default")] sem: Arc<Semaphore>,
+    #[serde(skip, default = "mock_broadcast")] pub(super) out: tokio::sync::broadcast::Sender<Broadcast>,
 }
 /// Room arc type.
 pub type RoomArc = Arc<RwLock<Room>>;
@@ -200,6 +201,11 @@ mod arc_n_t_transform {
     }
 }
 
+fn mock_broadcast() -> tokio::sync::broadcast::Sender<Broadcast> {
+    let (tx,_) = tokio::sync::broadcast::channel(1);
+    tx
+}
+
 impl Room {
     /// Attempt to load a room.
     /// 
@@ -235,6 +241,7 @@ impl Room {
                     terrain: None,
                     room_type: RoomType::default(),
                     sem: room_sem_default(),
+                    out: mock_broadcast(),
                 }
             }
         };
@@ -307,6 +314,7 @@ impl Room {
             terrain: self.terrain.clone(),
             room_type: self.room_type.clone(),
             sem: self.sem.clone(),
+            out: self.out.clone(),
         }
     }
 
@@ -457,17 +465,20 @@ impl StorageMut for Room {
 }
 
 impl Room {
-    pub async fn tick(&mut self) {
+    pub async fn tick(&mut self, curr_tick: usize, room: RoomArc) {
         // Deal with players first…
         for p_weak in self.who.values() {
             if let Some(p_arc) = p_weak.upgrade() {
                 if let Ok(mut p) = p_arc.try_write() {
-                    _ = p.tick(self.special_environment, self.terrain);
+                    _ = p.tick(curr_tick, self.special_environment, self.terrain);
                 }
             }
         }
 
         // …then entitites…
+        #[cfg(not(feature = "stresstest"))]
+        const BATCH_SIZE: usize = 10;
+        #[cfg(feature = "stresstest")]
         const BATCH_SIZE: usize = 5_000;
         let mut join_set = tokio::task::JoinSet::new();
         let mut curr_ent_batch = Vec::with_capacity(BATCH_SIZE);
@@ -478,10 +489,26 @@ impl Room {
                 let sem_clone = Arc::clone(&self.sem);
                 let r_env = self.special_environment;
                 let r_ter = self.terrain.clone();
+                let r_tick = curr_tick;
+                let out = self.out.clone();
+                let room = room.clone();
                 join_set.spawn(async move {
                     let _permit = sem_clone.acquire_owned().await.unwrap();
                     for e in batch {
-                        e.write().await.tick(r_env, r_ter);
+                        if let Some(t) = e.write().await.tick(r_tick, r_env, r_ter) {
+                            for ai_act in t {
+                                if let TickMeaning::AiStateChange { maybe_action: Some(act), .. } = ai_act {
+                                    match act {
+                                        AiAction::Emote { fmt } => {
+                                            out.send(Broadcast::MessageInRoom {
+                                                room: room.clone(),
+                                                message: fmt
+                                            }).ok();},
+                                        //_ => {}
+                                    }
+                                }
+                            }
+                        }
                     }
                 });
             }
@@ -491,10 +518,25 @@ impl Room {
             let sem_clone = Arc::clone(&self.sem);
             let r_env = self.special_environment;
             let r_ter = self.terrain.clone();
+            let r_tick = curr_tick;
+            let out = self.out.clone();
             join_set.spawn(async move {
                 let _permit = sem_clone.acquire_owned().await.unwrap();
                 for e in curr_ent_batch {
-                    e.write().await.tick(r_env, r_ter);
+                        if let Some(t) = e.write().await.tick(r_tick, r_env, r_ter) {
+                            for ai_act in t {
+                                if let TickMeaning::AiStateChange { maybe_action: Some(act), .. } = ai_act {
+                                    match act {
+                                        AiAction::Emote { fmt } => {
+                                            out.send(Broadcast::MessageInRoom {
+                                                room: room.clone(),
+                                                message: fmt
+                                            }).ok();},
+                                        //_ => {}
+                                    }
+                                }
+                            }
+                        }
                 }
             });
         }
@@ -502,7 +544,7 @@ impl Room {
         while let Some(_) = join_set.join_next().await {}
 
         // no reaction yet to "positive" tick(s)
-        let _ = self.contents.tick(self.special_environment, self.terrain);
+        let _ = self.contents.tick(curr_tick, self.special_environment, self.terrain);
         #[cfg(all(debug_assertions,feature = "stresstest"))]{
             log::debug!("Room '{}' ticked.", self.id);
         }

@@ -11,7 +11,7 @@ use crate::{
     combat::{Combatant, CombatantMut, DamageType, Damager}, error::CgError, identity::{IdentityQuery, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
         Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
     },
-    mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}},
+    mob::{Ai, Gender, GenderError, GenderType, Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}},
     room::{RoomWeak, environ::{SpecialEnvironment, Terrain}},
     string::UNNAMED,
     thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels},
@@ -126,9 +126,10 @@ impl TryFrom<&str> for EntitySize {
 #[derive(Debug, Clone, DescribableMut, Deserialize, Serialize, IdentityMut, Mob, MobMut, FactionMut, CombatantMut)]
 pub struct Entity {
     id: String,
-    #[identity(title)]
-    name: String,
+    #[identity(title)] name: String,
+    #[serde(default, skip)] location: RoomWeak,
     desc: String,
+    #[serde(default)] gender: GenderType,
     hp: Stat,
     mp: Stat,
     san: Stat,
@@ -140,14 +141,11 @@ pub struct Entity {
     max_weapon_size: WeaponSize,
     size: EntitySize,
     pub(crate) equipped_weapon: Option<Item>,
-    #[serde(default, skip)]
-    location: RoomWeak,
-    #[serde(default = "entity_inv_default")]
-    inventory: ContainerVariant,
-    #[serde(default, skip)]
-    brain_freeze: bool,
-    #[serde(default)]
-    gender: GenderType,
+    #[serde(default = "entity_inv_default")] inventory: ContainerVariant,
+    
+    // AI stuff…
+    #[serde(default, skip)] brain_freeze: bool,
+    #[serde(default)] ai: Ai,
 }
 
 impl Default for Entity {
@@ -171,6 +169,7 @@ impl Default for Entity {
             brain_freeze: false,
             desc: "Some sort of an entity. Use <c yellow>desc =</c> to describe it…".into(),
             gender: GenderType::default(),
+            ai: Ai::default(),
         }
     }
 }
@@ -269,13 +268,14 @@ impl Damager for Entity {
 
 #[async_trait]
 impl Tickable for Entity {
-    fn tick(&mut self, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
-        self.hp_mut().tick(room_env, room_terrain);
-        self.mp_mut().tick(room_env, room_terrain);
-        self.sn_mut().tick(room_env, room_terrain);
-        self.san_mut().tick(room_env, room_terrain);
+    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+        self.hp_mut().tick(curr_tick, room_env, room_terrain);
+        self.mp_mut().tick(curr_tick, room_env, room_terrain);
+        self.sn_mut().tick(curr_tick, room_env, room_terrain);
+        self.san_mut().tick(curr_tick, room_env, room_terrain);
+        self.ai.tick(&self.title().to_string(), curr_tick, room_env, room_terrain);
         // TODO self-effects of inv
-        self.inventory.tick(room_env, room_terrain)
+        self.inventory.tick(curr_tick, room_env, room_terrain)
     }
 }
 
@@ -308,6 +308,7 @@ mod entity_tests {
         assert_eq!(UNNAMED, e.title());
         e.mp_mut().set_drain(-1.0);
         log::debug!("re-UUID is heavy (Uuid::new_v4()), and it'd never be used in a loop like this in reality, but… hold the press until {LOOPS} x 100 ticks is done.:");
+        let mut tick = 0;
         for _ in 0..LOOPS {
             let old_id = e.id().to_string();
             _ = e.set_id(&old_id.re_uuid(), true);
@@ -316,9 +317,10 @@ mod entity_tests {
             e.mp_mut().set_curr(next_val);
             while next_val > 0.0 {
                 next_val -= 1.0;
-                if e.tick(0,None).is_none() {
+                if e.tick(tick, 0,None).is_none() {
                     panic!("No tick?!");
                 }
+                tick += 1;
                 assert_eq!(next_val, e.mp());
             }
             assert_eq!(Ok(true), e.is_unconscious());

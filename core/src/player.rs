@@ -345,11 +345,11 @@ impl Accessor for Player {
 
 #[async_trait]
 impl Tickable for Player {
-    fn tick(&mut self, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
-        self.hp_mut().tick(room_env, room_terrain);
-        self.mp_mut().tick(room_env, room_terrain);
-        self.sn_mut().tick(room_env, room_terrain);
-        self.san_mut().tick(room_env, room_terrain);
+    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+        self.hp_mut().tick(curr_tick, room_env, room_terrain);
+        self.mp_mut().tick(curr_tick, room_env, room_terrain);
+        self.sn_mut().tick(curr_tick, room_env, room_terrain);
+        self.san_mut().tick(curr_tick, room_env, room_terrain);
         let old_affects = std::mem::take(&mut self.affects);
         let mut survivors = HashMap::new();
         for (id, mut affect) in old_affects {
@@ -361,7 +361,7 @@ impl Tickable for Player {
                 }
             }
             let hc = matches!(affect, Affect::HardcorePending { .. });
-            affect.tick(room_env, room_terrain);
+            affect.tick(curr_tick, room_env, room_terrain);
             if affect.expired() && hc {
                 if let Some(false) = self.hardcore {
                     self.hardcore = None;
@@ -376,7 +376,7 @@ impl Tickable for Player {
         
         // inventory ticks?
         let bubbles =
-            if let Some(mut eff)= self.inventory.tick(room_env, room_terrain) {
+            if let Some(mut eff)= self.inventory.tick(curr_tick, room_env, room_terrain) {
                 eff.retain(|e| {
                     match e {
                         // we care only about direct possessor effects:

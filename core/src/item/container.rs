@@ -348,10 +348,10 @@ impl<'a> IntoIterator for &'a ContainerSpec {
 
 #[async_trait]
 impl Tickable for ContainerSpec {
-    fn tick(&mut self, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         let mut ticked = vec![];
         for i in self.contents.values_mut() {
-            if let Some(t) = i.tick(room_env, None) {
+            if let Some(t) = i.tick(curr_tick, room_env, None) {
                 ticked.extend(t);
             }
         }
