@@ -766,7 +766,7 @@ mod life_tests {
         get_operational_mock_life!(c,w);
         get_operational_mock_librarian!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
-        stabilize_threads!();
+        stabilize_threads!(1000);
         let start_work = std::time::Instant::now();
         let (otx,orx) = tokio::sync::oneshot::channel::<bool>();
         c.life.send(SystemSignal::SpawnBatch { what: SpawnType::Mob { id: "goblin".into() }, num: MILLION_GOBBOS, room: "r-1".into(), reply: otx.into() }).ok();

@@ -146,13 +146,13 @@ impl World {
                         {
                             let mut l1 = r1.write().await;
                             let exit = Exit::Free { room: Arc::downgrade(&r2) };
-                            l1.assign_exit(Direction::North, exit).await;
+                            l1.assign_exit(Direction::North, r2_id.clone().into(), exit).await;
                             l1.save().await?;
                         }
                         {   
                             let mut l2 = r2.write().await;
                             let exit = Exit::Free { room: Arc::downgrade(&r1) };
-                            l2.assign_exit(Direction::South, exit).await;
+                            l2.assign_exit(Direction::South, r1_id.clone().into(), exit).await;
                             l2.save().await?;
                         }
                         rooms

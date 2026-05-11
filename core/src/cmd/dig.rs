@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, combat::Battler, err_tell_user, identity::{MachineIdentity, uniq::UuidValidator}, room::{Room, locking::Exit}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::SystemSignal, translocate, util::direction::Direction, validate_access};
+use crate::{cmd::{Command, CommandCtx, redit::ReditCommand}, combat::Battler, err_tell_user, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, room::{Room, locking::Exit}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::SystemSignal, translocate, util::direction::Direction, validate_access};
 
 pub struct DigCommand;
 
@@ -14,6 +14,7 @@ impl Command for DigCommand {
         let plr = validate_access!(ctx, builder);
         show_help_if_needed!(ctx, "dig");
         let origin_arc = roomloc_or_bust!(plr);
+        let origin_id = origin_arc.read().await.id().to_string();
 
         let (dir, dest) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
         if dest.is_empty() {
@@ -25,9 +26,10 @@ impl Command for DigCommand {
 
         // does the world already know `dest_id`?
         let mut pre_existing = false;
-        let d_arc = if let Some(d_arc) = ctx.world.read().await.get_room_by_id(dest).clone() {
+        let (d_id, d_arc) = if let Some(d_arc) = ctx.world.read().await.get_room_by_id(dest).clone() {
             pre_existing = true;
-            d_arc
+            let d_id = d_arc.read().await.id().to_string();
+            (d_id, d_arc)
         } else {
             let Ok(dest_id) = dest.as_id() else {
                 err_tell_user!(ctx.writer, "'{}' doesn't work as an ID. Try again…\n", dest);
@@ -44,8 +46,9 @@ impl Command for DigCommand {
                     }
                     
                     let exit = Exit::Free { room: Arc::downgrade(&d_arc) };
-                    origin_arc.write().await.assign_exit(dir.clone(), exit).await;
-                    d_arc
+                    let d_id = d_arc.read().await.id().to_string();
+                    origin_arc.write().await.assign_exit(dir.clone(), d_id.clone().into(), exit).await;
+                    (d_id, d_arc)
                 },
                 Err(e) => {
                     log::warn!("Digging accident: {e:?}");
@@ -70,13 +73,13 @@ impl Command for DigCommand {
                     tell_user!(ctx.writer, "Exit '<c cyan>{}</c>' grafted, but <c cyan>{}</c>'s corresponding <c cyan>{}</c> is already occupied.\nYou need to sort out return direction manually there, if needed.\n", dir, dest, opp);
                 }
                 let exit = Exit::Free { room: Arc::downgrade(&origin_arc) };
-                d.assign_exit(opp.clone(), exit).await;
+                d.assign_exit(opp.clone(), origin_id.clone().into(), exit).await;
             }
             let exit = Exit::Free { room: Arc::downgrade(&d_arc) };
             if !uni {
                 tell_user!(ctx.writer, "Bidirectional exit {} ↔ {} grafted.\n", dir, opp);
             }
-            origin_arc.write().await.assign_exit(dir, exit).await;
+            origin_arc.write().await.assign_exit(dir, d_id.into(), exit).await;
             ctx.out.janitor.send(SystemSignal::SaveRoom { arc: origin_arc }).ok();
             ctx.out.janitor.send(SystemSignal::SaveRoom { arc: d_arc }).ok();
             return;
@@ -86,7 +89,7 @@ impl Command for DigCommand {
             let exit = Exit::Free { room: Arc::downgrade(&origin_arc) };
             ctx.out.janitor.send(SystemSignal::SaveRoom { arc: origin_arc.clone() }).ok();
             tell_user!(ctx.writer, "Bidirectional exit {} ↔ {} grafted.\n\n", dir, opp);
-            d_arc.write().await.assign_exit(opp, exit).await;
+            d_arc.write().await.assign_exit(opp, origin_id.into(), exit).await;
         } else {
             tell_user!(ctx.writer, "Custom <c red>unidirectional</c> exit <c cyan>{}</c> has no direct opposite.\nYou need to make one manually at <c cyan>{}</c> …\n", dir, dest);
         }

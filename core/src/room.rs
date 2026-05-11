@@ -72,6 +72,11 @@ impl RoomPayload {
 fn empty_room_desc() -> String { "A room.".into() }
 fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
 
+#[cfg(not(feature = "pi_compat"))]
+type DirectionHasher = BuildNoHashHasher<Direction>;
+#[cfg(feature = "pi_compat")]
+type DirectionHasher = std::collections::hash_map::RandomState;
+
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct Room {
     id: String,
@@ -82,10 +87,10 @@ pub struct Room {
     pub who: HashMap<String, PlayerWeak>,
 
     #[serde(default, skip)]
-    pub exits: HashMap<Direction, Exit, BuildNoHashHasher<Direction>>,
+    pub exits: HashMap<Direction, Exit, DirectionHasher>,
     
     #[serde(default)]
-    raw_exits: HashMap<Direction, ExitLike, BuildNoHashHasher<Direction>>,
+    raw_exits: HashMap<Direction, ExitLike, DirectionHasher>,
 
     #[serde(default = "room_inventory")]
     contents: ContainerVariant,
@@ -123,36 +128,46 @@ pub struct ExitLike {
 }
 
 impl ExitLike {
-    pub async fn from(ex: &Exit) -> Self {
+    pub async fn from(ex_id: Option<String>, ex: &Exit) -> Self {
         match ex {
-            Exit::Closed { key_bp, room } =>
+            Exit::Closed { key_bp,..} =>
                 Self {
-                    room_id: option_room_id_from_weak!(room),
+                    room_id: ex_id,
                     key_bp: key_bp.clone(),
                     state: ExitState::Closed
                 },
-            Exit::Free { room } =>
-                Self { room_id: option_room_id_from_weak!(room),
+            Exit::Free {..} =>
+                Self {
+                    room_id: {
+                        log::debug!("Pre-free");
+                        let o = ex_id;
+                        log::debug!("Post-free");
+                        o
+                    },
                     key_bp: None,
                     state: ExitState::Free
                 },
-            Exit::Locked { key_bp, room } =>
-                Self { room_id: option_room_id_from_weak!(room),
+            Exit::Locked { key_bp,..} =>
+                Self {
+                    room_id: ex_id,
                     key_bp: key_bp.clone().into(),
                     state: ExitState::Locked
                 },
-            Exit::LockedAL { key_bp, room } =>
-                Self { room_id: option_room_id_from_weak!(room),
+            Exit::LockedAL { key_bp,..} =>
+                Self {
+                    room_id: ex_id,
                     key_bp: key_bp.clone().into(),
                     state: ExitState::LockedAL
                 },
-            Exit::Open { key_bp, room } =>
-                Self { room_id: option_room_id_from_weak!(room),
+            Exit::Open { key_bp,..} =>
+                Self {
+                    room_id: ex_id,
                     key_bp: key_bp.clone(),
                     state: ExitState::Open
                 },
-            Exit::OpenAL { key_bp, room } =>
-                Self { room_id: option_room_id_from_weak!(room),
+            Exit::OpenAL { key_bp,..} =>
+                Self {
+                    room_id: ex_id,
                     key_bp: key_bp.clone().into(),
                     state: ExitState::OpenAL
                 },
@@ -268,8 +283,16 @@ impl Room {
     }
 
     /// Assign an [Exit]. Existing [`dir`][Direction] will be overwritten.
-    pub async fn assign_exit(&mut self, dir: Direction, exit: Exit) {
-        self.raw_exits.insert(dir.clone(), ExitLike::from(&exit).await);
+    /// 
+    /// # Args
+    /// - `dir`ection.
+    /// - `exit_id` of the [Exit].
+    /// - `exit` itself.
+    //
+    // `exit_id` has to be determined by the caller or we face potential deadlock(s).
+    //
+    pub async fn assign_exit(&mut self, dir: Direction, exit_id: Option<String>, exit: Exit) {
+        self.raw_exits.insert(dir.clone(), ExitLike::from(exit_id, &exit).await);
         self.exits.insert(dir, exit);
     }
 

@@ -4,7 +4,7 @@ use std::sync::{Arc, Weak};
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, room::{RoomArc, locking::Exit}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::SystemSignal, util::direction::{Direction, Directional}, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, identity::IdentityQuery, room::{RoomArc, locking::Exit}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, thread::SystemSignal, util::direction::{Direction, Directional}, validate_access};
 
 pub struct WayCommand;
 
@@ -91,12 +91,14 @@ async fn rm_bi_way(ctx: &mut CommandCtx<'_>, origin: RoomArc, dir: &str) {
 
 async fn make_uni_way(ctx: &mut CommandCtx<'_>, origin: RoomArc, dir: &str, dest_id: &str) {
     let dir = Direction::from(dir);
+    let mut d_id = None;
     let exit = Exit::Free { room:
         if let Some(d_arc) = ctx.world.read().await.get_room_by_id(dest_id) {
+            d_id = Some(d_arc.read().await.id().to_string());
             Arc::downgrade(&d_arc)
         } else { Weak::new() }
     };
-    origin.write().await.assign_exit(dir, exit).await;
+    origin.write().await.assign_exit(dir, d_id, exit).await;
 }
 
 async fn make_bi_way(ctx: &mut CommandCtx<'_>, origin: RoomArc, dir: &str, dest_id: &str) {
@@ -114,7 +116,8 @@ async fn make_bi_way(ctx: &mut CommandCtx<'_>, origin: RoomArc, dir: &str, dest_
                     err_tell_user!(ctx.writer, "Shucks! Exit '{}' created, but destination '{}' already has an assigned opposite.\nUse <c yellow>way <dir> <room-id> override</c> to force redirection.\n", dir, dest_id);
                 }
                 let exit = Exit::Free { room: Arc::downgrade(&origin) };
-                dw.assign_exit(opp.clone(), exit).await;
+                let o_id = Some(origin.read().await.id().to_string());
+                dw.assign_exit(opp.clone(), o_id, exit).await;
             }
             tell_user!(ctx.writer, "Bidirectional link {} ↔ {} established.\n", dir, opp);
             ctx.out.janitor.send(SystemSignal::SaveRoom { arc: d_arc }).ok();

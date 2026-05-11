@@ -30,12 +30,19 @@ impl EntityLibrary {
             struct BasicMobs {
                 mobs: Vec<Entity>,
             }
+            // let ok = ;
+            // if ok.is_err() {
+            //     let Err(err) = ok else {panic!("what?!")};
+            //     log::debug!("{err:?}");
+            //     panic!("Bye!");
+            // }
             let wrapper: BasicMobs = toml::from_str(basic_mobs_toml)?;
             for mob in wrapper.mobs {
                 log::debug!(" EL-boot → '{}'", mob.id());
                 lib.id_stem.insert(mob.id().to_string(), true);
                 lib.bps.insert(mob.id().to_string(), mob);
             }
+            log::debug!("basic_mobs_toml read.");
             lib.save().await?;
 
             return  Ok(lib)

@@ -38,6 +38,10 @@ The major threads in a nutshell:
 * Janitor acts as a… janitor. He and his co-spawns deal with disk I/O and other
   janitorial stuff.
 
+### Pi
+
+To get CG running on a Pi, use `--features pi_compat` when compiling.
+
 ### Security
 
 `Argon2` and `HIBP` - 'nuff said?
