@@ -26,14 +26,6 @@ impl Display for RoomError {
     }
 }
 
-macro_rules! option_room_id_from_weak {
-    ($r:expr) => {
-        if let Some(arc) = $r.upgrade() {
-            arc.read().await.id().to_string().into()
-        } else { None }
-    };
-}
-
 impl std::error::Error for RoomError {}
 
 /// Payload for [SystemSignal].
@@ -72,9 +64,6 @@ impl RoomPayload {
 fn empty_room_desc() -> String { "A room.".into() }
 fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
 
-#[cfg(not(feature = "pi_compat"))]
-type DirectionHasher = BuildNoHashHasher<Direction>;
-#[cfg(feature = "pi_compat")]
 type DirectionHasher = std::collections::hash_map::RandomState;
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
@@ -138,12 +127,7 @@ impl ExitLike {
                 },
             Exit::Free {..} =>
                 Self {
-                    room_id: {
-                        log::debug!("Pre-free");
-                        let o = ex_id;
-                        log::debug!("Post-free");
-                        o
-                    },
+                    room_id: ex_id,
                     key_bp: None,
                     state: ExitState::Free
                 },

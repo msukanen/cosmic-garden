@@ -64,9 +64,9 @@ impl Command for DigCommand {
                 tell_user!(ctx.writer, "Exit to <c cyan>{}</c> grafted, but it's <c red>unidirectional</c>.\nIf wanted/needed, go <c yellow>dig</c> or <c yellow>way</c> a return route manually.\n", dest);
                 true
             } else { false };
-            let opp = opp.unwrap();
             // lets not overwrite already existing exit…
-            {
+            let opp = if !uni {
+                let opp = opp.unwrap();
                 let mut d = d_arc.write().await;
                 if d.contains_exit(&opp) {
                     uni = true;
@@ -74,14 +74,15 @@ impl Command for DigCommand {
                 }
                 let exit = Exit::Free { room: Arc::downgrade(&origin_arc) };
                 d.assign_exit(opp.clone(), origin_id.clone().into(), exit).await;
-            }
+                opp.into()
+            } else { None };
             let exit = Exit::Free { room: Arc::downgrade(&d_arc) };
             if !uni {
-                tell_user!(ctx.writer, "Bidirectional exit {} ↔ {} grafted.\n", dir, opp);
+                tell_user!(ctx.writer, "Bidirectional exit {} ↔ {} grafted.\n", dir, opp.unwrap());
+                ctx.out.janitor.send(SystemSignal::SaveRoom { arc: d_arc }).ok();
             }
             origin_arc.write().await.assign_exit(dir, d_id.into(), exit).await;
             ctx.out.janitor.send(SystemSignal::SaveRoom { arc: origin_arc }).ok();
-            ctx.out.janitor.send(SystemSignal::SaveRoom { arc: d_arc }).ok();
             return;
         }
 
