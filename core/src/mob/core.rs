@@ -1,6 +1,6 @@
 //! Mob core.
 
-use std::fmt::Display;
+use std::{fmt::Display, sync::RwLock};
 
 use async_trait::async_trait;
 use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mob, MobMut};
@@ -11,7 +11,7 @@ use crate::{
     combat::{Combatant, CombatantMut, DamageType, Damager}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
         Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
     },
-    mob::{Ai, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiAction, faction::{Demeanor, EntityFaction}},
+    mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiAction, faction::{Demeanor, EntityFaction}},
     room::{RoomWeak, environ::{SpecialEnvironment, Terrain}},
     string::UNNAMED,
     thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels},
@@ -123,9 +123,13 @@ impl TryFrom<&str> for EntitySize {
     }
 }
 
+/// An entity of some sort…
 #[derive(Debug, Clone, DescribableMut, Deserialize, Serialize, IdentityMut, Mob, MobMut, FactionMut, CombatantMut)]
 pub struct Entity {
-    id: String, #[serde(skip)] tick_id: MachineId,
+    id: String,
+    /// Tick-ID, used for the entity's [AI][Ai], etc.
+    // `tick_id` is derived from the [Entity]'s `Arc<RwLock<..>>`.
+    #[serde(skip)] tick_id: MachineId,
     #[identity(title)] name: String,
     #[serde(default, skip)] location: RoomWeak,
     desc: String,
@@ -203,7 +207,7 @@ impl Entity {
                 tick_id: id.as_m_id(),
                 id,
                 ..ent
-            });
+            })
         }
         
         Err(CgError::from(EntityError::NoSuchEntity(id.into())))
@@ -256,6 +260,12 @@ impl Entity {
             StatType::Rep => unimplemented!("Entity do not have 'reputation' stat."),
         }
     }
+
+    /// Set the [Entity]'s `tick_id`.
+    pub fn set_tick_id(&mut self, self_arc: &EntityArc) -> MachineId {
+        self.tick_id = lock2key!(arc self_arc);
+        self.tick_id
+    }
 }
 
 impl Damager for Entity {
@@ -284,8 +294,8 @@ impl Tickable for Entity {
 
         #[cfg(feature = "stresstest")] static mut AIMC: usize = 0;
         let ai_m =
-        //if self.should_pulse(curr_tick, self.tick_id, 15) {
-            if let Some(ai_means) = self.ai.tick(/* &self.title().to_string(),  */curr_tick, room_env, room_terrain) {
+        if self.should_pulse(curr_tick, self.tick_id, 15) {
+            if let Some(ai_means) = self.ai.tick(self.tick_id(), curr_tick, room_env, room_terrain) {
                 if let TickMeaning::AiStateChange { maybe_action: Some(AiAction::Emote { .. }), .. } = &ai_means {
                     #[cfg(feature = "stresstest")]{
                         unsafe {
@@ -298,7 +308,7 @@ impl Tickable for Entity {
                     ai_means.into()
                 } else { None }
             } else { None }
-        // } else { None }
+        } else { None }
         ;
 
         let inv_m = if self.should_pulse(curr_tick, self.tick_id, 25) {
