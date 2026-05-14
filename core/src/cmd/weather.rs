@@ -1,4 +1,4 @@
-//! Alter local weather…
+//! Check or alter local weather…
 
 use async_trait::async_trait;
 
@@ -54,12 +54,9 @@ impl Command for WeatherCommand {
 
 #[cfg(test)]
 mod cmd_weather_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use sysinfo::System;
-use tokio::sync::broadcast::error::RecvError;
-
-    use crate::{io::Broadcast, cmd::weather::WeatherCommand, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::weather::WeatherCommand, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn weather_currently() {
@@ -77,9 +74,13 @@ use tokio::sync::broadcast::error::RecvError;
         state = ctx!(state, WeatherCommand,"brainy",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = crate::util::access::Access::Builder;
         state = ctx!(state, WeatherCommand,"brainy",s,c,w,|out:&str| out.contains("no weather pattern"));
-        state = ctx!(state, WeatherCommand,"rainy",s,c,w,|out:&str| out.contains("Weather now") && out.contains("rainy"));
+        _ = ctx!(state, WeatherCommand,"rainy",s,c,w,|out:&str| out.contains("Weather now") && out.contains("rainy"));
 
-        // #[cfg(feature = "stresstest")]{
+        #[cfg(feature = "stresstest")]{
+        use sysinfo::System;
+        use tokio::sync::broadcast::error::RecvError;
+        use std::time::Duration;
+        use crate::{io::Broadcast, thread::{SystemSignal, signal::SpawnType}};
         // Live RSS reporting:
         let mut rss_report_interval = tokio::time::interval(Duration::from_secs(2));
         let mut sys = System::new_all();
@@ -114,7 +115,7 @@ use tokio::sync::broadcast::error::RecvError;
             
                 res = report_bcast.recv() => {
                     match res {
-                        Ok(Broadcast::MessageInRoomE { room, entity, message }) => {
+                        Ok(Broadcast::MessageInRoomE { message,.. }) => {
                             log::debug!("{message}");
                         }
                         Ok(_) => (),
@@ -135,13 +136,14 @@ use tokio::sync::broadcast::error::RecvError;
         let _ = orx.await;
         log::debug!("Dust?");
         let work_duration = start_work.elapsed();
-        stabilize_threads!(30_000); // see for 30s what log fox says
+        stabilize_threads!(60_000); // see for 30s what log fox says
         let spawns_per_sec = 1_000_000 as f64 / work_duration.as_secs_f64();
         let r1 = w.read().await.get_room_by_id("r-1").unwrap();
         let spawn_c = r1.read().await.entities.len();
 
         log::debug!("--terminated--");
         log::debug!("Duration: {work_duration:?} | Throughput: {spawns_per_sec:.2} ent/sec | Entities: {spawn_c}");
-        // }
+        
+        }// stresstest
     }
 }
