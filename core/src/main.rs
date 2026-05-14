@@ -100,6 +100,7 @@ async fn main() {
     let mut sys = System::new_all();
     let pid = sysinfo::get_current_pid().expect("Unable to determine PID?!");
     let mut peak_mem_kb: u64 = 0;
+    #[cfg(feature = "stresstest")]
     let mut peak_counted = 0;
     //
     // This is the main-loop for all …
@@ -108,8 +109,11 @@ async fn main() {
         tokio::select! {
             _ = rss_report_interval.tick() => {
                 sys.refresh_memory();
+                #[allow(unused_assignments)]
                 if let Some(process) = sys.process(pid) {
-                    peak_counted += 1;
+                    #[cfg(feature = "stresstest")]{
+                        peak_counted += 1;
+                    }
                     let curr_mem_use = process.memory();
                     let kib = peak_mem_kb as f64 / 1024.0;
                     let mib = kib / 1024.0;
