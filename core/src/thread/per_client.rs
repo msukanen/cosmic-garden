@@ -6,7 +6,7 @@ use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpStream, sync::broadcast};
 
 use crate::{
     cmd::{self, CommandCtx},
-    r#const::{GREETING, PROMPT_LOGIN},
+    r#const::{BCAST_FMT_ENTITY_TITLE, GREETING, PROMPT_LOGIN},
     identity::IdentityQuery,
     io::{Broadcast, ClientState, ForceTarget},
     reprompt_playing_user,
@@ -152,6 +152,15 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                         Broadcast::MessageInRoom { room, message } => {
                             let Some(ploc) = player.read().await.location.upgrade() else {continue;};
                             if !Arc::ptr_eq(&room, &ploc) {continue;}
+                            tell_user!(&mut writer, "\n{}\n", message);
+                            reprompt_playing_user!(writer, state);
+                        },
+
+                        Broadcast::MessageInRoomE { room, entity, mut message } => {
+                            let Some(ploc) = player.read().await.location.upgrade() else {continue;};
+                            if !Arc::ptr_eq(&room, &ploc) {continue;}
+                            // TODO add more ~xyz~ replacers at some point
+                            message = message.replace(BCAST_FMT_ENTITY_TITLE, entity.read().await.title());
                             tell_user!(&mut writer, "\n{}\n", message);
                             reprompt_playing_user!(writer, state);
                         },

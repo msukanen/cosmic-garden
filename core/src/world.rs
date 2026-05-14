@@ -5,9 +5,7 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::{RwLock, Semaphore}, task::JoinSet};
 
-use crate::{Cli, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity}, io::{Broadcast, world_fp}, item::Item, mob::EntityWeak, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
-
-pub(crate) const CPU_CORES: usize = 16;// adjust to whatever number of cores your server has…
+use crate::{Cli, r#const::CPU_CORES, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity}, io::{Broadcast, world_fp}, item::Item, mob::EntityWeak, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 /// The world!
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -44,9 +42,15 @@ pub struct World {
     pub lost_and_found: HashMap<MachineId, Item>,
     #[serde(skip)]
     pub channels: Option<SignalSenderChannels>,
+    #[serde(skip, default = "world_sem_default")]
+    sem: Arc<Semaphore>,
 }
 /// World arc type.
 pub type WorldArc = Arc<RwLock<World>>;
+
+fn world_sem_default() -> Arc<Semaphore> {
+    Arc::new(Semaphore::new(*(CPU_CORES.get().unwrap()) as usize))
+}
 
 impl World {
     #[cfg(test)]
@@ -71,6 +75,7 @@ impl World {
             lost_and_found: HashMap::new(),
             channels: None,
             entities: HashMap::default(),
+            sem: world_sem_default(),
         }
     }
 }
@@ -160,6 +165,7 @@ impl World {
                     lost_and_found: HashMap::new(),
                     channels: None,
                     entities: HashMap::default(),
+                    sem: world_sem_default(),
                 };
                 w.save(true).await?;
                 log::info!("Brand new world: '{}'; bootstrapped successfully.", w.name);
@@ -233,6 +239,7 @@ impl World {
         let rooms = self.rooms.clone();
         for room_arc in rooms.values() {
             let mut room = room_arc.write().await;
+            room.m_id = room.id().as_m_id();
             room.bootstrap_exits(&self);
             log::trace!("Room id '{}' vs sought for '{}'…", room.id(), self.root_room_id);
             // weld the root room in place
@@ -240,6 +247,7 @@ impl World {
                 log::trace!("Welding '{}' as root room.", room.id());
                 self.root_room = room_arc.clone().into();
             }
+            log::trace!("Connecting the phone lines of R#{}…", room.m_id);
             room.out = broadcast.clone();
         }
 
@@ -298,15 +306,14 @@ impl World {
 }
 
 impl World {
+    /// Tick the world!
     pub async fn tick(&mut self, curr_tick: usize) {
         #[allow(dead_code)] static mut WC: usize = 0;
         
-        let max_par = CPU_CORES;
-        let sem = Arc::new(Semaphore::new(max_par));
         let mut join_set = JoinSet::new();
 
         for r in self.rooms.values() {
-            let sem_clone = Arc::clone(&sem);
+            let sem_clone = Arc::clone(&self.sem);
             let r_clone = r.clone();
             let r_curr_tick = curr_tick;
             join_set.spawn(async move {
@@ -315,6 +322,8 @@ impl World {
                 r.tick(r_curr_tick, r_clone.clone()).await;
             });
         }
+
+        while let Some(_) = join_set.join_next().await {}
         
         #[cfg(feature = "stresstest")]{
         unsafe {
@@ -326,6 +335,11 @@ impl World {
         }}
     }
 
+    /// Get list of registered [Room]s.
+    /// 
+    /// # Args
+    /// - optional search `term`.
+    /// - where to `out`put the results.
     fn room_list(&self, term: Option<String>, out: tokio::sync::oneshot::Sender<Vec<(MachineId, RoomArc)>>) {
         let list: Vec<(MachineId, RoomArc)> = self.rooms.iter()
             .map(|(k,v)| (*k, v.clone()))
@@ -420,6 +434,7 @@ pub(crate) mod world_tests {
         DISK_VERIFIED.call_once(|| {
             let _ = crate::DATA.get_or_init(|| "data".into());
             let _ = crate::WORLD.get_or_init(|| "crash-test-dummy".to_string());
+            let _ = crate::CPU_CORES.get_or_init(|| 16);
             let _ = crate::thread::life::CORE_HZ.get_or_init(|| 100);
             let _ = crate::thread::life::BATTLE_HZ.get_or_init(|| 50);
             let path = std::path::Path::new("data/crash-test-dummy");
@@ -446,6 +461,7 @@ pub(crate) mod world_tests {
 
         // signal channels…
         let sigs = crate::SignalChannels::default();
+        r.write().await.out = sigs.out.broadcast.clone();
         world.channels = sigs.out.clone().into();
 
         let (dtx,drx) = tokio::sync::oneshot::channel::<()>();

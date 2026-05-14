@@ -3,10 +3,11 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, fs as sync_fs, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
+use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs as async_fs, sync::{RwLock, Semaphore}};
 
-use crate::{error::CgError, identity::{IdentityQuery, MachineIdentity, uniq::UuidValidator}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World};
+use crate::{r#const::CPU_CORES, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World};
 
 pub mod environ;
 pub mod locking;
@@ -63,15 +64,14 @@ impl RoomPayload {
 fn empty_room_desc() -> String { "A room.".into() }
 fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
 fn room_sem_default() -> Arc<Semaphore> {
-    const MAX_PAR: usize = crate::world::CPU_CORES;
-    Arc::new(Semaphore::new(MAX_PAR))
+    Arc::new(Semaphore::new(*(CPU_CORES.get().unwrap()) as usize))
 }
 
 type DirectionHasher = std::collections::hash_map::RandomState;
 
 #[derive(Debug, Clone, Deserialize, Serialize, IdentityMut, DescribableMut)]
 pub struct Room {
-    id: String,
+    id: String, #[serde(skip)] pub(super) m_id: MachineId,
     title: String,
     #[serde(default = "empty_room_desc")]
     pub desc: String,
@@ -90,7 +90,7 @@ pub struct Room {
     /// NPC [entities][Entity] in the [Room].
     // [Room] is the sole owner of an [Entity].
     #[serde(default, with = "arc_n_t_transform")]
-    pub entities: HashMap<usize, EntityArc>,
+    pub entities: HashMap<MachineId, EntityArc, BuildNoHashHasher<MachineId>>,
 
     /// Special environment bitmask.
     #[serde(default)] pub special_environment: SpecialEnvironment,
@@ -167,12 +167,13 @@ impl ExitLike {
 mod arc_n_t_transform {
     use std::{collections::HashMap, sync::Arc};
 
-    use serde::{Deserialize, Deserializer, Serializer, ser::SerializeMap};
+    use nohash_hasher::BuildNoHashHasher;
+use serde::{Deserialize, Deserializer, Serializer, ser::SerializeMap};
     use tokio::sync::RwLock;
 
     use crate::{identity::MachineId, mob::{EntityArc, core::Entity}};
 
-    pub fn serialize<S>(what: &HashMap<MachineId, EntityArc>, s:S) -> Result<S::Ok, S::Error>
+    pub fn serialize<S>(what: &HashMap<MachineId, EntityArc, BuildNoHashHasher<MachineId>>, s:S) -> Result<S::Ok, S::Error>
     where S: Serializer
     {
         let mut map = s.serialize_map(Some(what.len()))?;
@@ -188,11 +189,14 @@ mod arc_n_t_transform {
         map.end()
     }
 
-    pub fn deserialize<'de, D>(d: D) -> Result< HashMap<MachineId, EntityArc>, D::Error>
+    pub fn deserialize<'de, D>(d: D) -> Result< HashMap<MachineId, EntityArc, BuildNoHashHasher<MachineId>>, D::Error>
     where D: Deserializer<'de>
     {
         let raw: HashMap<MachineId, Entity> = HashMap::deserialize(d)?;
-        let mut arced = HashMap::with_capacity(raw.len());
+        let mut arced: HashMap<MachineId, Arc<RwLock<Entity>>, BuildNoHashHasher<MachineId>> = HashMap::with_capacity_and_hasher(
+            raw.len(),
+            BuildNoHashHasher::default()
+        );
         for (id, ent) in raw {
             arced.insert(id, Arc::new(RwLock::new(ent)));
         }
@@ -227,15 +231,17 @@ impl Room {
             Ok(room) => room,
             _ => {
                 log::info!("No archælogy possible, thus creating new room '{}'", id);
+                let id = if bootstrap { id.slug()? } else { id.as_id()? };
                 Self {
-                    id: if bootstrap { id.slug()? } else { id.as_id()? },
+                    m_id: id.as_m_id(),
+                    id,
                     title: title.into(),
                     desc: empty_room_desc(),
                     who: HashMap::new(),
                     exits: HashMap::default(),
                     raw_exits: HashMap::default(),
                     contents: room_inventory(),
-                    entities: HashMap::new(),
+                    entities: HashMap::default(),
                     special_environment: SPECIAL_ENVIRONMENT_DEFAULT,
                     memory_fog: None,
                     terrain: None,
@@ -301,6 +307,7 @@ impl Room {
     pub fn shallow_clone(&self) -> Self {
         Self {
             id: self.id.clone(),
+            m_id: self.m_id,
             title: self.title.clone(),
             desc: self.desc.clone(),
             exits: self.exits.clone(),
@@ -308,7 +315,7 @@ impl Room {
             // we skip everything else:
             who: HashMap::new(),
             contents: room_inventory(),
-            entities: HashMap::new(),
+            entities: HashMap::default(),
             special_environment: self.special_environment,
             memory_fog: self.memory_fog.clone(),
             terrain: self.terrain.clone(),
@@ -465,7 +472,12 @@ impl StorageMut for Room {
 }
 
 impl Room {
+    /// Tick the [Room].
+    /// 
+    /// By default we try to tick at 1/10th of the main core speed.
     pub async fn tick(&mut self, curr_tick: usize, room: RoomArc) {
+        if self.m_id.wrapping_add(curr_tick) % 10 != 0 { return ;}
+        
         // Deal with players first…
         for p_weak in self.who.values() {
             if let Some(p_arc) = p_weak.upgrade() {
@@ -480,6 +492,8 @@ impl Room {
         const BATCH_SIZE: usize = 10;
         #[cfg(feature = "stresstest")]
         const BATCH_SIZE: usize = 5_000;
+        #[cfg(feature = "stresstest")]
+        static mut AISC: usize = 0;
         let mut join_set = tokio::task::JoinSet::new();
         let mut curr_ent_batch = Vec::with_capacity(BATCH_SIZE);
         for (_, e) in &self.entities {
@@ -490,26 +504,21 @@ impl Room {
                 let r_env = self.special_environment;
                 let r_ter = self.terrain.clone();
                 let r_tick = curr_tick;
-                let out = self.out.clone();
-                let room = room.clone();
                 join_set.spawn(async move {
                     let _permit = sem_clone.acquire_owned().await.unwrap();
+                    let mut ai_acts = Vec::with_capacity(BATCH_SIZE);
+                    // TODO macro this?
                     for e in batch {
-                        if let Some(t) = e.write().await.tick(r_tick, r_env, r_ter) {
-                            for ai_act in t {
-                                if let TickMeaning::AiStateChange { maybe_action: Some(act), .. } = ai_act {
-                                    match act {
-                                        AiAction::Emote { fmt } => {
-                                            out.send(Broadcast::MessageInRoom {
-                                                room: room.clone(),
-                                                message: fmt
-                                            }).ok();},
-                                        //_ => {}
-                                    }
+                        if let Some(means) = e.write().await.tick(r_tick, r_env, r_ter) {
+                            for m in means {
+                                if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
+                                    #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
+                                    ai_acts.push((e.clone(), act));
                                 }
                             }
                         }
                     }
+                    ai_acts
                 });
             }
         }
@@ -519,29 +528,48 @@ impl Room {
             let r_env = self.special_environment;
             let r_ter = self.terrain.clone();
             let r_tick = curr_tick;
-            let out = self.out.clone();
+            let batch_len = curr_ent_batch.len();
             join_set.spawn(async move {
                 let _permit = sem_clone.acquire_owned().await.unwrap();
+                let mut ai_acts = Vec::with_capacity(batch_len);
+                // TODO see case #1 higher above about macro…
                 for e in curr_ent_batch {
-                        if let Some(t) = e.write().await.tick(r_tick, r_env, r_ter) {
-                            for ai_act in t {
-                                if let TickMeaning::AiStateChange { maybe_action: Some(act), .. } = ai_act {
-                                    match act {
-                                        AiAction::Emote { fmt } => {
-                                            out.send(Broadcast::MessageInRoom {
-                                                room: room.clone(),
-                                                message: fmt
-                                            }).ok();},
-                                        //_ => {}
-                                    }
-                                }
+                    if let Some(means) = e.write().await.tick(r_tick, r_env, r_ter) {
+                        for m in means {
+                            if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
+                                #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
+                                ai_acts.push((e.clone(), act));
                             }
                         }
+                    }
                 }
+                ai_acts
             });
         }
 
-        while let Some(_) = join_set.join_next().await {}
+        #[cfg(feature = "stresstest")] static mut MIREC: usize = 0;
+        while let Some(ai_act_res) = join_set.join_next().await {
+            if let Ok(ai_acts) = ai_act_res {
+                for (entity, act) in ai_acts.into_iter() {
+                    if let AiAction::Emote { fmt } = act {
+                        #[cfg(feature = "stresstest")] unsafe {
+                            MIREC += 1;
+                            if MIREC < 10 {
+                                log::debug!("BCAST::MIRE");
+                            } else if MIREC % 1_000_000 == 0 {
+                                let mirec = MIREC;
+                                log::debug!("BCAST::MIRE ×{mirec}")
+                            }
+                        }
+                        self.out.send(Broadcast::MessageInRoomE {
+                            room: room.clone(),
+                            entity,
+                            message: fmt.to_string()
+                        }).ok();
+                    }
+                }
+            }
+        }
 
         // no reaction yet to "positive" tick(s)
         let _ = self.contents.tick(curr_tick, self.special_environment, self.terrain);

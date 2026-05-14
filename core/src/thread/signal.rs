@@ -2,7 +2,7 @@
 
 use tokio::sync::{broadcast, mpsc};
 
-use crate::{combat::Battler, help::HelpPage, io::Broadcast, item::Item, mob::core::Entity, player::PlayerArc, room::{RoomArc, RoomPayload}, thread::librarian::BlueprintType, util::{access::Access, direction::Direction}};
+use crate::{combat::Battler, r#const::ESTIMATED_BCAST_REQ_COUNT, help::HelpPage, io::Broadcast, item::Item, mob::core::Entity, player::PlayerArc, room::{RoomArc, RoomPayload}, thread::librarian::BlueprintType, util::{access::Access, direction::Direction}};
 
 pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
 pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
@@ -120,7 +120,7 @@ pub(crate) struct SignalChannels {
 
 impl SignalChannels {
     pub fn default() -> Self {
-        let (tx, _) = broadcast::channel::<Broadcast>(16);
+        let (tx, _) = broadcast::channel::<Broadcast>(ESTIMATED_BCAST_REQ_COUNT);
         let (jtx,jrx) = mpsc::unbounded_channel::<SystemSignal>();
         let (ltx,lrx) = mpsc::unbounded_channel::<SystemSignal>();
         let (gtx,grx) = mpsc::unbounded_channel::<SystemSignal>();

@@ -18,7 +18,18 @@ and thus more an OMFG than "mere" MUD engine.
 
 ## Technobabble
 
-…CG drives the World by default at 100Hz, so hold on to your britches and hats.
+…***CG*** drives the World by default at 100Hz, so hold on to your britches and hats.
+
+### CPU
+
+**TO NOTE** - ***CG*** has been *stress*tested only on a 16-core Xeon platform.
+YMMV with others if trying out any of the *stress*test modes.
+
+#### Stress-tests
+
+Generally the *stress*tests involve about 1 million entities doing their thing…
+
+### Threads
 
 The major threads in a nutshell:
 
@@ -44,6 +55,6 @@ The major threads in a nutshell:
 
 ### Genesis
 
-CG does not rely on configs or 3rd party anything. It can and will generate
+***CG*** does not rely on configs or 3rd party anything. It can and will generate
 a skeleton but fully functional world from scratch if none is present
 yet.

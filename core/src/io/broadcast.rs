@@ -1,4 +1,4 @@
-use crate::{combat::Battler, player::PlayerArc, room::RoomArc};
+use crate::{combat::Battler, mob::EntityArc, player::PlayerArc, room::RoomArc};
 
 /// Various broadcast types.
 #[derive(Clone)]
@@ -54,6 +54,12 @@ pub enum Broadcast {
 
     MessageInRoom {
         room: RoomArc,
+        message: String,
+    },
+
+    MessageInRoomE {
+        room: RoomArc,
+        entity: EntityArc,
         message: String,
     },
 

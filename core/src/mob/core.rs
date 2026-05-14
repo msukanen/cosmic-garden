@@ -8,10 +8,10 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 
 use crate::{
-    combat::{Combatant, CombatantMut, DamageType, Damager}, error::CgError, identity::{IdentityQuery, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
+    combat::{Combatant, CombatantMut, DamageType, Damager}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
         Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
     },
-    mob::{Ai, Gender, GenderError, GenderType, Stat, StatType, StatValue, faction::{Demeanor, EntityFaction}},
+    mob::{Ai, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiAction, faction::{Demeanor, EntityFaction}},
     room::{RoomWeak, environ::{SpecialEnvironment, Terrain}},
     string::UNNAMED,
     thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels},
@@ -125,7 +125,7 @@ impl TryFrom<&str> for EntitySize {
 
 #[derive(Debug, Clone, DescribableMut, Deserialize, Serialize, IdentityMut, Mob, MobMut, FactionMut, CombatantMut)]
 pub struct Entity {
-    id: String,
+    id: String, #[serde(skip)] tick_id: MachineId,
     #[identity(title)] name: String,
     #[serde(default, skip)] location: RoomWeak,
     desc: String,
@@ -150,8 +150,10 @@ pub struct Entity {
 
 impl Default for Entity {
     fn default() -> Self {
+        let id = "entity".with_uuid();
         Self {
-            id: "entity".with_uuid(),
+            tick_id: id.as_m_id(),
+            id,
             name: UNNAMED.into(),
             hp: Stat::new(StatType::HP),
             mp: Stat::new(StatType::MP),
@@ -196,8 +198,10 @@ impl std::error::Error for EntityError {}
 impl Entity {
     pub async fn new(id: &str, out: &SignalSenderChannels) -> Result<Self, CgError> {
         if let Some(ent) = get_entity_blueprint(id, out).await {
+            let id = id.show_uuid(false).to_string();
             return Ok(Self {
-                id: id.show_uuid(false).into(),
+                tick_id: id.as_m_id(),
+                id,
                 ..ent
             });
         }
@@ -269,13 +273,44 @@ impl Damager for Entity {
 #[async_trait]
 impl Tickable for Entity {
     fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
-        self.hp_mut().tick(curr_tick, room_env, room_terrain);
-        self.mp_mut().tick(curr_tick, room_env, room_terrain);
-        self.sn_mut().tick(curr_tick, room_env, room_terrain);
-        self.san_mut().tick(curr_tick, room_env, room_terrain);
-        self.ai.tick(&self.title().to_string(), curr_tick, room_env, room_terrain);
-        // TODO self-effects of inv
-        self.inventory.tick(curr_tick, room_env, room_terrain)
+        // tick stats at 1/10th of our [Room]'s pace.
+        if self.should_pulse(curr_tick, self.tick_id, 10) {
+            // we tick only drain value having stats.
+            self.hp_mut().tick(curr_tick, room_env, room_terrain);
+            self.mp_mut().tick(curr_tick, room_env, room_terrain);
+            self.sn_mut().tick(curr_tick, room_env, room_terrain);
+            self.san_mut().tick(curr_tick, room_env, room_terrain);
+        }
+
+        #[cfg(feature = "stresstest")] static mut AIMC: usize = 0;
+        let ai_m =
+        //if self.should_pulse(curr_tick, self.tick_id, 15) {
+            if let Some(ai_means) = self.ai.tick(/* &self.title().to_string(),  */curr_tick, room_env, room_terrain) {
+                if let TickMeaning::AiStateChange { maybe_action: Some(AiAction::Emote { .. }), .. } = &ai_means {
+                    #[cfg(feature = "stresstest")]{
+                        unsafe {
+                            if AIMC <= 10 {
+                                AIMC += 1;
+                                log::debug!("Entity@AiStateChange::Emote");
+                            }
+                        }
+                    }
+                    ai_means.into()
+                } else { None }
+            } else { None }
+        // } else { None }
+        ;
+
+        let inv_m = if self.should_pulse(curr_tick, self.tick_id, 25) {
+            self.inventory.tick(curr_tick, room_env, room_terrain)
+        } else { None };
+
+        match (ai_m, inv_m) {
+            (None, None) => None,
+            (Some(a), None) => vec![a].into(),
+            (None, Some(b)) => b.into(),
+            (Some(a), Some(mut b)) => { b.push(a); b.into() }
+        }
     }
 }
 

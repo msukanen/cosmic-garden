@@ -1,7 +1,5 @@
 //! REdit 'set' for various settables…
 
-use std::sync::RwLock;
-
 use async_trait::async_trait;
 
 use crate::{cmd::{Command, CommandCtx}, err_tell_user, room::{RoomArc, environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, SPECIAL_ENVIRONMENT_CORROSIVE, SPECIAL_ENVIRONMENT_FOGGED_VISIBILITY, SPECIAL_ENVIRONMENT_FREEZER, SPECIAL_ENVIRONMENT_GAS_TRAP, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SPECIAL_ENVIRONMENT_INFERNO, SPECIAL_ENVIRONMENT_LOUD, SPECIAL_ENVIRONMENT_OBSTRUCTED_VISIBILITY, SPECIAL_ENVIRONMENT_STINKY, SPECIAL_ENVIRONMENT_TOXIC}}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, validate_access, validate_editor_mode};
@@ -21,7 +19,7 @@ impl Command for SetCommand {
         // t - self.terrain = source.terrain;
         // r - self.room_type = source.room_type;
 
-        let (mut op, args) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
+        let (op, args) = ctx.args.split_once(' ').unwrap_or((ctx.args, ""));
         if op.is_empty() { show_help!(ctx, "u set"); }
         match &op[..1] {
             "s"|"S" => set_spec_env(ctx, &loc, args).await,
@@ -38,12 +36,11 @@ impl Command for SetCommand {
 
 /// Set [special environment][SpecialEnvironment], if possible.
 async fn set_spec_env(ctx: &mut CommandCtx<'_>, room: &RoomArc, args: &str) {
-    let (env, args) = args.split_once(' ').unwrap_or((args, ""));
-    if env.len() < 2 {
-        err_tell_user!(ctx.writer, "Well… '{}' is a bit too ambiguous. Be more explicit a bit.\n", env);
+    if args.len() < 2 {
+        err_tell_user!(ctx.writer, "Well… '{}' is a bit too ambiguous. Be more explicit a bit.\n", args);
     }
     room.write().await.set_special_env_bitmask(
-    match &env[..2] {
+    match &args[..2] {
         // corrosive|acidic
         "co"|"CO"|
         "ac"|"AC" => SPECIAL_ENVIRONMENT_CORROSIVE,
@@ -78,7 +75,7 @@ async fn set_spec_env(ctx: &mut CommandCtx<'_>, room: &RoomArc, args: &str) {
 
         // loud (or low-g)
         "lo"|"LO" =>
-            if env.len() > 2 && matches!(&env[..2], "low"|"LOW"|"Low") {
+            if args.len() > 2 && matches!(&args[..2], "low"|"LOW"|"Low") {
                 SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY | GRAVITY_ANOMALY_LOW_H
             } else {
                 SPECIAL_ENVIRONMENT_LOUD
@@ -88,7 +85,7 @@ async fn set_spec_env(ctx: &mut CommandCtx<'_>, room: &RoomArc, args: &str) {
         "st"|"ST" => SPECIAL_ENVIRONMENT_STINKY,
 
         _ => {
-            tell_user!(ctx.writer, "'{}' doesn't represent any known environment…\n", env);
+            tell_user!(ctx.writer, "'{}' doesn't represent any known environment…\n", args);
             show_help!(ctx, "q special-environment");
         }
     }, false).ok();

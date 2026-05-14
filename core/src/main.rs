@@ -8,7 +8,7 @@ mod io;             use convert_case::{Case, Casing};
 use sysinfo::System;
 use tokio::{net::TcpListener, sync::RwLock};
 
-use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{DATA, WORLD}, thread::{life::{BATTLE_HZ, CORE_HZ}, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
+use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{CPU_CORES, DATA, WORLD}, thread::{life::{BATTLE_HZ, CORE_HZ}, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
 
 mod cmd;
 pub(crate) mod combat;
@@ -49,6 +49,7 @@ pub struct Cli {
     #[arg(long)] autosave_queue_interval: Option<u64>,
     #[arg(long, default_value = "100")] core_hz: u8,
     #[arg(long, default_value = "50")] battle_hz: u8,
+    #[arg(long, default_value = "8")] cpu_cores: u32,
 }
 
 /// The main culprit of many things main…
@@ -60,6 +61,7 @@ async fn main() {
     let _ = WORLD.set(args.world.clone());
     let _ = CORE_HZ.set(args.core_hz.clamp(5, 100));//    5-100 Hz
     let _ = BATTLE_HZ.set(args.battle_hz.clamp(5, 75));// 5-75 Hz
+    let _ = CPU_CORES.set(args.cpu_cores.max(1));// computers generally have at least *one* core…
 
     if (*CMD_ALIASES).is_empty() {
         log::info!("No command aliases defined yet.");
@@ -119,6 +121,7 @@ async fn main() {
                             log::warn!("[CRITICAL] Garden is occupying >40GB RAM.");
                         }
                     } else {
+                        #[cfg(feature = "stresstest")]
                         if peak_counted % 6 == 0 {
                             log::trace!("[MEM] usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
                         }

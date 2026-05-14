@@ -32,13 +32,14 @@ impl Default for AiMentalState {
 
 #[derive(Debug, Clone)]
 pub enum AiAction {
-    Emote { fmt: String },
+    Emote { fmt: &'static str },
     //Attack { xyz }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Ai {
     state: AiState,
+    //tick_id: usize,
     mental_state: AiMentalState,
 
     #[serde(skip, default = "ai_rng_default")] rng: u64,
@@ -57,6 +58,7 @@ impl Default for Ai {
     fn default() -> Self {
         Self { 
             state: AiState::default(),
+            //tick_id: rand::random::<u64>() as usize,
             mental_state: AiMentalState::default(),
             rng: ai_rng_default(),
             p_idle_to_wandering: 0.01,
@@ -66,12 +68,14 @@ impl Default for Ai {
 }
 
 impl Ai {
-    pub fn tick(&mut self, e_title: &str, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning> > {
+    /// Tick the AI.
+    /// 
+    // By default we run AI at some fraction of the parent's [Room]'s Hz.
+    pub fn tick(&mut self, /* e_title: &str, */ curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<TickMeaning> {
         let mut maybe_state = None;
         let mut maybe_mental_state = None;
         let mut maybe_action = None;
         self.rng = ai_rng(self.rng);
-
         match self.state {
             AiState::Idle => {
                 if ai_probability(self.rng) <= 0.01 {
@@ -89,14 +93,31 @@ impl Ai {
             }
         }
 
-        if room_env & WEATHER_RAIN != 0 && self.mental_state == AiMentalState::Grumpy {
-            // let's not spam too much…
-            self.rng = ai_rng(self.rng);
-            if ai_probability(self.rng) <= 0.01 {
-                maybe_action = AiAction::Emote { fmt: format!("[{e_title}] glares at the clouds for a moment.") }.into()
+        if room_env & WEATHER_RAIN != 0 {
+            match self.mental_state {
+                AiMentalState::Grumpy => {
+                    // let's not spam too much…
+                    self.rng = ai_rng(self.rng);
+                    if ai_probability(self.rng) <= 0.01 {
+                        maybe_action = AiAction::Emote { fmt: "[~e~] glares at the clouds for a moment." }.into()
+                    }
+                },
+                AiMentalState::Neutral => {
+                    self.rng = ai_rng(self.rng);
+                    if ai_probability(self.rng) <= 20.0 {
+                        self.mental_state = AiMentalState::Grumpy;
+                        maybe_mental_state = self.mental_state.into();
+                    }
+                }
+                _ => () // a bit of rain doesn't make Happy worse nor Angry any angrier…
             }
         }
         
-        single_tick_meaning!(TickMeaning::AiStateChange { maybe_state, maybe_mental_state, maybe_action })
+        if  maybe_action.is_none() &&
+            maybe_mental_state.is_none() &&
+            maybe_state.is_none() { None }
+        else {
+            TickMeaning::AiStateChange { maybe_state, maybe_mental_state, maybe_action }.into()
+        }
     }
 }

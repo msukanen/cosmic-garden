@@ -626,3 +626,16 @@ List of <c brown>special environments</c>:
    <x info>tx</x> <x ->  -"-</x>
 """
 see_also = ["redit-set"]
+[[help_pages]]
+id = "weather"
+alias = ["weather","room weather","skies"]
+access = "builder"
+title = "local weather"
+contents = """
+'weather' command is used for altering current, local, weather pattern.
+
+<type>:
+ * rain
+ * clear
+"""
+usage = ["weather <type>"]

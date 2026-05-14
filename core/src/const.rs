@@ -1,13 +1,15 @@
 //! Various global consts and constlikes.
 
-use std::{collections::HashSet, fs, ops::Deref, path::PathBuf, sync::Arc};
+use std::{collections::HashSet, fs, ops::Deref, path::PathBuf};
 
 use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
-use tokio::sync::RwLock;
 use unicode_normalization::UnicodeNormalization;
 
 use crate::{identity::MAX_ID_LEN, io::reserved_names_fp, item::container::storage::StorageSpace, util::escape_hatch::VILLAIN_ID};
+
+/// CPU cores in the server.
+pub(crate) static CPU_CORES: OnceCell<u32> = OnceCell::new();
 
 // some const to deal with [World]-specific choices that aren't present for a reason or other…
 pub const GREETING: &'static str = "Welcome to Cosmic Garden!";
@@ -153,3 +155,11 @@ pub const SMALL_ITEM: StorageSpace = 2 * SIZE_BALANCE;
 pub const MEDIUM_ITEM: StorageSpace = 4 * SIZE_BALANCE;
 pub const LARGE_ITEM: StorageSpace = 7 * SIZE_BALANCE;
 pub const HUGE_ITEM: StorageSpace = 12 * SIZE_BALANCE;
+
+//
+// Broadcast::FooBarBaz `~foo~` replacers.
+//
+pub const BCAST_FMT_ENTITY_TITLE: &'static str = "~e~";
+const BCAST_REQ_BITS: usize = 12;
+#[cfg(not(feature = "stresstest"))] pub const ESTIMATED_BCAST_REQ_COUNT: usize = 1 << BCAST_REQ_BITS;
+#[cfg(feature = "stresstest")] pub const ESTIMATED_BCAST_REQ_COUNT: usize = 1 << (BCAST_REQ_BITS + 4);
