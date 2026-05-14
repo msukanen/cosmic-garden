@@ -160,9 +160,17 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
                             let Some(ploc) = player.read().await.location.upgrade() else {continue;};
                             if !Arc::ptr_eq(&room, &ploc) {continue;}
                             // TODO add more ~xyz~ replacers at some point
-                            message = message.replace(BCAST_FMT_ENTITY_TITLE, entity.read().await.title());
-                            tell_user!(&mut writer, "\n{}\n", message);
-                            reprompt_playing_user!(writer, state);
+                            if let Some(ent) = pcd.world.read().await.entities.get(&entity) {
+                                if let Some(ent) = ent.upgrade() {
+                                    message = message.replace(BCAST_FMT_ENTITY_TITLE, ent.read().await.title());
+                                    tell_user!(&mut writer, "\n{}\n", message);
+                                    reprompt_playing_user!(writer, state);
+                                } else {
+                                    log::info!("Broadcasting entity died before message dispatch happened?");
+                                }
+                            } else {
+                                log::info!("A message from grave… Let's ignore it. Too spooky…");
+                            }
                         },
 
                         Broadcast::BiSignal { to, from, who, message_to, message_from, message_who } => {
