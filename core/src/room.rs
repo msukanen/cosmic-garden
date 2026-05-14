@@ -471,6 +471,18 @@ impl StorageMut for Room {
     fn set_max_space(&mut self, sz: StorageSpace) -> bool { self.contents.set_max_space(sz) }
 }
 
+const fn bucket_scaler(num_things: usize, cpu_cores: usize) -> usize {
+    const Y0: usize = 32;
+    const X0: usize = 32;
+    const Y1: usize = 1_000_000;
+    let x1: usize = (5_000.0 * (cpu_cores as f64 / 16.0)) as usize;
+    if num_things <= Y0 { X0 }
+    else {
+        const DY: usize = Y1 - Y0;
+        X0 + ((x1 - X0) * (num_things - Y0)) / DY
+    }
+}
+
 impl Room {
     /// Tick the [Room].
     /// 
@@ -488,10 +500,11 @@ impl Room {
         }
 
         // …then entitites…
-        #[cfg(not(feature = "stresstest"))]
-        const BATCH_SIZE: usize = 10;
-        #[cfg(feature = "stresstest")]
-        const BATCH_SIZE: usize = 5_000;
+        // #[cfg(not(feature = "stresstest"))]
+        // const BATCH_SIZE: usize = 10;
+        // #[cfg(feature = "stresstest")]
+        // const BATCH_SIZE: usize = 5_000;
+        let BATCH_SIZE: usize = bucket_scaler(self.entities.len(), *CPU_CORES.get().unwrap() as usize);
         #[cfg(feature = "stresstest")]
         static mut AISC: usize = 0;
         let mut join_set = tokio::task::JoinSet::new();
@@ -513,7 +526,7 @@ impl Room {
                             for m in means {
                                 if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
                                     #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
-                                    ai_acts.push((e.clone(), act));
+                                    ai_acts.push(act);
                                 }
                             }
                         }
@@ -538,7 +551,7 @@ impl Room {
                         for m in means {
                             if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
                                 #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
-                                ai_acts.push((e.clone(), act));
+                                ai_acts.push(act);
                             }
                         }
                     }
@@ -548,10 +561,11 @@ impl Room {
         }
 
         #[cfg(feature = "stresstest")] static mut MIREC: usize = 0;
+        let mut emohash: HashMap<&str, (MachineId, usize)> = HashMap::new();
         while let Some(ai_act_res) = join_set.join_next().await {
             if let Ok(ai_acts) = ai_act_res {
-                for (entity, act) in ai_acts.into_iter() {
-                    if let AiAction::Emote { fmt } = act {
+                for act in ai_acts.into_iter() {
+                    if let AiAction::Emote { ent_m_id, fmt } = act {
                         #[cfg(feature = "stresstest")] unsafe {
                             MIREC += 1;
                             if MIREC < 10 {
@@ -561,14 +575,22 @@ impl Room {
                                 log::debug!("BCAST::MIRE ×{mirec}")
                             }
                         }
-                        self.out.send(Broadcast::MessageInRoomE {
-                            room: room.clone(),
-                            entity,
-                            message: fmt.to_string()
-                        }).ok();
+                        let (_,c) = emohash.entry(fmt).or_insert((ent_m_id, 0));
+                        *c += 1;
                     }
                 }
             }
+        }
+
+        for (fmt, (ent_m_id, count)) in emohash {
+            self.out.send(Broadcast::MessageInRoomE {
+                room: room.clone(),
+                entity: ent_m_id,
+                message: match count {
+                    1 => fmt.to_string(),
+                    _ => fmt.replace("~e~", &format!("~e~ ×{count}"))
+                }
+            }).ok();
         }
 
         // no reaction yet to "positive" tick(s)
