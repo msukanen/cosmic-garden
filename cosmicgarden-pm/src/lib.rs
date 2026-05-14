@@ -80,11 +80,13 @@ fn generate_identity_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
         Data::Enum(data) => {
             let ids = gen_container_match(&data, &format_ident!("id"), 0);
             let titles = gen_container_match(&data, &format_ident!("title"), 0);
+            let tick_ids = gen_container_match(&data, &format_ident!("tick_id"), 0);
             
             quote! {
                 impl crate::identity::IdentityQuery for #name {
-                    fn id<'a>(&'a self) -> &'a str { match self {#(#ids),*} }
-                    fn title<'a>(&'a self) -> &'a str { match self {#(#titles),*} }
+                    fn id<'a>(&'a self) -> &'a str { match self {#(#ids),*}}
+                    fn tick_id(&self) -> crate::identity::MachineId { match self {#(#tick_ids),*}}
+                    fn title<'a>(&'a self) -> &'a str { match self {#(#titles),*}}
                 }
             }
         },
@@ -92,11 +94,20 @@ fn generate_identity_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
         Data::Struct(data) => {
             let f_id = req_field!(data, "id");
             let f_title = get_tagged_ident!(data, "identity", "title");
+            let f_tick_id_code = if let Some(tick_id) = maybe_field!(data, "tick_id") {
+                quote! { self.#tick_id }
+            } else {
+                quote! { self.id().as_m_id() }
+            };
             
             quote! {
                 impl crate::identity::IdentityQuery for #name {
                     fn id<'a>(&'a self) -> &'a str { &self.#f_id }
                     fn title<'a>(&'a self) -> &'a str { &self.#f_title }
+                    fn tick_id(&self) -> crate::identity::MachineId {
+                        use crate::identity::MachineIdentity;
+                        #f_tick_id_code
+                    }
                 }
             }
         },
@@ -151,6 +162,11 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
         }
         Data::Struct(data) => {
             let f_id = req_field!(data, "id");
+            let tick_id_code = if let Some(tick_id_field) = maybe_field!(data, "tick_id") {
+                quote! {
+                    self.#tick_id_field = self.#f_id.as_m_id();
+                }
+            } else { quote!{} };
             let title = get_tagged_ident!(data, "identity", "title");
             quote! {
                 impl crate::identity::IdentityMut for #name {
@@ -158,6 +174,7 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
                         use crate::identity::uniq::{Uuid, UuidValidator};
                         let pre_checked_id = if !b {a.as_id()?} else {a.to_string()};
                         self.#f_id = pre_checked_id.re_uuid();
+                        #tick_id_code
                         Ok(())
                     }
                     fn title_mut<'a>(&'a mut self) -> &'a mut String { &mut self.#title }

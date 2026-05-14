@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use crate::{identity::IdentityQuery, item::Item};
+use crate::{identity::{IdentityQuery, MachineIdentity}, item::Item};
 
 /// "Unit" of space and/or weight…
 pub type StorageSpace = u16;
@@ -35,6 +35,10 @@ impl IdentityQuery for StorageError {
             Self::NoSpace(i)|
             Self::NotContainer(i) => i.title()
         }
+    }
+
+    fn tick_id(&self) -> crate::identity::MachineId {
+        self.id().as_m_id()
     }
 }
 

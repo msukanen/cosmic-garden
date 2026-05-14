@@ -12,7 +12,7 @@ use crate::{
     identity::{IdentityMut, IdentityQuery, MachineId, MachineIdentity, uniq::Uuid},
     io::Broadcast,
     item::Item,
-    mob::{StatValue, core::Entity},
+    mob::{EntityArc, StatValue, core::Entity},
     room::{RoomArc, RoomPayload},
     string::{DescribableMut, styling::maybe_plural},
     thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}},
@@ -609,25 +609,25 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, num
             if let Ok(_) = out.librarian.send(SystemSignal::EntityBlueprintReq { id: id.clone(), out: oneshot }) {
                 if let Ok(reply) = recv.await {
                     if let Some(bp_mob) = reply {
-                        let mut mobs = Vec::with_capacity(num);
                         let mut w = world.write().await;
                         let mut r = r_arc.write().await;
+                        
+                        // spawn the horde! Or less of entities…
                         for _ in 0..num {
                             let mut mob = bp_mob.clone();
                             mob.set_id(&bp_mob.id().re_uuid(), true).ok();
                             *(mob.location_mut()) = Arc::downgrade(&r_arc);
-                            mobs.push(mob);
-                            unsafe { C += 1; }
-                        }
-                        log::debug!("Generated {num} entities…");
-                        for mob in mobs {
-                            let mob_id = mob.id().to_string();
-                            let mob_m_id = mob_id.as_m_id();
-                            let mob_arc = mob.into();
+                            let mob_arc: EntityArc = mob.into();
+                            // set the tick-ID
+                            let mob_m_id = {
+                                let mut mw = mob_arc.write().await;
+                                mw.set_tick_id(&mob_arc)
+                            };
                             // tell the world 1st…
                             w.entities.insert(mob_m_id, Arc::downgrade(&mob_arc));
                             // …then the room itself.
                             r.entities.insert(mob_m_id, mob_arc);
+                            unsafe { C += 1; }
                         }
                         log::debug!("Spawned {num} entit{}.", if num==1{"y"} else {"ies"});
                         return true;

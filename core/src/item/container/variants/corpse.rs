@@ -64,6 +64,10 @@ impl IdentityQuery for CorpseSpec {
     fn title<'a>(&'a self) -> &'a str {
         self.spec.title()
     }
+
+    fn tick_id(&self) -> crate::identity::MachineId {
+        self.spec.tick_id()
+    }
 }
 
 impl Owned for CorpseSpec {

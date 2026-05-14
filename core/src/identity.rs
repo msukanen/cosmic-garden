@@ -36,6 +36,8 @@ impl std::error::Error for IdError {}
 pub trait IdentityQuery {
     /// Get the ID.
     fn id<'a>(&'a self) -> &'a str;
+    /// Get tick-ID.
+    fn tick_id(&self) -> MachineId;
     /// Get the title/name.
     fn title<'a>(&'a self) -> &'a str;
 }
