@@ -1,5 +1,6 @@
 //! Editor modes for those who need them.
 
+pub mod ed; pub use ed::*;
 pub mod mode; pub use mode::*;
 
 /// Validate editor mode.

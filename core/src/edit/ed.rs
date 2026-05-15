@@ -261,7 +261,7 @@ macro_rules! access_ed_entry {
 mod ed_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, desc::DescCommand}}, string::{DescribableMut, newline::LineEndingExt, styling::MAX_DESCRIPTION_LINES}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, redit::{ReditCommand, desc::DescCommand}}, ctx, string::{DescribableMut, newline::LineEndingExt, styling::MAX_DESCRIPTION_LINES}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[test]
     fn remove_nth_line() {

@@ -69,9 +69,9 @@ macro_rules! cmd_xedit_desc {
         }
 
         let plr = crate::validate_access!($ctx, builder);
-        let res = crate::util::ed::edit_text($ctx.writer, $ctx.args, crate::access_ed_entry!(plr, $ed).desc()).await;
+        let res = crate::edit::edit_text($ctx.writer, $ctx.args, crate::access_ed_entry!(plr, $ed).desc()).await;
         let verbose = match res {
-            Ok(crate::util::ed::EdResult::ContentReady { text, verbose, dirty }) => {
+            Ok(crate::edit::EdResult::ContentReady { text, verbose, dirty }) => {
                 paste::paste! {
                     let Some(ref mut b) = plr.write().await.[<$ed _buffer>] else {
                         log::error!("Whatever happened to {} buffer here...?", $ed_v);
@@ -82,8 +82,8 @@ macro_rules! cmd_xedit_desc {
                 $ctx.state.set_dirty(dirty);
                 verbose
             },
-            Ok(crate::util::ed::EdResult::NoChanges(true)) => true,
-            Ok(crate::util::ed::EdResult::HelpRequested) => {
+            Ok(crate::edit::EdResult::NoChanges(true)) => true,
+            Ok(crate::edit::EdResult::HelpRequested) => {
                 crate::show_help!($ctx, "edit-desc");
             },
             _ => false

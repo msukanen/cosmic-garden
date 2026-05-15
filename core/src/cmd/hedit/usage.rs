@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, tell_user, validate_editor_mode, util::ed::{EdResult, edit_text}, validate_access};
+use crate::{cmd::{Command, CommandCtx}, identity::IdentityQuery, tell_user, validate_editor_mode, edit::{EdResult, edit_text}, validate_access};
 
 pub struct UsageCommand;
 
