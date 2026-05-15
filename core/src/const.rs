@@ -8,12 +8,12 @@ use unicode_normalization::UnicodeNormalization;
 
 use crate::{identity::MAX_ID_LEN, io::reserved_names_fp, item::container::storage::StorageSpace, util::escape_hatch::VILLAIN_ID};
 
-/// CPU cores in the server.
+/// CPU cores in the server (at least if user so says)…
 pub(crate) const CPU_CORES: usize = match option_env!("GARDEN_CORES") {
     Some(s) => usize_from_str(s),
     None => 16
 };
-
+/// Very basic `usize` "parse" specifically for `CPU_CORES`…
 const fn usize_from_str(s:&str) -> usize {
     let bytes = s.as_bytes();
     let mut result = 0;
