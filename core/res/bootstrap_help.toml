@@ -639,3 +639,16 @@ contents = """
  * clear
 """
 usage = ["weather <type>"]
+[[help_pages]]
+id = "reload"
+alias = ["reload", "hot load"]
+access = "builder"
+title = "reload"
+contents = """
+'reload' Room data from disk. Generally of use for bringing offline edits into
+running server.
+"""
+usage = [
+    "reload here|this",
+    "reload <room-id>"
+]
