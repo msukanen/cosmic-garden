@@ -58,3 +58,8 @@ The major threads in a nutshell:
 ***CG*** does not rely on configs or 3rd party anything. It can and will generate
 a skeleton but fully functional world from scratch if none is present
 yet.
+
+#### Environment: CPU
+
+An environment variable `GARDEN_CORES` can be used to control (to some degree)
+how many cores ***CG*** will utilize.
