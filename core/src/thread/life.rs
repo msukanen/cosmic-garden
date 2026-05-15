@@ -292,6 +292,7 @@ pub(crate) async fn life(
     let mut spawn_out: Option<tokio::sync::oneshot::Sender<()>> = None;
 
     let mut tick = 0;
+    #[cfg(debug_assertions)]
     let start_time = Instant::now();
     loop {
         tokio::select! {
@@ -306,6 +307,7 @@ pub(crate) async fn life(
                 }
                 tick += 1;
                 let elapsed = tick_start.elapsed();
+                #[cfg(debug_assertions)]
                 let drift = Instant::now().duration_since(ci);
                 if elapsed > Duration::from_millis(10) {
                     log::warn!("Slow tick: {tick} took {elapsed:?}?!");

@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::MachineId, room::environ::{SpecialEnvironment, Terrain, WEATHER_RAIN}, single_tick_meaning, traits::TickMeaning};
+use crate::{identity::MachineId, room::environ::{SpecialEnvironment, Terrain, WEATHER_RAIN}, traits::TickMeaning};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
 pub enum AiState {

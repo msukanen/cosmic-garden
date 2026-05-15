@@ -1,6 +1,6 @@
 //! Mob core.
 
-use std::{fmt::Display, sync::RwLock};
+use std::fmt::Display;
 
 use async_trait::async_trait;
 use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mob, MobMut};
