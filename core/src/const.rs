@@ -9,7 +9,26 @@ use unicode_normalization::UnicodeNormalization;
 use crate::{identity::MAX_ID_LEN, io::reserved_names_fp, item::container::storage::StorageSpace, util::escape_hatch::VILLAIN_ID};
 
 /// CPU cores in the server.
-pub(crate) static CPU_CORES: OnceCell<u32> = OnceCell::new();
+pub(crate) const CPU_CORES: usize = match option_env!("GARDEN_CORES") {
+    Some(s) => usize_from_str(s),
+    None => 16
+};
+
+const fn usize_from_str(s:&str) -> usize {
+    let bytes = s.as_bytes();
+    let mut result = 0;
+    let mut i = 0;
+    while i < bytes.len() {
+        let byte = bytes[i];
+        if byte >= b'0' && byte <= b'9' {
+            result = result * 10 + (byte - b'0') as usize;
+        } else {
+            panic!("Non-digit character in GARDEN_CORES!");
+        }
+        i += 1;
+    }
+    result
+}
 
 // some const to deal with [World]-specific choices that aren't present for a reason or other…
 pub const GREETING: &'static str = "Welcome to Cosmic Garden!";

@@ -49,7 +49,7 @@ pub struct World {
 pub type WorldArc = Arc<RwLock<World>>;
 
 fn world_sem_default() -> Arc<Semaphore> {
-    Arc::new(Semaphore::new(*(CPU_CORES.get().unwrap()) as usize))
+    Arc::new(Semaphore::new(CPU_CORES))
 }
 
 impl World {
@@ -434,7 +434,6 @@ pub(crate) mod world_tests {
         DISK_VERIFIED.call_once(|| {
             let _ = crate::DATA.get_or_init(|| "data".into());
             let _ = crate::WORLD.get_or_init(|| "crash-test-dummy".to_string());
-            let _ = crate::CPU_CORES.get_or_init(|| 16);
             let _ = crate::thread::life::CORE_HZ.get_or_init(|| 100);
             let _ = crate::thread::life::BATTLE_HZ.get_or_init(|| 50);
             let path = std::path::Path::new("data/crash-test-dummy");

@@ -3,6 +3,7 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, fs as sync_fs, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
+use lazy_static::lazy_static;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs as async_fs, sync::{RwLock, Semaphore}};
@@ -64,7 +65,7 @@ impl RoomPayload {
 fn empty_room_desc() -> String { "A room.".into() }
 fn room_inventory() -> ContainerVariant { ContainerVariant::raw(ContainerVariantType::Room) }
 fn room_sem_default() -> Arc<Semaphore> {
-    Arc::new(Semaphore::new(*(CPU_CORES.get().unwrap()) as usize))
+    Arc::new(Semaphore::new(CPU_CORES))
 }
 
 type DirectionHasher = std::collections::hash_map::RandomState;
@@ -471,15 +472,15 @@ impl StorageMut for Room {
     fn set_max_space(&mut self, sz: StorageSpace) -> bool { self.contents.set_max_space(sz) }
 }
 
-const fn bucket_scaler(num_things: usize, cpu_cores: usize) -> usize {
+const fn bucket_scaler(num_things: usize) -> usize {
     const Y0: usize = 32;
     const X0: usize = 32;
     const Y1: usize = 1_000_000;
-    let x1: usize = (5_000.0 * (cpu_cores as f64 / 16.0)) as usize;
+    const X1: usize = 5_000 * CPU_CORES / 16;
     if num_things <= Y0 { X0 }
     else {
         const DY: usize = Y1 - Y0;
-        X0 + ((x1 - X0) * (num_things - Y0)) / DY
+        X0 + ((X1 - X0) * (num_things - Y0)) / DY
     }
 }
 
@@ -504,14 +505,14 @@ impl Room {
         // const BATCH_SIZE: usize = 10;
         // #[cfg(feature = "stresstest")]
         // const BATCH_SIZE: usize = 5_000;
-        let BATCH_SIZE: usize = bucket_scaler(self.entities.len(), *CPU_CORES.get().unwrap() as usize);
+        let batch_size: usize = bucket_scaler(self.entities.len());
         #[cfg(feature = "stresstest")]
         static mut AISC: usize = 0;
         let mut join_set = tokio::task::JoinSet::new();
-        let mut curr_ent_batch = Vec::with_capacity(BATCH_SIZE);
+        let mut curr_ent_batch = Vec::with_capacity(batch_size);
         for (_, e) in &self.entities {
             curr_ent_batch.push(e.clone());
-            if curr_ent_batch.len() == BATCH_SIZE {
+            if curr_ent_batch.len() == batch_size {
                 let batch = std::mem::take(&mut curr_ent_batch);
                 let sem_clone = Arc::clone(&self.sem);
                 let r_env = self.special_environment;
@@ -519,7 +520,7 @@ impl Room {
                 let r_tick = curr_tick;
                 join_set.spawn(async move {
                     let _permit = sem_clone.acquire_owned().await.unwrap();
-                    let mut ai_acts = Vec::with_capacity(BATCH_SIZE);
+                    let mut ai_acts = Vec::with_capacity(batch_size);
                     // TODO macro this?
                     for e in batch {
                         if let Some(means) = e.write().await.tick(r_tick, r_env, r_ter) {

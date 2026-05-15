@@ -49,7 +49,6 @@ pub struct Cli {
     #[arg(long)] autosave_queue_interval: Option<u64>,
     #[arg(long, default_value = "100")] core_hz: u8,
     #[arg(long, default_value = "50")] battle_hz: u8,
-    #[arg(long, default_value = "8")] cpu_cores: u32,
 }
 
 /// The main culprit of many things main…
@@ -61,7 +60,6 @@ async fn main() {
     let _ = WORLD.set(args.world.clone());
     let _ = CORE_HZ.set(args.core_hz.clamp(5, 100));//    5-100 Hz
     let _ = BATTLE_HZ.set(args.battle_hz.clamp(5, 75));// 5-75 Hz
-    let _ = CPU_CORES.set(args.cpu_cores.max(1));// computers generally have at least *one* core…
 
     if (*CMD_ALIASES).is_empty() {
         log::info!("No command aliases defined yet.");
@@ -93,7 +91,7 @@ async fn main() {
     // Create a listener that will accept incoming connections.
     let listen_on = format!("{}:{}", args.host_listen_addr, world.read().await.port);
     let listener = TcpListener::bind(&listen_on).await.unwrap();
-    log::info!("{} v{} listening on {}", args.world.to_case(Case::Title), env!("CARGO_PKG_VERSION"), listen_on);
+    log::info!("{} v{} listening on {} with {CPU_CORES} CPU core{} primed.", args.world.to_case(Case::Title), env!("CARGO_PKG_VERSION"), listen_on, if CPU_CORES == 1 {""} else {"s"});
 
     // Live RSS reporting:
     let mut rss_report_interval = tokio::time::interval(Duration::from_secs(5));
