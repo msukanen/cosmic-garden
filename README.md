@@ -16,6 +16,22 @@ Built from scratch in Rust, Cosmic Garden heavily embraces an event‑driven des
 A modern engine with the soul of a MUD and the posture of a cosmic gardener,
 and thus more an OMFG than "mere" MUD engine.
 
+## Usage in General
+
+To build:
+
+* `cargo build [--release] [--features stresstest]`
+
+To test:
+
+* `cargo test [--features stresstest]`
+
+To run:
+
+* `cargo run [--release] -- --help` to see CLI flags and stuff.
+* `cargo run [--release] [-- [options]]`
+* `GARDEN_CORES=# cargo run …` with `#` denoting number of CPU cores to utilize. This is mainly a hint for various semaphore batchers, etc.
+
 ## Technobabble
 
 …***CG*** drives the World by default at 100Hz, so hold on to your britches and hats.
@@ -23,7 +39,7 @@ and thus more an OMFG than "mere" MUD engine.
 ### CPU
 
 **TO NOTE** - ***CG*** has been *stress*tested only on a 16-core Xeon platform.
-YMMV with others if trying out any of the *stress*test modes.
+It certainly will *work* on any other platform, but YMMV with the ***stress***test part.
 
 #### Stress-tests
 
@@ -58,8 +74,3 @@ The major threads in a nutshell:
 ***CG*** does not rely on configs or 3rd party anything. It can and will generate
 a skeleton but fully functional world from scratch if none is present
 yet.
-
-#### Environment: CPU
-
-An environment variable `GARDEN_CORES` can be used to control (to some degree)
-how many cores ***CG*** will utilize.
