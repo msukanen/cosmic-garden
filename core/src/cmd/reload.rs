@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, roomloc_or_bust, show_help_if_needed, thread::SystemSignal, validate_access};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, roomloc_or_bust, show_help_if_needed, tell_user, thread::SystemSignal, validate_access};
 
 pub struct ReloadCommand;
 
@@ -26,5 +26,7 @@ impl Command for ReloadCommand {
                 }
             }
         }
+
+        tell_user!(ctx.writer, "Requested Janitor to (re)fix the scenery…\n");
     }
 }

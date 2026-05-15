@@ -5,7 +5,7 @@ use std::{sync::Arc, time::Duration};
 use lazy_static::lazy_static;
 use tokio::{sync::RwLock, time};
 
-use crate::{Cli, identity::{IdentityQuery, MachineIdentity}, item::Item, player::PlayerArc, room::RoomArc, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, world::WorldArc};
+use crate::{Cli, error::CgError, identity::{IdentityQuery, MachineIdentity}, item::Item, player::PlayerArc, room::{Room, RoomArc}, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels}}, world::WorldArc};
 
 lazy_static! {
     pub static ref ROOMS_TO_SAVE: Arc<RwLock<Vec<RoomArc>>> = Arc::new(RwLock::new(Vec::new()));
@@ -87,6 +87,15 @@ pub(crate) async fn janitor(
                     log::trace!("Saving '{}'…", arc.read().await.id());
                     arc.write().await.save().await.ok();
                 });}
+                SystemSignal::ReloadRoom { arc } => {
+                    #[cfg(test)]{ log::debug!("Oh cool, a request to reload a room received in mail…");}
+                    let world = world.clone();
+                    tokio::spawn(async move {
+                        if let Err(e) = reload_room(world, arc).await {
+                            log::error!("Sheesh, the room file is in fire?! {e:?}");
+                        };
+                    });
+                }
 
                 _ => ()
             }
@@ -210,4 +219,48 @@ async fn lost_and_found(world: WorldArc) {
     // Force world save so that current L'n'F is stored along the world file.
     // This is separately called during wind down, too, but…
     save_the_whales(world.clone(), true).await;
+}
+
+/// Reload a room from disk.
+async fn reload_room(world: WorldArc, arc: RoomArc) -> Result<(), CgError> {
+    let r = {
+        let rw = arc.read().await;
+        Room::load_sync(rw.id())?
+    };
+    arc.write().await.scavenge(r, &world).await;
+    Ok(())
+}
+
+#[cfg(test)]
+mod janitor_tests {
+    use std::io::Cursor;
+
+    use crate::{cmd::{look::LookCommand, reload::ReloadCommand}, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
+
+    #[tokio::test]
+    async fn janitor_reload_room() {
+        let mut b: Vec<u8> = vec![];
+        let mut s = Cursor::new(&mut b);
+        let (w,c,(mut state, p),d) = get_operational_mock_world().await;
+        let jt = get_operational_mock_janitor!(c,w,d.0);
+        get_operational_mock_librarian!(c,w);
+        stabilize_threads!();
+        let c = c.out;
+        state = ctx!(state, ReloadCommand,"",s,c,w,|out:&str| out.contains("Huh?"));
+        p.write().await.access = Access::Player { event_host: false, builder: true };
+        state = ctx!(state, ReloadCommand,"",s,c,w,|out:&str| out.contains("Huh?"));
+        p.write().await.access = Access::Builder;
+        let Some(rw) = w.read().await.get_room_by_id("r-1").clone() else {
+            panic!("Where'd the room go?!");
+        };
+        rw.write().await.desc = "Very, very roomy".into();
+        state = ctx!(state, LookCommand,"",s,c,w,|out:&str| out.contains("Very, very"));
+        state = ctx!(state, ReloadCommand, "",s,c,w,|out:&str| out.contains("'reload'"));
+        state = ctx!(state, ReloadCommand, "googolplex",s,c,w,|out:&str| out.contains("no such place"));
+        state = ctx!(state, ReloadCommand, "here",s,c,w,|out:&str| out.contains("Requested"));
+        stabilize_threads!(10);//let's wait reload to actually happen…
+        _ = ctx!(state, LookCommand,"",s,c,w,|out:&str| !out.contains("Very, very"));
+        c.shutdown().await;
+        _ = d.1.await;
+    }
 }
