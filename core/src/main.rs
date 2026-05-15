@@ -8,7 +8,16 @@ mod io;             use convert_case::{Case, Casing};
 use sysinfo::System;
 use tokio::{net::TcpListener, sync::RwLock};
 
-use crate::{cmd::cmd_alias::CMD_ALIASES, r#const::{CPU_CORES, DATA, WORLD}, thread::{life::{BATTLE_HZ, CORE_HZ}, per_client::{self, PerClientData}, signal::SignalChannels}, world::World};
+use crate::{
+    cmd::cmd_alias::CMD_ALIASES,
+    r#const::{CPU_CORES, DATA, WORLD},
+    thread::{
+        life::{BATTLE_HZ, CORE_HZ},
+        per_client::{self, PerClientData},
+        signal::SignalChannels},
+    world::World,
+    util::mem_as_gmk
+};
 
 mod cmd;
 pub(crate) mod combat;
@@ -97,7 +106,7 @@ async fn main() {
     let mut rss_report_interval = tokio::time::interval(Duration::from_secs(5));
     let mut sys = System::new_all();
     let pid = sysinfo::get_current_pid().expect("Unable to determine PID?!");
-    let mut peak_mem_kb: u64 = 0;
+    let mut peak_mem_b: u64 = 0;
     #[cfg(feature = "stresstest")]
     let mut peak_counted = 0;
     //
@@ -109,15 +118,15 @@ async fn main() {
                 sys.refresh_memory();
                 #[allow(unused_assignments)]
                 if let Some(process) = sys.process(pid) {
+                    let curr_mem_use = process.memory();
+
                     #[cfg(feature = "stresstest")]{
                         peak_counted += 1;
                     }
-                    let curr_mem_use = process.memory();
-                    let kib = peak_mem_kb as f64 / 1024.0;
-                    let mib = kib / 1024.0;
-                    let gib = mib / 1024.0;
-                    if curr_mem_use > peak_mem_kb {
-                        peak_mem_kb = curr_mem_use;
+
+                    if curr_mem_use > peak_mem_b {
+                        let (kib, mib, gib) = mem_as_gmk(peak_mem_b as f64);
+                        peak_mem_b = curr_mem_use;
                         log::info!("[TELEMETRY] peak mem usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
                         if gib > 40.0 {
                             log::warn!("[CRITICAL] Garden is occupying >40GB RAM.");
@@ -125,6 +134,7 @@ async fn main() {
                     } else {
                         #[cfg(feature = "stresstest")]
                         if peak_counted % 6 == 0 {
+                        let (kib, mib, gib) = mem_as_gmk(peak_mem_b as f64);
                             log::trace!("[MEM] usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
                         }
                     }
