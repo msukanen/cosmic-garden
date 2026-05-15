@@ -25,6 +25,7 @@ pub enum SystemSignal {
     SaveRoom { arc: RoomArc },
     /// Prepare for delayed shutdown.
     TimedShutdown { delay: usize },
+    ReloadRoom { arc: RoomArc },
 
     //
     //--- Librarian ---
