@@ -1,0 +1,20 @@
+{
+    "items": [
+    {
+        "Weapon": {
+            "id": "knife-cd991039-93e8-4a44-b936-667686a855bb",
+            "name": "A <c red>BIG</c> knife!",
+            "desc": "It's a knife. A <c red>big</c> knife…\n\n…or not so big…\n",
+            "owner": {
+                "owner_id": null,
+                "last_user_id": null,
+                "source": "System"
+            },
+            "size": 20,
+            "weapon_size": "Small",
+            "base_dmg": 2.0,
+            "dmg_type": "Crush"
+        }
+    }
+    ]
+}
