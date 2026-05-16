@@ -86,13 +86,32 @@ impl BlueprintLibrary {
     pub async fn load_or_bootstrap() -> Result<BlueprintLibrary, BlueprintError> {
         // Library present? If no, make one.
         let Ok(mf) = fs::read_to_string(blueprint_lib_fp()).await else {
-            log::warn!("No library established yet. Setting defaults…");
-            let mut lib = BlueprintLibrary::default();
+            log::warn!("No blueprint library established yet. Setting defaults…");
+            let mut lib = BlueprintLibrary::default(); 
             lib.world_id = WORLD_ID.as_str().into();
-            lib.id_stem = HashMap::new();
-            lib.items = HashMap::new();
+
+            let primordial_json = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/res/bootstrap_bp.json"));
+            #[derive(Debug, Deserialize)]
+            struct PrimordialLexicon {
+                items: Vec<Item>,
+            }
+            log::debug!("Debdeb");
+            let plex: PrimordialLexicon = serde_json::from_str(primordial_json).unwrap_or_else(|e|{
+                log::error!("{e:?}");
+                panic!("{e:?}");
+            });
+            log::debug!("plex: {plex:?}");
+            for item in plex.items {
+                lib.id_stem.insert(item.id().show_uuid(false).into(), true);
+                lib.items.insert(item.id().show_uuid(false).into(), item);
+            }
+
             lib.save().await?;
-            log::info!("Library in place, just no blueprints yet.");
+            log::info!("Blueprint Library in place {}.",
+                if lib.id_stem.len() < 1 {"but it's (so far) empty".into()}
+                else if lib.id_stem.len() == 1 {"with one item (so far).".into()}
+                else {format!("with {} things in it!", lib.id_stem.len())}
+            );
             return Ok(lib);
         };
 

@@ -170,7 +170,11 @@ impl HelpLibrary {
             lib.items.insert(nouuid, xfiles);
 
             lib.save().await?;
-            log::info!("Library in place, just no documents yet.");
+            log::info!("Library in place {}.",
+                if lib.id_stem.len() < 1 {"but (so far) empty".into()}
+                else if lib.id_stem.len() == 1 {"(with just one entry, so far).".into()}
+                else {format!("with {} entries!", lib.id_stem.len())}
+            );
             return Ok(lib);
         };
 
