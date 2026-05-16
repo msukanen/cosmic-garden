@@ -246,20 +246,21 @@ mod janitor_tests {
         get_operational_mock_librarian!(c,w);
         stabilize_threads!();
         let c = c.out;
-        state = ctx!(state, ReloadCommand,"",s,c,w,|out:&str| out.contains("Huh?"));
+        state = ctx!(sup state, ReloadCommand,"",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Player { event_host: false, builder: true };
-        state = ctx!(state, ReloadCommand,"",s,c,w,|out:&str| out.contains("Huh?"));
+        state = ctx!(sup state, ReloadCommand,"",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
         let Some(rw) = w.read().await.get_room_by_id("r-1").clone() else {
             panic!("Where'd the room go?!");
         };
+        _ = rw.read().await.save().await;
         rw.write().await.desc = "Very, very roomy".into();
-        state = ctx!(state, LookCommand,"",s,c,w,|out:&str| out.contains("Very, very"));
+        state = ctx!(sup state, LookCommand,"",s,c,w,|out:&str| out.contains("Very, very"));
         state = ctx!(state, ReloadCommand, "",s,c,w,|out:&str| out.contains("'reload'"));
         state = ctx!(state, ReloadCommand, "googolplex",s,c,w,|out:&str| out.contains("no such place"));
         state = ctx!(state, ReloadCommand, "here",s,c,w,|out:&str| out.contains("Requested"));
         stabilize_threads!(10);//let's wait reload to actually happen…
-        _ = ctx!(state, LookCommand,"",s,c,w,|out:&str| !out.contains("Very, very"));
+        _ = ctx!(sup state, LookCommand,"",s,c,w,|out:&str| !out.contains("Very, very"));
         c.shutdown().await;
         _ = d.1.await;
     }

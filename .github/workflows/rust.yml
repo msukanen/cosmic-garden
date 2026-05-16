@@ -11,14 +11,17 @@ env:
 
 jobs:
   build:
-
     runs-on: ubuntu-latest
-
     steps:
     - uses: actions/checkout@v4
     - name: Build
       run: cargo build --verbose
-    - name: Run tests
+    - name: Bootstrap Librarian
+      run: cargo test librarian_bootstrap
+      env:
+        RUST_LOG: debug
+        RUST_BACKTRACE: 1
+    - name: Run Tests
       run: cargo test -- --test-threads=1 --nocapture
       env:
         RUST_LOG: debug

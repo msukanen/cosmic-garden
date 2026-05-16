@@ -264,6 +264,12 @@ impl Room {
         Ok(())
     }
 
+    /// Erase the [Room] from disk.
+    #[cfg(test)]
+    pub fn erase(&self) {
+        
+    }
+
     /// Bootstrap phase exits linker.
     pub fn bootstrap_exits(&mut self, world: &World) {
         for (dir, exl) in self.raw_exits.drain() {

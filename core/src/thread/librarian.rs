@@ -347,6 +347,6 @@ mod librarian_tests {
         // let mut s = Cursor::new(&mut b);
         let (w,c,_,_) = get_operational_mock_world().await;
         get_operational_mock_librarian!(c,w);
-        stabilize_threads!(1000);
+        stabilize_threads!(3_000);// leave 3s of time for librarian to init.
     }
 }

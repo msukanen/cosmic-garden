@@ -66,26 +66,26 @@ impl Command for RenameCommand {
 
 #[cfg(test)]
 mod medit_rename_tests {
-    use std::{io::Cursor, time::Duration};
+    use std::io::Cursor;
 
-    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand}, ctx, get_operational_mock_librarian, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand}, ctx, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[tokio::test]
     async fn rename_normal() {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
-        let (w,c,(state, p),_) = get_operational_mock_world().await;
+        let (w,c,(mut state, p),_) = get_operational_mock_world().await;
         let _ = get_operational_mock_librarian!(c,w);
-        tokio::time::sleep(Duration::from_secs(1)).await;// let the thread(s) stabilize…
+        stabilize_threads!();
         let c = c.out;
-        let state = ctx!(state, MeditCommand, "goblin",s,c,w,|out:&str| out.contains("Huh?"));
+        state = ctx!(state, MeditCommand, "goblin",s,c,w,|out:&str| out.contains("Huh?"));
         p.write().await.access = Access::Builder;
-        let state = ctx!(state, MeditCommand, "goblin",s,c,w);
-        let state = ctx!(state, RenameCommand, "",s,c,w);
-        let state = ctx!(state, RenameCommand, "Hoblin",s,c,w,|out:&str| out.contains("Hoblin"));
-        let state = ctx!(state, RenameCommand, "ixd hoblin",s,c,w,|out:&str| out.contains("rename <name>"));
-        let state = ctx!(state, RenameCommand, "id hoblin",s,c,w,|out:&str| out.contains("Re-ID requires"));
+        state = ctx!(state, MeditCommand, "goblin",s,c,w);
+        state = ctx!(state, RenameCommand, "",s,c,w);
+        state = ctx!(state, RenameCommand, "Hoblin",s,c,w,|out:&str| out.contains("Hoblin"));
+        state = ctx!(state, RenameCommand, "ixd hoblin",s,c,w,|out:&str| out.contains("rename <name>"));
+        state = ctx!(state, RenameCommand, "id hoblin",s,c,w,|out:&str| out.contains("Re-ID requires"));
         p.write().await.access = Access::Admin;
-        let _ = ctx!(state, RenameCommand, "id hoblin",s,c,w,|out:&str| out.contains("re-ID"));
+        _ = ctx!(state, RenameCommand, "id hoblin",s,c,w,|out:&str| out.contains("re-ID"));
     }
 }
