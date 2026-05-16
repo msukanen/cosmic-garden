@@ -652,3 +652,26 @@ usage = [
     "reload here|this",
     "reload <room-id>"
 ]
+[[help_pages]]
+id = "machine-id"
+alias = ["machine-id", "machineid", "m-id", "m_id", "machine_id"]
+access = "any_builder"
+title = "machine id"
+contents = """
+MachineId - a unique runtime value attached to each entity, item, etc.
+
+You can see the MachineId with one or the other <x cmd>iex</c>, or with <x cmd>look</c> if you have
+<x cmd>set config show_id true</x>.
+"""
+see_also = ["set", "look", "iex"]
+[[help_pages]]
+id = "iex"
+alias = ["iex", "investigate existence"]
+access = "any_builder"
+title = "iex"
+contents = """
+IEX is both a context-dependant command and a term. What iex does, depends on
+context, but generally - as it stands for "investigate existence" - it shows
+various data about whatever is under scrutiny.
+"""
+see_also = ["medit-iex", "iedit-iex"]
