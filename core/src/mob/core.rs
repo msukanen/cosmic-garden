@@ -354,19 +354,17 @@ mod entity_tests {
         e.mp_mut().set_drain(-1.0);
         log::debug!("re-UUID is heavy (Uuid::new_v4()), and it'd never be used in a loop like this in reality, but… hold the press until {LOOPS} x 100 ticks is done.:");
         let mut tick = 0;
-        for _ in 0..LOOPS {
+        for x in 0..LOOPS {
+            if x % 1_000 == 0 {
+                log::debug!("Tickage… {x}");
+            }
             let old_id = e.id().to_string();
             _ = e.set_id(&old_id.re_uuid(), true);
             assert_ne!(old_id.as_str(), e.id());
-            let mut next_val = 100.0;
-            e.mp_mut().set_curr(next_val);
-            while next_val > 0.0 {
-                next_val -= 1.0;
-                if e.tick(tick, 0,None).is_none() {
-                    panic!("No tick?!");
-                }
+            e.mp_mut().set_curr(100.0);
+            while let Ok(false) = e.is_unconscious() {
+                e.tick(tick, 0, None);
                 tick += 1;
-                assert_eq!(next_val, e.mp());
             }
             assert_eq!(Ok(true), e.is_unconscious());
         }

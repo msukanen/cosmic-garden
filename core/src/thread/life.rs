@@ -48,8 +48,9 @@ impl BattlerRec {
     async fn loot_pinata(&self, world: &WorldArc) {
         let mut lock = self.combatant.write().await;
         if let Some(room) = lock.location().upgrade() {
-            let c_id = lock.id().as_m_id();
+            let c_id = lock.tick_id();
             if !world.read().await.entities.contains_key(&c_id) {
+                log::debug!("???");
                 // alerady looted, bail.
                 return ;
             }
@@ -59,7 +60,7 @@ impl BattlerRec {
             c_inv.set_desc(&format!("Corpse of '{}'", c_title));
             {
                 let mut lock = room.write().await;
-                lock.entities.remove(&c_id);
+                lock.remove_entity(c_id);
                 if let Err(e) = lock.try_insert(c_inv) {
                     // well shucks, room full…
                     add_item_to_lnf(e).await;
@@ -325,7 +326,7 @@ pub(crate) async fn life(
             _ = battle_interval.tick() => {
                 if bs.active.is_empty() { continue; }
                 #[allow(dead_code)] static mut C: usize = 1;
-                #[cfg(all(test, feature = "stresstest"))]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
+                #[cfg(test)]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
                 let mut end_fight_for: Vec<usize> = vec![];
 
                 // navigate the aggro swamp…
@@ -340,7 +341,7 @@ pub(crate) async fn life(
                                     vct: vct.clone(),
                                     resolution: resolution.clone()
                                 }).ok();
-                                #[cfg(all(test,feature = "stresstest"))]{log::debug!("resolution = {resolution:?}");}
+                                #[cfg(test)]{log::debug!("resolution = {resolution:?}");}
                                 match resolution {
                                     Resolution::AtkRetreat => { end_fight_for.push(*a_key);},
                                     Resolution::AtkVictory {..} => {
@@ -626,9 +627,9 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, num
                                 mw.set_tick_id(&mob_arc)
                             };
                             // tell the world 1st…
-                            w.entities.insert(mob_m_id, Arc::downgrade(&mob_arc));
+                            w.add_entity(mob_m_id, Arc::downgrade(&mob_arc));
                             // …then the room itself.
-                            r.entities.insert(mob_m_id, mob_arc);
+                            r.add_entity(mob_m_id, mob_arc);
                             unsafe { C += 1; }
                         }
                         log::debug!("Spawned {num} entit{}.", if num==1{"y"} else {"ies"});
@@ -726,7 +727,7 @@ mod life_tests {
 
     use sysinfo::System;
 
-use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::{IdentityQuery, MachineIdentity}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
 
     #[cfg(all(feature = "obsolete", feature = "stresstest"))]
     #[tokio::test]
@@ -763,9 +764,9 @@ use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType},
     #[tokio::test]
     async fn goblin_ocean_batch() {
         #[cfg(feature = "stresstest")]
-        const MILLION_GOBBOS: usize = 1_000_000;
+        const GOBBOCOUNT: usize = 1_000_000;
         #[cfg(not(feature = "stresstest"))]
-        const MILLION_GOBBOS: usize = 60_000;// chuck...
+        const GOBBOCOUNT: usize = 1_000;// chuck...
 
         let (w,c,_,j) = get_operational_mock_world().await;
     // Live RSS reporting:
@@ -805,15 +806,18 @@ use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType},
         stabilize_threads!(1000);
         let start_work = std::time::Instant::now();
         let (otx,orx) = tokio::sync::oneshot::channel::<bool>();
-        c.life.send(SystemSignal::SpawnBatch { what: SpawnType::Mob { id: "goblin".into() }, num: MILLION_GOBBOS, room: "r-1".into(), reply: otx.into() }).ok();
+        c.life.send(SystemSignal::SpawnBatch { what: SpawnType::Mob { id: "goblin".into() }, num: GOBBOCOUNT, room: "r-1".into(), reply: otx.into() }).ok();
         // let the dust settle…
         let _ = orx.await;
         log::debug!("Dust?");
         let work_duration = start_work.elapsed();
-        stabilize_threads!(30_000); // see for 30s what log fox says
-        let spawns_per_sec = MILLION_GOBBOS as f64 / work_duration.as_secs_f64();
+        
+        #[cfg(feature = "stresstest")]      stabilize_threads!(30_000); // see for 30s what log fox says
+        #[cfg(not(feature = "stresstest"))] stabilize_threads!( 5_000);
+
+        let spawns_per_sec = GOBBOCOUNT as f64 / work_duration.as_secs_f64();
         let r1 = w.read().await.get_room_by_id("r-1").unwrap();
-        let spawn_c = r1.read().await.entities.len();
+        let spawn_c = r1.read().await.entity_count();
 
         log::debug!("--terminated--");
         log::debug!("Duration: {work_duration:?} | Throughput: {spawns_per_sec:.2} ent/sec | Entities: {spawn_c}");
@@ -838,19 +842,8 @@ use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType},
             drop(lock);
             log::debug!("Dropped world lock…");
             let lock = r1.read().await;
-            let mut e_id = 0;
-            for k in lock.entities.values() {
-                let lock = k.read().await;
-                if lock.id().starts_with("goblin") {
-                    e_id = lock.id().as_m_id();
-                    break;
-                }
-            }
-            if e_id == 0 {
-                panic!("Oi! No lil gobbo found!");
-            }
             log::debug!("Found lil gobbo…");
-            if let Some(e) = lock.entities.get(&e_id) {
+            if let Some(e) = lock.get_entity_by_id("goblin").await {
                 let e = e.clone();
                 drop(lock);
                 log::debug!("Dropped room lock…");

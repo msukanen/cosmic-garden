@@ -1,11 +1,11 @@
 //! When worlds collide…
-use std::{collections::HashMap, net::SocketAddr, sync::Arc, usize};
+use std::{collections::HashMap, fmt::Display, net::SocketAddr, sync::Arc, usize};
 
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::{RwLock, Semaphore}, task::JoinSet};
 
-use crate::{Cli, r#const::CPU_CORES, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity}, io::{Broadcast, world_fp}, item::Item, mob::EntityWeak, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
+use crate::{Cli, r#const::CPU_CORES, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity}, io::{Broadcast, world_fp}, item::Item, mob::{EntityArc, EntityWeak}, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 /// The world!
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -302,6 +302,32 @@ impl World {
         log::trace!("Room '{id}'({m_id}) registered");
         self.rooms.insert(m_id, room);
         Ok(())
+    }
+
+    /// Get entity by (one or the other) ID.
+    /// 
+    /// # Args
+    /// - `id` maybe be either [MachineId] or a string-ID.
+    pub async fn get_entity_by_id<Id: MachineIdentity + Display>(&self, id: Id) -> Option<EntityArc> {
+        if let Some(w) = self.get_entity_by_m_id(id.as_m_id()) {
+            if let Some(arc) = w.upgrade() {
+                return arc.into();
+            } else {
+                log::warn!("A ghost of '{id}' found possessing World entity list!");
+            }
+        }
+
+        None
+    }
+
+    /// Get entity by [MachineId].
+    pub fn get_entity_by_m_id(&self, id: MachineId) -> Option<EntityWeak> {
+        self.entities.get(&id).cloned()
+    }
+
+    /// Add [crate::mob::core::Entity][Entity] to the [World]'s entity list.
+    pub fn add_entity(&mut self, id: MachineId, ent: EntityWeak) {
+        self.entities.insert(id, ent);
     }
 }
 

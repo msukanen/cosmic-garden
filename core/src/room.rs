@@ -8,7 +8,7 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs as async_fs, sync::{RwLock, Semaphore}};
 
-use crate::{r#const::CPU_CORES, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::UuidValidator}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World};
+use crate::{r#const::CPU_CORES, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World};
 
 pub mod environ;
 pub mod locking;
@@ -91,7 +91,7 @@ pub struct Room {
     /// NPC [entities][Entity] in the [Room].
     // [Room] is the sole owner of an [Entity].
     #[serde(default, with = "arc_n_t_transform")]
-    pub entities: HashMap<MachineId, EntityArc, BuildNoHashHasher<MachineId>>,
+    entities: HashMap<MachineId, EntityArc, BuildNoHashHasher<MachineId>>,
 
     /// Special environment bitmask.
     #[serde(default)] pub special_environment: SpecialEnvironment,
@@ -439,8 +439,64 @@ impl Room {
     }
 
     /// Wipe environmental bitmask.
+    #[inline]
     pub fn clear_env_bitmask(&mut self) {
         self.special_environment = SPECIAL_ENVIRONMENT_DEFAULT;
+    }
+
+    /// Remove given [Entity] from the [Room].
+    #[inline]
+    pub fn remove_entity(&mut self, id: MachineId) {
+        self.entities.remove(&id);
+    }
+
+    /// Add [crate::mob::core::Entity][Entity] to [Room].
+    #[inline]
+    pub fn add_entity(&mut self, id: MachineId, ent: EntityArc) {
+        self.entities.insert(id, ent);
+    }
+
+    /// Find [Entity] by [MachineId].
+    #[inline]
+    pub fn get_entity_by_m_id(&self, id: MachineId) -> Option<EntityArc> {
+        self.entities.get(&id).cloned()
+    }
+
+    /// Get [crate::mob::Entity][Entity] by (one or the other) ID.
+    pub async fn get_entity_by_id<Id: MachineIdentity + Display + UuidValidator>(&self, id: Id) -> Option<EntityArc> {
+        if let Some(e) = self.get_entity_by_m_id(id.as_m_id()) {
+            return e.into();
+        }
+
+        let (show_id, needle) = {
+            let show_id = id.has_uuid();
+            (show_id, id.to_string())
+        };
+
+        for ent in self.entities.values() {
+            if ent.read().await.id().show_uuid(show_id).starts_with(&needle) {
+                return ent.clone().into();
+            }
+        }
+
+        None
+    }
+
+    /// Get count of [Entity] in the [Room].
+    #[inline]
+    pub fn entity_count(&self) -> usize {
+        self.entities.len()
+    }
+
+    /// Drain the entities for processing somewhere else.
+    pub fn drain_entities(&mut self) -> Vec<(MachineId, EntityArc)>{
+        self.entities.drain().collect()
+    }
+
+    /// Get the [Entity]s as an iterator.
+    #[inline]
+    pub fn entities(&self) -> impl Iterator<Item = (&MachineId, &EntityArc)> {
+        self.entities.iter()
     }
 }
 

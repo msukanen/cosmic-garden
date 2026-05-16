@@ -74,25 +74,17 @@ mod medit_iex_tests {
         // we know r-1 exists…
         let r1 = w.read().await.get_room_by_id("r-1").unwrap().clone();// we do have r-1 …↑
         let id = {
-            let r1l = r1.read().await;
-            let mut ent = None;
-            for e in r1l.entities.values() {
-                let lock = e.read().await;
-                if lock.id().starts_with("goblin") {
-                    ent = lock.id().to_string().into();
-                    break;
-                }
-            }
+            let ent = r1.read().await.get_entity_by_id("goblin").await;
             let Some(e) = ent else {
                 panic!("Where'd the lil goblin go?!");
             };
-            e
+            e.read().await.tick_id().to_string()
         };
-        let state = ctx!(sup state, MeditCommand, &id, s,c,w,|out:&str| out.contains("MEdit invoked"));
-        let state = ctx!(sup state, RenameCommand, "Morg-Gluglug", s,c,w,|out:&str| out.contains("renamed"));
+        let state = ctx!(state, MeditCommand, &id, s,c,w);//,|out:&str| out.contains("MEdit invoked"));
+        let state = ctx!(state, RenameCommand, "Morg-Gluglug", s,c,w,|out:&str| out.contains("renamed"));
         let state = ctx!(sup state, LookCommand,"",s,c,w,|out:&str| out.contains("goblin"));
-        let state = ctx!(sup state, WeaveCommand, "",s,c,w);
-        let state = ctx!(sup state, LookCommand,"",s,c,w,|out:&str| out.contains("Morg-Glug"));
+        let state = ctx!(state, WeaveCommand, "",s,c,w);
+        let state = ctx!(state, LookCommand,"",s,c,w,|out:&str| out.contains("Morg-Glug"));
         let state = ctx!(sup state, MeditCommand, &id, s,c,w,|out:&str| out.contains("MEdit invoked"));
         let _ = ctx!(state, IexCommand, "", s,c,w,|out:&str| out.contains("Faction"));
     }

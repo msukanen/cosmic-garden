@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{item::Item, util::escape_hatch::VILLAIN_ID};
+use crate::{identity::MachineId, item::Item, util::escape_hatch::VILLAIN_ID};
 use super::{IdError, IdentityMut, IdentityQuery};
 
 lazy_static! {
@@ -21,11 +21,42 @@ pub trait UuidValidator {
     fn as_id(&self) -> Result<String, IdError>;
     /// Check if string is valid as ID without actually creating an ID out of it.
     fn is_id(&self) -> Result<(), IdError>;
+    fn has_uuid(&self) -> bool;
 }
 
 impl UuidValidator for str {
     #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
     #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
+    #[inline] fn has_uuid(&self) -> bool { has_uuid(self) }
+}
+
+impl UuidValidator for &str {
+    #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(self) }
+    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(self) }
+    #[inline] fn has_uuid(&self) -> bool { has_uuid(self) }
+}
+
+impl UuidValidator for &&str {
+    #[inline] fn as_id(&self) -> Result<String, IdError> { as_id(*self) }
+    #[inline] fn is_id(&self) -> Result<(), IdError> { is_id(*self) }
+    #[inline] fn has_uuid(&self) -> bool { has_uuid(*self) }
+}
+
+impl UuidValidator for MachineId {
+    fn as_id(&self) -> Result<String, IdError> {
+        self.to_string().as_id()
+    }
+
+    /// [MachineId] by default is file-system friendly due being all-digits.
+    #[inline]
+    fn is_id(&self) -> Result<(), IdError> {
+        Ok(())
+    }
+    
+    #[inline]
+    fn has_uuid(&self) -> bool {
+        false
+    }
 }
 
 pub trait UuidCore {
@@ -43,12 +74,18 @@ pub trait Uuid<'a> : UuidCore {
 
 /// Append UUID if no such yet.
 fn append_uuid(value: &str) -> String {
-    if UUID_RE.is_match(value) {
+    if value.has_uuid() {
         return value.into()
     }
     append_uuid_bypass(value)
 }
 
+#[inline]
+fn has_uuid(value: &str) -> bool {
+    UUID_RE.is_match(value)
+}
+
+#[inline]
 fn append_uuid_bypass(value: &str) -> String {
     format!("{value}-{}", uuid::Uuid::new_v4())
 }

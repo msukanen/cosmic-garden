@@ -34,7 +34,7 @@ impl Command for LookCommand {
                 ).collect::<Vec<_>>(),
                 {
                     let mut ents = vec![];
-                    for (id, ent) in lock.entities.iter() {
+                    for (id, ent) in lock.entities() {
                         if let Ok(ent) = ent.try_read() {
                             ents.push((id.clone(), ent.title().to_string()));
                         } else {

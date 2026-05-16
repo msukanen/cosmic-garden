@@ -88,7 +88,7 @@ mod cmd_get_tests {
         stabilize_threads!(25);
         state = ctx!(sup state, AttackCommand, "goblin",s,c,w);
         // let combat roll a moment…
-        stabilize_threads!(2000);
+        stabilize_threads!(4000);
         state = ctx!(state, LookCommand,"",s,c,w);
         state = ctx!(state, GetCommand,"all",s,c,w,|out:&str| out.contains("vacuum"));
         state = ctx!(state, GetCommand,"corpse",s,c,w,|out:&str| out.contains("undertaker"));

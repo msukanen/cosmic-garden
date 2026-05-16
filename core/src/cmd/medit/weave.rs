@@ -27,7 +27,7 @@ impl Command for WeaveCommand {
         // "weave" w/o args
         if op.is_empty() {
             let w = ctx.world.read().await;
-            if let Some(ent) = w.entities.get(&buf.id().as_m_id()) {
+            if let Some(ent) = w.entities.get(&buf.tick_id()) {
                 if let Some(arc) = ent.upgrade() {
                     drop(w);
                     let mut lock = arc.write().await;

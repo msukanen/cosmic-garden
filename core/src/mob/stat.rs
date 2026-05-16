@@ -1,4 +1,4 @@
-//! Mob stats.
+//! Stats.
 
 use std::{fmt::Display, ops::{AddAssign, Div, Mul, SubAssign}};
 

@@ -40,7 +40,7 @@ macro_rules! translocate {
     // Translocate [$ent][Entity] (ID $id) from [$origin][Room] to [$target][Room]
     (ent $ent:ident, $id:ident, $origin:expr, $target:expr) => {
         {
-            $origin.write().await.entities.remove(&$id);
+            $origin.write().await.remove_entity($id);
             crate::translocate!(ent $ent, $id, $target);
         }
     };
@@ -50,7 +50,7 @@ macro_rules! translocate {
     (ent $ent:ident, $id:ident, $target:expr) => {
         {
             use crate::combat::CombatantMut;
-            $target.write().await.entities.insert($id.clone(), $ent.clone());
+            $target.write().await.add_entity($id, $ent.clone());
             *($ent.write().await.location_mut()) = std::sync::Arc::downgrade(&$target);
         }
     };

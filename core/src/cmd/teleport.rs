@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, combat::Combatant, err_tell_user, identity::{IdentityQuery, MachineId, MachineIdentity}, mob::EntityArc, player::{PlayerArc, PlayerWeak}, room::RoomArc, roomloc_or_bust, show_help_if_needed, tell_user, translocate, validate_access, world::WorldArc};
+use crate::{cmd::{Command, CommandCtx}, combat::Combatant, err_tell_user, identity::{IdentityQuery, MachineIdentity}, mob::EntityArc, player::{PlayerArc, PlayerWeak}, room::RoomArc, roomloc_or_bust, show_help_if_needed, tell_user, translocate, validate_access, world::WorldArc};
 
 pub struct TeleportCommand;
 
@@ -77,8 +77,8 @@ impl Command for TeleportCommand {
                         }
                         // …and then the entities, if any:
                         for (id, arc) in
-                            {   let mut w = loc.write().await;
-                                w.entities.drain().collect::<Vec<(MachineId,EntityArc)>>()
+                            {   let mut rw = loc.write().await;
+                                rw.drain_entities()
                             }
                         {
                             translocate!(ent arc, id, t_loc);
@@ -90,7 +90,7 @@ impl Command for TeleportCommand {
             // …or teleport something somewhere else (or yank to where you are…)
             _ => {
                 let what = match try_resolve_to_something(what, &ctx.world, &loc).await {
-                    None => err_tell_user!(ctx.writer, "Ok, but… whatever '{}' is, or where, you have no clue.\n", what),
+                    None => err_tell_user!(ctx.writer, "Ok, but whatever '{}' is, or where, you have no clue.\n", what),
                     Some(found) => found
                 };
                 if wher.is_empty() {
@@ -119,35 +119,31 @@ async fn try_resolve_to_something(id: &str, world: &WorldArc, loc: &RoomArc) -> 
     else if let Some(plr) = w.players_by_id.get(id) {
         Some(TeleType::Player(plr.clone()))
     }
-    else if let Some(ent) = loc.read().await.entities.get(&id.as_m_id()) {
+    else if let Some(ent) = loc.read().await.get_entity_by_id(id).await {
         Some(TeleType::Entity(ent.clone()))
     }
-    else if let Some(ent) = world.read().await.entities.get(&id.as_m_id()) {
-        if let Some(arc) = ent.upgrade() {
-            Some(TeleType::Entity(arc.clone()))
-        } else {
-            None
-        }
+    else if let Some(ent) = world.read().await.get_entity_by_id(id).await {
+        Some(TeleType::Entity(ent))
     }
     // serious fallbacks:
     else {
-        // see room entity-by-entity
-        for e_arc in loc.read().await.entities.values() {
-            let lock = e_arc.read().await;
-            if lock.id().starts_with(id) {
-                return Some(TeleType::Entity(e_arc.clone()));
-            }
-        }
-        // worst case scenario: world…
-        for e in world.read().await.entities.values() {
-            if let Some(e_arc) = e.upgrade() {
-                let lock = e_arc.read().await;
-                if lock.id().starts_with(id) {
-                    return Some(TeleType::Entity(e_arc.clone()));
-                }
-            }
-        }
-        log::debug!("No {id}({}) found anywhere!", id.as_m_id());
+        // // see room entity-by-entity
+        // for e_arc in loc.read().await.entities.values() {
+        //     let lock = e_arc.read().await;
+        //     if lock.id().starts_with(id) {
+        //         return Some(TeleType::Entity(e_arc.clone()));
+        //     }
+        // }
+        // // worst case scenario: world…
+        // for e in world.read().await.entities.values() {
+        //     if let Some(e_arc) = e.upgrade() {
+        //         let lock = e_arc.read().await;
+        //         if lock.id().starts_with(id) {
+        //             return Some(TeleType::Entity(e_arc.clone()));
+        //         }
+        //     }
+        // }
+        log::debug!("No '{id}' found anywhere!");
         None
     }
 }
@@ -273,10 +269,10 @@ async fn translocate(ctx: &mut CommandCtx<'_>, initiator: PlayerArc, what: TeleT
             let lock = ent.write().await;
             let ent_id = lock.id().to_string();
             let ent_title = lock.title().to_string();
-            let m_id = ent_id.as_m_id();
+            let m_id = lock.tick_id();
             drop(lock);
-            there.entities.remove(&m_id);
-            here.entities.insert(m_id, ent);
+            there.remove_entity(m_id);
+            here.add_entity(m_id, ent);
             (
                 ent_id,
                 ent_title,

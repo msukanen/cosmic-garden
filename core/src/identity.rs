@@ -48,12 +48,20 @@ pub trait MachineIdentity {
     fn as_m_id(&self) -> MachineId;
 }
 
-impl MachineIdentity for str {
-    fn as_m_id(&self) -> MachineId {
+impl MachineIdentity for str { #[inline] fn as_m_id(&self) -> MachineId { as_m_id(&self) } }
+impl MachineIdentity for &str { #[inline] fn as_m_id(&self) -> MachineId { as_m_id(self) } }
+impl MachineIdentity for &&str { #[inline] fn as_m_id(&self) -> MachineId { as_m_id(*self) } }
+impl MachineIdentity for MachineId { #[inline] fn as_m_id(&self) -> MachineId { *self } }
+
+#[inline]
+fn as_m_id(v:&str) -> MachineId {
+    if let Ok(m_id) = v.parse::<MachineId>() {
+        m_id
+    } else {
         use std::collections::hash_map::DefaultHasher;
         use std::hash::{Hash, Hasher};
         let mut s = DefaultHasher::new();
-        self.hash(&mut s);
+        v.hash(&mut s);
         s.finish() as MachineId
     }
 }
