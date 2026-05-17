@@ -9,7 +9,10 @@ use crate::{
         Item, VolumeMut, Volumed, container::{
             ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageMut, StorageSpace
         }
-    }, room::environ::{SpecialEnvironment, Terrain}, string::{Describable, DescribableMut}, traits::{Reflector, TickMeaning, Tickable}
+    },
+    room::environ::{SpecialEnvironment, Terrain},
+    string::{Describable, DescribableMut},
+    traits::{Reflector, TickMeaning, Tickable}
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
