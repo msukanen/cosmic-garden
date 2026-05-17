@@ -29,6 +29,8 @@ const fn usize_from_str(s:&str) -> usize {
     }
     result
 }
+/// Number of "things" in one semaphore bucket when semaphore split kicks in.
+pub(crate) const PER_CORE_SEMAPHORE_BUCKET_SZ: usize = 5_000;
 
 // some const to deal with [World]-specific choices that aren't present for a reason or other…
 pub const GREETING: &'static str = "Welcome to Cosmic Garden!";
