@@ -4,7 +4,7 @@ use std::fmt::Display;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum Demeanor {
     Friendly,
     Neutral,
@@ -53,7 +53,7 @@ impl Default for Demeanor {
 }
 
 /// Some basic/preliminary factions.
-#[derive(Debug, Clone, Deserialize, Serialize)]
+#[derive(Debug, Clone, Copy, Deserialize, Serialize)]
 pub enum EntityFaction {
     /// Reserved for actual [Player].
     Player { pvp: bool },

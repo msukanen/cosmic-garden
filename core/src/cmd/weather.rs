@@ -139,7 +139,7 @@ mod cmd_weather_tests {
         stabilize_threads!(60_000); // see for 30s what log fox says
         let spawns_per_sec = 1_000_000 as f64 / work_duration.as_secs_f64();
         let r1 = w.read().await.get_room_by_id("r-1").unwrap();
-        let spawn_c = r1.read().await.entities.len();
+        let spawn_c = r1.read().await.entities().count();
 
         log::debug!("--terminated--");
         log::debug!("Duration: {work_duration:?} | Throughput: {spawns_per_sec:.2} ent/sec | Entities: {spawn_c}");

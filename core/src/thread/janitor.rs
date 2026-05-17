@@ -242,7 +242,7 @@ mod janitor_tests {
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
         let (w,c,(mut state, p),d) = get_operational_mock_world().await;
-        let jt = get_operational_mock_janitor!(c,w,d.0);
+        get_operational_mock_janitor!(c,w,d.0);
         get_operational_mock_librarian!(c,w);
         stabilize_threads!();
         let c = c.out;
