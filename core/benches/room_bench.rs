@@ -16,7 +16,7 @@ async fn setup_bench_room(entity_count: usize, sigs: &SignalSenderChannels) -> A
         for i in 0..entity_count {
             let raw_id = format!("goblin:{i}");
             let mut goblin = Entity::new(&raw_id, &sigs).await.unwrap();
-            log::trace!("{raw_id} ({})", goblin.tick_id());
+            #[cfg(feature = "stresstest")]{ log::trace!("{raw_id} ({})", goblin.tick_id()); }
             room_lock.add_entity(goblin.tick_id(), Arc::new(RwLock::new(goblin)));
         }
     }
@@ -42,20 +42,22 @@ fn bench_room_tick(c: &mut Criterion) {
         (w,sigs.out,(state,p),d)
     });
     
-    // Test scale scaling: 1 entity vs 100 entities in a single room
-    for scale in &[1, 10, 100] {
+    // Test scale scaling: 1 entity vs X entities in a single room
+    for scale in &[1, 10, 100, 1_000, 10_000, 100_000, 1_000_000] {
         let room = rt.block_on(setup_bench_room(*scale, &sigs));
+        let mut curr_tick = 0;
         group.bench_with_input(
             criterion::BenchmarkId::new("tick_duration", scale),
             scale,
             |b, _| {
                 b.to_async(&rt).iter(|| {
                     let room_clone = room.clone();
+                    curr_tick += 1;
                     async move {
                         let mut room_lock = room_clone.write().await;
                         // Execute the pure 100Hz marrow logic
                         room_lock.tick(
-                            0, // current global tick count
+                            curr_tick, // current global tick count
                             room_clone.clone()
                         ).await;
                     }

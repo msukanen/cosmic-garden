@@ -24,7 +24,8 @@ To build:
 
 To test:
 
-* `cargo test [--features stresstest]`
+* `cargo test [--features stresstest]` to run normal/stresstest tests.
+* `cargo criterion` to run **criterion** benchmark(s).
 
 To run:
 
