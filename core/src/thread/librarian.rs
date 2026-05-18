@@ -13,7 +13,7 @@ use crate::{
     world::WorldArc
 };
 
-#[cfg(test)]
+#[cfg(any(test, feature = "use-criterion"))]
 #[macro_export]
 macro_rules! get_operational_mock_librarian {
     ($ch:ident, $w:ident) => {
@@ -33,7 +33,7 @@ struct Library {
     bp: BlueprintLibrary,
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "use-criterion"))]
 mod librarian_test_cache {
     use crate::{help::HelpLibrary, item::BlueprintLibrary, mob::spawn_lib::EntityLibrary};
     pub static LIB_DATA_CACHE: tokio::sync::OnceCell<std::sync::Arc<(BlueprintLibrary, EntityLibrary, HelpLibrary)>> = tokio::sync::OnceCell::const_new();
@@ -334,7 +334,7 @@ pub(crate) async fn search_coworker(list: Vec<String>, term: Option<String>, out
 
 #[cfg(test)]
 mod librarian_tests {
-    use crate::{stabilize_threads, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, world::mock_world::get_operational_mock_world};
 
     /// Bootstrap librarian.
     /// 

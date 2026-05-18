@@ -5,6 +5,8 @@ use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::{RwLock, Semaphore}, task::JoinSet};
 
+#[cfg(any(test, feature = "use-criterion"))]
+use crate::thread::signal::SignalChannels;
 use crate::{Cli, r#const::CPU_CORES, error::CgError, identity::{IdError, IdentityQuery, MachineId, MachineIdentity}, io::{Broadcast, world_fp}, item::Item, mob::{EntityArc, EntityWeak}, player::{Player, PlayerArc}, room::{Room, RoomArc, locking::Exit}, string::{UNNAMED, prompt::PromptType}, thread::{SystemSignal, signal::SignalSenderChannels}, util::direction::Direction};
 
 /// The world!
@@ -53,27 +55,46 @@ fn world_sem_default() -> Arc<Semaphore> {
 }
 
 impl World {
-    #[cfg(test)]
-    pub async fn dummy() -> Self {
-        let root_room = Some(Room::new("r-1", "Incineration Chamber", false).await.unwrap());
-        let room_2 = Some(Room::new("r-2", "Waterfall", false).await.unwrap());
+    #[cfg(any(test, feature = "use-criterion"))]
+    pub fn dummy(sigs: &SignalChannels) -> Self {
+        use crate::identity::IdentityMut;
+
+        let mut root_room = Room::new_raw("r-1", "Incineration Chamber", false).unwrap();
+        let mut room_2 = Room::new_raw("r-2", "Waterfall", false).unwrap();
+
+        // create Player#1
+        let mut plr = crate::player::Player::default();
+        plr.set_id("test-player-1", true).ok();
+        let plr_id = plr.id().to_string();
+        let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
+        let mut players_by_id = HashMap::default();
+        players_by_id.insert(plr_id.clone(), plr.clone());
+        
+        root_room.out = sigs.out.broadcast.clone();
+        room_2.out = sigs.out.broadcast.clone();
+        
+        // put player#1 into r-1
+        root_room.who.insert(plr_id.clone(), std::sync::Arc::downgrade(&plr));
+
+        let root_room = Arc::new(RwLock::new(root_room));
+        let room_2 = Arc::new(RwLock::new(room_2));
         Self {
             name: "Test World".into(),
             port: 8080,
             greeting: "Greetings, Crash Test Dummy!".to_string().into(),
             fixed_prompts: HashMap::new(),
             players_by_sockaddr: HashMap::new(),
-            players_by_id: HashMap::new(),
+            players_by_id,
             root_room_id: "r-1".into(),
             rooms: {
                 use crate::identity::MachineIdentity;
                 let mut m = HashMap::default();
-                m.insert("r-1".as_m_id(), root_room.clone().unwrap());
-                m.insert("r-2".as_m_id(), room_2.clone().unwrap());
+                m.insert("r-1".as_m_id(), root_room.clone());
+                m.insert("r-2".as_m_id(), room_2);
                 m},
-                root_room,
+            root_room: root_room.into(),
             lost_and_found: HashMap::new(),
-            channels: None,
+            channels: sigs.out.clone().into(),
             entities: HashMap::default(),
             sem: world_sem_default(),
         }
@@ -141,11 +162,11 @@ impl World {
                     rooms: {
                         let mut rooms = HashMap::default();
                         
-                        let r1 = Room::new(default_root_room_id().as_str(), "Room #1", true).await?;
+                        let r1 = Room::new(default_root_room_id().as_str(), "Room #1", true)?;
                         let r1_id = r1.read().await.id().to_string();
                         rooms.insert(r1_id.as_m_id(), r1.clone());
 
-                        let r2 = Room::new("room 2!", "Room #2", true).await?;
+                        let r2 = Room::new("room 2!", "Room #2", true)?;
                         let r2_id = r2.read().await.id().to_string();
                         rooms.insert(r2_id.as_m_id(), r2.clone());                       
                         {
@@ -420,15 +441,15 @@ pub async fn room_list(world: &WorldArc, term: Option<String>) -> Vec<(MachineId
     recv.await.unwrap_or_default()
 }
 
-#[cfg(test)]
-pub(crate) mod world_tests {
+#[cfg(any(test, feature = "use-criterion"))]
+pub mod mock_world {
     use std::sync::Once;
 
     use crate::{cformat, identity::{IdentityMut, MachineIdentity}, player::PlayerArc, world::WorldArc};
 
     pub static DISK_VERIFIED: Once = Once::new();
 
-    pub(crate) async fn get_operational_mock_world() -> (
+    pub async fn get_operational_mock_world() -> (
         WorldArc,
         crate::SignalChannels,
         (   crate::io::ClientState,
@@ -469,31 +490,26 @@ pub(crate) mod world_tests {
                 log::info!("Bootstrap missing.");
             }
         });
-        use crate::identity::IdentityQuery;
-        // world basics…
-        let mut world = crate::world::World::dummy().await;
-        
-        // create Player#1
-        let mut plr = crate::player::Player::default();
-        plr.set_id("test-player-1", true).ok();
-        let plr_id = plr.id().to_string();
-        let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
-        world.players_by_id.insert(plr_id.clone(), plr.clone());
-        // put player#1 into r-1
-        let Some(r) = world.rooms.get(&"r-1".as_m_id()) else { panic!("r-1 missing?!")};
-        r.write().await.who.insert(plr_id.clone(), std::sync::Arc::downgrade(&plr));
-        plr.write().await.location = std::sync::Arc::downgrade(&r);
 
         // signal channels…
         let sigs = crate::SignalChannels::default();
-        r.write().await.out = sigs.out.broadcast.clone();
-        world.channels = sigs.out.clone().into();
-
+        // world basics…
+        let world = crate::world::World::dummy(&sigs);
+        let plr = {
+            let Some(plr) = world.players_by_id.values().into_iter().nth(0) else {
+                panic!("Where did the player go?!")
+            };
+            let Some(r) = &world.root_room else {
+                panic!("Where did the root room go?!")
+            };
+            plr.write().await.location = std::sync::Arc::downgrade(r);
+            plr.clone()
+        };
         let (dtx,drx) = tokio::sync::oneshot::channel::<()>();
 
         (   std::sync::Arc::new(tokio::sync::RwLock::new(world)),
             sigs,
-            (crate::io::ClientState::Playing { player: plr.clone() }, plr.clone()),
+            (crate::io::ClientState::Playing { player: plr.clone() }, plr),
             (dtx, drx),
         )
     }

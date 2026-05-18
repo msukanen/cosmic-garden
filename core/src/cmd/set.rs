@@ -80,7 +80,7 @@ async fn set_gender_val(ctx: &mut CommandCtx<'_>, plr: PlayerArc, access: Access
 
 #[cfg(test)]
 mod cmd_set_tests {
-    use crate::{stabilize_threads, cmd::{look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::{look::LookCommand, set::SetCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn set_config_val() {

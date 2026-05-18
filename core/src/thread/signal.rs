@@ -108,13 +108,13 @@ pub struct SignalSenderChannels {
 }
 
 #[derive(Debug)]
-pub(crate) struct SignalReceiverChannels {
+pub struct SignalReceiverChannels {
     pub janitor: SigReceiver,
     pub librarian: SigReceiver,
     pub life: SigReceiver,
 }
 
-pub(crate) struct SignalChannels {
+pub struct SignalChannels {
     pub out: SignalSenderChannels,
     pub recv: SignalReceiverChannels,
 }

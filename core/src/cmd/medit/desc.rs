@@ -14,7 +14,7 @@ impl Command for DescCommand {
 mod medit_desc_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::medit::{MeditCommand, desc::DescCommand, iex::IexCommand, rename::RenameCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::medit::{MeditCommand, desc::DescCommand, iex::IexCommand, rename::RenameCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn medit_desc() {

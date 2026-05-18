@@ -235,7 +235,7 @@ async fn reload_room(world: WorldArc, arc: RoomArc) -> Result<(), CgError> {
 mod janitor_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, reload::ReloadCommand}, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, reload::ReloadCommand}, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn janitor_reload_room() {

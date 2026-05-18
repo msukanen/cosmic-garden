@@ -37,7 +37,7 @@ impl Command for DigCommand {
 
             // make a new room, no `dest_id` present yet.
             let new_title = format!("New Room ({})", dest_id);
-            match Room::new(&dest_id, &new_title, false).await {
+            match Room::new(&dest_id, &new_title, false) {
                 Ok(d_arc) => {
                     // try tell the World about us!
                     let mut w = ctx.world.write().await;
@@ -108,7 +108,7 @@ impl Command for DigCommand {
 mod cmd_dig_tests {
     use std::io::Cursor;
     use super::*;
-    use crate::{ctx, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{ctx, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn dig_third_cardinal() {

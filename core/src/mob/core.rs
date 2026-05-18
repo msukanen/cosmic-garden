@@ -8,7 +8,11 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 
 use crate::{
-    combat::{Combatant, CombatantMut, DamageType, Damager}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
+    combat::{Combatant, CombatantMut, DamageType, Damager},
+    error::CgError,
+    identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}},
+    io::entity_entry_fp,
+    item::{
         Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
     },
     mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiAction, faction::{Demeanor, EntityFaction}},
@@ -295,7 +299,13 @@ impl Tickable for Entity {
         #[cfg(feature = "stresstest")] static mut AIMC: usize = 0;
         let ai_m =
         if self.should_pulse(curr_tick, self.tick_id, 15) {
-            if let Some(ai_means) = self.ai.tick(self.tick_id(), curr_tick, room_env, room_terrain) {
+            if let Some(ai_means) = self.ai.tick(
+                self.tick_id(),
+                curr_tick,
+                room_env,
+                room_terrain,
+                self.faction,
+            ) {
                 if let TickMeaning::AiStateChange { maybe_action: Some(AiAction::Emote { .. }), .. } = &ai_means {
                     #[cfg(feature = "stresstest")]{
                         unsafe {
@@ -336,7 +346,7 @@ impl Gender for Entity {
 mod entity_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery, uniq::{UUID_RE, Uuid}}, mob::core::Entity, stabilize_threads, string::UNNAMED, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Combatant, CombatantMut}, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery, uniq::{UUID_RE, Uuid}}, mob::core::Entity, stabilize_threads, string::UNNAMED, thread::{SystemSignal, signal::SpawnType}, traits::Tickable, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[cfg(feature = "stresstest")]
     const LOOPS: u32 = 1_000_000;

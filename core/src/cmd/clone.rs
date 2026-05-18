@@ -80,7 +80,7 @@ impl Command for CloneCommand {
 mod cmd_clone_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{clone::CloneCommand, inventory::InventoryCommand, look::LookCommand}, combat::DamageType, r#const::SMALL_ITEM, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityQuery, uniq::Uuid}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, roomloc_or_bust, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{clone::CloneCommand, inventory::InventoryCommand, look::LookCommand}, combat::DamageType, r#const::SMALL_ITEM, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityQuery, uniq::Uuid}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, roomloc_or_bust, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn cmd_clone_knife() {

@@ -249,7 +249,7 @@ mod exit_locking_tests {
     #[tokio::test]
     async fn exit_close() {
         init();
-        let r1 = Room::new("r-1", "Room#1", false).await.unwrap();
+        let r1 = Room::new("r-1", "Room#1", false).unwrap();
         let mut ex1 = Exit::Open { key_bp: Some("key-1".into()), room: Arc::downgrade(&r1) };
         if let Err(e) = ex1.try_close() {
             panic!("LockingError: {e:?}");
@@ -260,7 +260,7 @@ mod exit_locking_tests {
     #[tokio::test]
     async fn exit_open() {
         init();
-        let r1 = Room::new("r-1", "Room#1", false).await.unwrap();
+        let r1 = Room::new("r-1", "Room#1", false).unwrap();
         let mut ex1 = Exit::Closed { key_bp: Some("key-1".into()), room: Arc::downgrade(&r1) };
         if let Err(e) = ex1.try_open(None, false) {
             panic!("LockingError: {e:?}");
@@ -274,7 +274,7 @@ mod exit_locking_tests {
     #[tokio::test]
     async fn exit_locked_open() {
         init();
-        let r1 = Room::new("r-1", "Room#1", false).await.unwrap();
+        let r1 = Room::new("r-1", "Room#1", false).unwrap();
         let k1 = Item::Key(TemporaryStructToAppeaseAnalyzerDuringWIP { id: "key-1".into(), title: "Key#1".into(), owner: Owner::no_one() });
         let k2 = Item::Key(TemporaryStructToAppeaseAnalyzerDuringWIP { id: "key-2".into(), title: "Key#2".into(), owner: Owner::no_one() });
         let mut ex1 = Exit::Locked { key_bp: "key-1".into(), room: Arc::downgrade(&r1) };
@@ -289,7 +289,7 @@ mod exit_locking_tests {
     #[tokio::test]
     async fn exit_lock() {
         init();
-        let r1 = Room::new("r-1", "Room#1", false).await.unwrap();
+        let r1 = Room::new("r-1", "Room#1", false).unwrap();
         let k1 = Item::Key(TemporaryStructToAppeaseAnalyzerDuringWIP { id: "key-1".into(), title: "Key#1".into(), owner: Owner::no_one() });
         let k2 = Item::Key(TemporaryStructToAppeaseAnalyzerDuringWIP { id: "key-2".into(), title: "Key#2".into(), owner: Owner::no_one() });
         let mut ex1 = Exit::Free { room: Arc::downgrade(&r1) };

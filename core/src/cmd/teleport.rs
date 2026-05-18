@@ -291,7 +291,7 @@ mod cmd_teleport_tests {
 
     use tokio::sync::RwLock;
 
-    use crate::{cmd::{look::LookCommand, teleport::TeleportCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityMut, player::Player, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, teleport::TeleportCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityMut, player::Player, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn teleport_self() {

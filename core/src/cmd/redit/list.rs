@@ -57,7 +57,7 @@ impl Command for ListCommand {
 
 #[cfg(test)]
 mod cmd_redit_list {
-    use crate::{cmd::{redit::{ReditCommand, list::ListCommand}}, ctx, room::Room, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{redit::{ReditCommand, list::ListCommand}}, ctx, room::Room, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn exits_listing() {
@@ -77,7 +77,7 @@ mod cmd_redit_list {
             let id = format!("{}-{i}", alphabet[i % alphalen]);
             let t = format!("Room #{i}");
             let d = format!("This would be the room #{i}");
-            let r = Room::new(&id, &t, false).await.ok().unwrap();
+            let r = Room::new(&id, &t, false).ok().unwrap();
             r.write().await.desc = d;
             lock.insert_room(r).await.ok();
         }

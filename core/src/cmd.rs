@@ -108,7 +108,7 @@ pub async fn parse_and_exec<'a>(mut ctx: CommandCtx<'_>) -> ClientState {
 
 #[cfg(test)]
 mod cmd_tests {
-    use crate::{cmd::{Command, CommandCtx, look::LookCommand}, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{Command, CommandCtx, look::LookCommand}, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn synthetic_commandctx() {

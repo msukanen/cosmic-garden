@@ -54,7 +54,7 @@ impl Command for IexCommand {
 mod medit_iex_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, iex::IexCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, iex::IexCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::IdentityQuery, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn medit_iex_test() {

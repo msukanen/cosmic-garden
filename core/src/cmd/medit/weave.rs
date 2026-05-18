@@ -90,7 +90,7 @@ impl Command for WeaveCommand {
 mod medit_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, edit::EditorMode, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, medit::{MeditCommand, rename::RenameCommand, weave::WeaveCommand}}, ctx, edit::EditorMode, get_operational_mock_librarian, get_operational_mock_life, io::ClientState, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn weave_test() {

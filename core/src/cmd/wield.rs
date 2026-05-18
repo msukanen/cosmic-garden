@@ -62,7 +62,7 @@ impl Command for WieldCommand {
 mod cmd_wield_tests {
     use std::io::Cursor;
 
-    use crate::{stabilize_threads, cmd::{get::GetCommand, look::LookCommand, shutdown::ShutdownCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::{get::GetCommand, look::LookCommand, shutdown::ShutdownCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn wield_knife_ok() {

@@ -56,7 +56,7 @@ impl Command for WeatherCommand {
 mod cmd_weather_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::weather::WeatherCommand, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::weather::WeatherCommand, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn weather_currently() {

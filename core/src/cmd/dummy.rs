@@ -35,7 +35,7 @@ mod cmd_dummy_tests {
         use std::io::Cursor;
 
         use super::*;
-        use crate::{cmd::{GotoCommand, look::LookCommand, redit::{ReditCommand, way::WayCommand}}, ctx, get_operational_mock_life, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
+        use crate::{cmd::{GotoCommand, look::LookCommand, redit::{ReditCommand, way::WayCommand}}, ctx, get_operational_mock_life, stabilize_threads, util::access::Access, world::mock_world::get_operational_mock_world};
 
         let mut b: Vec<u8> = vec![];
         let mut s = Cursor::new(&mut b);
@@ -52,6 +52,6 @@ mod cmd_dummy_tests {
         state = ctx!(state, GotoCommand, "north", s,c,w);
         stabilize_threads!(1);// to not send next command within next nanosecond…
         state = ctx!(state, DummyCommand, "", s,c,w);
-        state = ctx!(state, LookCommand, "", s,c,w);
+        _ = ctx!(state, LookCommand, "", s,c,w);
     }
 }

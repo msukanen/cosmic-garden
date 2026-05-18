@@ -105,8 +105,16 @@ impl EntityLibrary {
     }
 
     /// Get a copy of an [Entity] blueprint from cold storage, if exists.
+    /// 
+    /// We'll treat character `:` as "namespacer" so that builders can separate
+    /// blueprint stem from e.g. their own indexing number.
+    /// 
+    /// And, in case of e.g. cloned entities, we'll snip off a) UUID, b) index numbers.
     pub fn get(&self, id: &str) -> Option<Entity> {
-        self.bps.get(id.show_uuid(false)).cloned()
+        let (namespaced, rest) = id.split_once(':').unwrap_or((id, ""));
+        // TODO snip off index number if present
+
+        self.bps.get(namespaced.show_uuid(false)).cloned()
     }
 
     /// Shelve a new [Entity] blueprint.

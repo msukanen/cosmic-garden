@@ -4,7 +4,7 @@ use std::{sync::Arc, time::Duration};
 
 use clap::Parser;
 
-mod io;             use convert_case::{Case, Casing};
+use convert_case::{Case, Casing};
 use sysinfo::System;
 use tokio::{net::TcpListener, sync::RwLock};
 
@@ -26,21 +26,28 @@ mod edit;
 mod environ;
 mod error;
 mod help;
-mod identity;
+#[cfg(feature = "use-criterion")] pub mod identity;
+#[cfg(not(feature = "use-criterion"))] mod identity;
+mod io;
 mod item;
 #[macro_use]
   mod macros;
-mod mob;
+#[cfg(feature = "use-criterion")] pub mod mob;// pub for criterion
+#[cfg(not(feature = "use-criterion"))] mod mob;
 mod password;
 mod player;
-mod room;
+#[cfg(feature = "use-criterion")] pub mod room;// pub for criterion
+#[cfg(not(feature = "use-criterion"))] mod room;
 mod serial;
 mod string;
-mod thread;
-mod traits;
+#[cfg(feature = "use-criterion")] pub mod thread;// pub for criterion
+#[cfg(not(feature = "use-criterion"))] pub mod thread;
+#[cfg(feature = "use-criterion")] pub mod traits;// pub for criterion
+#[cfg(not(feature = "use-criterion"))] mod traits;
 mod user;
 mod util;
-mod world;
+#[cfg(feature = "use-criterion")] pub mod world;// pub for criterion
+#[cfg(not(feature = "use-criterion"))] mod world;
 
 /// Command line options…
 #[derive(Debug, Parser, Clone)]

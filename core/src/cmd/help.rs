@@ -119,7 +119,7 @@ mod cmd_help_tests {
     use std::io::Cursor;
 
     use super::*;
-    use crate::{stabilize_threads, cmd::{hedit::{HeditCommand, abort::AbortCommand, desc::DescCommand, weave::WeaveCommand}, iedit::IeditCommand}, ctx, get_operational_mock_librarian, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{stabilize_threads, cmd::{hedit::{HeditCommand, abort::AbortCommand, desc::DescCommand, weave::WeaveCommand}, iedit::IeditCommand}, ctx, get_operational_mock_librarian, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn namespacing_get() {

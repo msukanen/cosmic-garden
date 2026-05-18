@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::MachineId, room::environ::{SpecialEnvironment, Terrain, WEATHER_RAIN}, traits::TickMeaning};
+use crate::{identity::MachineId, mob::faction::EntityFaction, room::environ::{SpecialEnvironment, Terrain, WEATHER_RAIN}, traits::TickMeaning};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
 pub enum AiState {
@@ -33,7 +33,7 @@ impl Default for AiMentalState {
 #[derive(Debug, Clone)]
 pub enum AiAction {
     Emote { ent_m_id: MachineId, fmt: &'static str },
-    //Attack { xyz }
+    Attack,// { xyz }
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -76,7 +76,13 @@ impl Ai {
     /// Tick the AI.
     /// 
     // By default we (usually) run AI at some fraction of the parent's [Room]'s Hz.
-    pub fn tick(&mut self, e_tick_id: MachineId, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<TickMeaning> {
+    pub fn tick(&mut self,
+            e_tick_id: MachineId,
+            curr_tick: usize,
+            room_env: SpecialEnvironment,
+            room_ter: Option<Terrain>,
+            faction: EntityFaction,
+    ) -> Option<TickMeaning> {
         let mut maybe_state = None;
         let mut maybe_mental_state = None;
         let mut maybe_action = None;

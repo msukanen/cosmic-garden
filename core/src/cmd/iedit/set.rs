@@ -328,7 +328,7 @@ async fn do_dmg(ctx: &mut CommandCtx<'_>, ed: &mut Item, value: &str) {
 
 #[cfg(test)]
 mod cmd_iedit_set_tests {
-    use crate::{cmd::{iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, title::TitleCommand, weave::WeaveCommand}, shutdown::ShutdownCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{iedit::{IeditCommand, desc::DescCommand, iex::IexCommand, set::SetCommand, title::TitleCommand, weave::WeaveCommand}, shutdown::ShutdownCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, util::access::Access, world::mock_world::get_operational_mock_world};
     
     #[tokio::test]
     async fn iedit_set_something_on_primordial() {

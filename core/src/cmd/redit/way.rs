@@ -133,7 +133,7 @@ async fn make_bi_way(ctx: &mut CommandCtx<'_>, origin: RoomArc, dir: &str, dest_
 mod cmd_redit_way {
     use std::io::Cursor;
 
-    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, get_operational_mock_life, io::Broadcast, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{goto::GotoCommand, look::LookCommand, pop::PopCommand, redit::way::WayCommand}, ctx, get_operational_mock_life, io::Broadcast, stabilize_threads, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn way_creation_r1r2() {

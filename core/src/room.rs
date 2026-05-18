@@ -3,12 +3,11 @@
 use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, fs as sync_fs, sync::{Arc, Weak}};
 
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
-use lazy_static::lazy_static;
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
 use tokio::{fs as async_fs, sync::{RwLock, Semaphore}};
 
-use crate::{r#const::CPU_CORES, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World};
+use crate::{r#const::{CPU_CORES, PER_CORE_SEMAPHORE_BUCKET_SZ}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World};
 
 pub mod environ;
 pub mod locking;
@@ -102,6 +101,10 @@ pub struct Room {
     #[serde(default)] pub room_type: RoomType,
     #[serde(skip, default = "room_sem_default")] sem: Arc<Semaphore>,
     #[serde(skip, default = "mock_broadcast")] pub(super) out: tokio::sync::broadcast::Sender<Broadcast>,
+    
+    // Pooling…
+    // #[serde(skip, default)] ent_batch_pool: Vec<Vec<EntityArc>>,
+    // #[serde(skip, default)] ai_pool: Vec<Vec<AiAction>>,
 }
 /// Room arc type.
 pub type RoomArc = Arc<RwLock<Room>>;
@@ -169,7 +172,7 @@ mod arc_n_t_transform {
     use std::{collections::HashMap, sync::Arc};
 
     use nohash_hasher::BuildNoHashHasher;
-use serde::{Deserialize, Deserializer, Serializer, ser::SerializeMap};
+    use serde::{Deserialize, Deserializer, Serializer, ser::SerializeMap};
     use tokio::sync::RwLock;
 
     use crate::{identity::MachineId, mob::{EntityArc, core::Entity}};
@@ -225,10 +228,9 @@ impl Room {
     /// # Args
     /// - `id` of the new (or loaded) [Room].
     /// - *[[potential]]* `title` of the new [Room]. This is ignored if [Room] gets loaded.
-    pub async fn new(id: &str, title: &str, bootstrap: bool) -> Result<RoomArc, CgError> {
+    pub fn new_raw(id: &str, title: &str, bootstrap: bool) -> Result<Self, CgError> {
         // check if there is pre-existing file...
-        let loaded = Room::load_sync(id);
-        let room = match loaded {
+        Ok(match Room::load_sync(id) {
             Ok(room) => room,
             _ => {
                 log::info!("No archælogy possible, thus creating new room '{}'", id);
@@ -251,9 +253,16 @@ impl Room {
                     out: mock_broadcast(),
                 }
             }
-        };
+        })
+    }
 
-        Ok(Arc::new(RwLock::new(room)))
+    /// Create a new room (or load one if corresponding file exists for `id`).
+    /// 
+    /// # Args
+    /// - `id` of the new (or loaded) [Room].
+    /// - *[[potential]]* `title` of the new [Room]. This is ignored if [Room] gets loaded.
+    pub fn new(id: &str, title: &str, bootstrap: bool) -> Result<RoomArc, CgError> {
+        Ok(Arc::new(RwLock::new(Self::new_raw(id, title, bootstrap)?)))
     }
 
     /// Save the [Room].
@@ -262,12 +271,6 @@ impl Room {
         log::debug!("Saving '{}'…", path.display());
         async_fs::write(path, serde_json::to_string_pretty(self)?).await?;
         Ok(())
-    }
-
-    /// Erase the [Room] from disk.
-    #[cfg(test)]
-    pub fn erase(&self) {
-        
     }
 
     /// Bootstrap phase exits linker.
@@ -319,16 +322,17 @@ impl Room {
             desc: self.desc.clone(),
             exits: self.exits.clone(),
             raw_exits: self.raw_exits.clone(),
-            // we skip everything else:
-            who: HashMap::new(),
-            contents: room_inventory(),
-            entities: HashMap::default(),
             special_environment: self.special_environment,
             memory_fog: self.memory_fog.clone(),
             terrain: self.terrain.clone(),
             room_type: self.room_type.clone(),
             sem: self.sem.clone(),
             out: self.out.clone(),
+            
+            // we skip everything else:
+            who: HashMap::new(),
+            contents: room_inventory(),
+            entities: HashMap::default(),
         }
     }
 
@@ -534,11 +538,12 @@ impl StorageMut for Room {
     fn set_max_space(&mut self, sz: StorageSpace) -> bool { self.contents.set_max_space(sz) }
 }
 
+/// Semaphore bucket scaler for [Room::tick].
 const fn bucket_scaler(num_things: usize) -> usize {
     const Y0: usize = 32;
     const X0: usize = 32;
-    const Y1: usize = 1_000_000;
-    const X1: usize = 5_000 * CPU_CORES / 16;
+    const Y1: usize = 1_000_000;// NOTE: tuned for stresstest entity count…
+    const X1: usize = PER_CORE_SEMAPHORE_BUCKET_SZ * CPU_CORES / 16;
     if num_things <= Y0 { X0 }
     else {
         const DY: usize = Y1 - Y0;
@@ -563,10 +568,6 @@ impl Room {
         }
 
         // …then entitites…
-        // #[cfg(not(feature = "stresstest"))]
-        // const BATCH_SIZE: usize = 10;
-        // #[cfg(feature = "stresstest")]
-        // const BATCH_SIZE: usize = 5_000;
         let batch_size: usize = bucket_scaler(self.entities.len());
         #[cfg(feature = "stresstest")]
         static mut AISC: usize = 0;
@@ -577,15 +578,18 @@ impl Room {
             if curr_ent_batch.len() == batch_size {
                 let batch = std::mem::take(&mut curr_ent_batch);
                 let sem_clone = Arc::clone(&self.sem);
-                let r_env = self.special_environment;
-                let r_ter = self.terrain.clone();
-                let r_tick = curr_tick;
+                let room_env = self.special_environment;
+                let room_terrain = self.terrain.clone();
+                let curr_tick = curr_tick;
+                
                 join_set.spawn(async move {
                     let _permit = sem_clone.acquire_owned().await.unwrap();
                     let mut ai_acts = Vec::with_capacity(batch_size);
                     // TODO macro this?
                     for e in batch {
-                        if let Some(means) = e.write().await.tick(r_tick, r_env, r_ter) {
+                        if let Some(means) = e.write().await
+                            .tick(curr_tick, room_env, room_terrain)
+                        {
                             for m in means {
                                 if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
                                     #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
@@ -601,16 +605,16 @@ impl Room {
         // …any stragglers?
         if !curr_ent_batch.is_empty() {
             let sem_clone = Arc::clone(&self.sem);
-            let r_env = self.special_environment;
-            let r_ter = self.terrain.clone();
-            let r_tick = curr_tick;
+            let room_env = self.special_environment;
+            let room_terrain = self.terrain.clone();
+            let curr_tick = curr_tick;
             let batch_len = curr_ent_batch.len();
             join_set.spawn(async move {
                 let _permit = sem_clone.acquire_owned().await.unwrap();
                 let mut ai_acts = Vec::with_capacity(batch_len);
                 // TODO see case #1 higher above about macro…
                 for e in curr_ent_batch {
-                    if let Some(means) = e.write().await.tick(r_tick, r_env, r_ter) {
+                    if let Some(means) = e.write().await.tick(curr_tick, room_env, room_terrain) {
                         for m in means {
                             if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
                                 #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }

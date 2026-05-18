@@ -52,7 +52,7 @@ impl Command for UsageCommand {
 mod hedit_usage_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{hedit::{HeditCommand, usage::UsageCommand}, help::HelpCommand}, ctx, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{hedit::{HeditCommand, usage::UsageCommand}, help::HelpCommand}, ctx, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn dummy_entry_usage_check() {

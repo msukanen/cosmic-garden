@@ -36,7 +36,7 @@ impl Command for ShutdownCommand {
 #[cfg(test)]
 mod cmd_shutdown_tests {
     use std::{io::Cursor, time::Duration};
-    use crate::{cmd::shutdown::ShutdownCommand, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::shutdown::ShutdownCommand, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn autoshutdown() {

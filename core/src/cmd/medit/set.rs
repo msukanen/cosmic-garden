@@ -127,7 +127,7 @@ fn set_gender(entity: &mut Entity, args: &str) -> Result<(), GenderError> {
 mod medit_set_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand, set::SetCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand, set::SetCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn set_test() {

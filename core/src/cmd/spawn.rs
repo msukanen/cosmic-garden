@@ -121,7 +121,7 @@ async fn spawn_item(ctx: &mut CommandCtx<'_>, loc: RoomArc, plr: PlayerArc, args
 mod cmd_spawn_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{look::LookCommand, spawn::SpawnCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::{look::LookCommand, spawn::SpawnCommand}, ctx, get_operational_mock_librarian, get_operational_mock_life, stabilize_threads, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn spawn_knife() {

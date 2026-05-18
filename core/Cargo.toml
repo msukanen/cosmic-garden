@@ -47,6 +47,7 @@ log = "0.4"
 
 [dev-dependencies]
 tempfile = "3.27.0"
+criterion = { version = "0.8.2", features = ["async_tokio"] }
 
 [badges]
 maintenance = { status = "experimental" }
@@ -58,3 +59,13 @@ obsolete = []
 no-hibp = ["localtest"]
 stresstest_ai = ["localtest"]
 stresstest = ["localtest", "stresstest_ai"]
+use-criterion = ["localtest"]
+
+[[bench]]
+name = "room_bench"
+harness = false
+
+# lib - for criterion
+[lib]
+name = "cosmic_garden"
+path = "src/main.rs"

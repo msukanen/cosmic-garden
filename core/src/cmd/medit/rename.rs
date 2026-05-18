@@ -68,7 +68,7 @@ impl Command for RenameCommand {
 mod medit_rename_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand}, ctx, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::world_tests::get_operational_mock_world};
+    use crate::{cmd::medit::{MeditCommand, rename::RenameCommand}, ctx, get_operational_mock_librarian, stabilize_threads, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn rename_normal() {
