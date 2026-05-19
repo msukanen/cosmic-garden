@@ -60,7 +60,13 @@ impl World {
         use crate::identity::IdentityMut;
 
         let mut root_room = Room::new_raw("r-1", "Incineration Chamber", false).unwrap();
+        // put the signal channels in place
+        root_room.broadcast = sigs.out.broadcast.clone();
+        root_room.life_out = sigs.out.life.clone();
+
         let mut room_2 = Room::new_raw("r-2", "Waterfall", false).unwrap();
+        room_2.broadcast = sigs.out.broadcast.clone();
+        room_2.life_out = sigs.out.life.clone();
 
         // create Player#1
         let mut plr = crate::player::Player::default();
@@ -69,9 +75,6 @@ impl World {
         let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
         let mut players_by_id = HashMap::default();
         players_by_id.insert(plr_id.clone(), plr.clone());
-        
-        root_room.out = sigs.out.broadcast.clone();
-        room_2.out = sigs.out.broadcast.clone();
         
         // put player#1 into r-1
         root_room.who.insert(plr_id.clone(), std::sync::Arc::downgrade(&plr));
@@ -269,7 +272,10 @@ impl World {
                 self.root_room = room_arc.clone().into();
             }
             log::trace!("Connecting the phone lines of R#{}…", room.m_id);
-            room.out = broadcast.clone();
+            room.broadcast = broadcast.clone();
+            if let Some(ch) = &self.channels {
+                room.life_out = ch.life.clone()
+            }
         }
 
         if self.root_room.is_none() {
@@ -445,7 +451,7 @@ pub async fn room_list(world: &WorldArc, term: Option<String>) -> Vec<(MachineId
 pub mod mock_world {
     use std::sync::Once;
 
-    use crate::{cformat, identity::{IdentityMut, MachineIdentity}, player::PlayerArc, world::WorldArc};
+    use crate::{cformat, player::PlayerArc, world::WorldArc};
 
     pub static DISK_VERIFIED: Once = Once::new();
 
