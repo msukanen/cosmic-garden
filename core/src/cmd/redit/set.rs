@@ -88,7 +88,7 @@ async fn set_spec_env(ctx: &mut CommandCtx<'_>, room: &RoomArc, args: &str) {
             tell_user!(ctx.writer, "'{}' doesn't represent any known environment…\n", args);
             show_help!(ctx, "q special-environment");
         }
-    }, false).ok();
+    }).ok();
 }
 
 /// Set [memory fog][MemoryFogType]…

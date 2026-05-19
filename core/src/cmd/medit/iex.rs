@@ -27,16 +27,19 @@ impl Command for IexCommand {
         out.push(format!("{:>10}: {}", "Name", ent.title()));
         out.push("".into());
         out.push(format!("{:>10}: {:>3}/{:<3}     {:>2}: {:>3}/{:<3}     {:>2}: {:>3}/{:<3}",
-                         "HP", ent.hp().current(), ent.hp().max(),
-                         "MP", ent.mp().current(), ent.mp().max(),
-                         "SN", ent.sn().current(), ent.sn().max(),
+                        "HP", ent.hp().current(), ent.hp().max(),
+                        "MP", ent.mp().current(), ent.mp().max(),
+                        "SN", ent.sn().current(), ent.sn().max(),
                         ));
         out.push(format!("{:>10}: {:>3}/{:<3}    {:>3}: {:>3}/{:<3}   {:>4}: {:>3}/{:<3}",
-                         "BRN", ent.brn().current(), ent.brn().max(),
-                         "NIM", ent.nim().current(), ent.nim().max(),
-                         "STRN", ent.str().current(), ent.str().max(),
+                        "BRN", ent.brn().current(), ent.brn().max(),
+                        "NIM", ent.nim().current(), ent.nim().max(),
+                        "STRN", ent.str().current(), ent.str().max(),
                         ));
-        out.push(format!("{:>10}: {:>3}/{:<3}", "SAN", ent.san().current(), ent.san().max()));
+        out.push(format!("{:>10}: {:>3}/{:<3}    {:>3}: {:>3}/{:<3}",
+                        "SAN", ent.san().current(), ent.san().max(),
+                        "SAT", ent.satiation().current(), ent.satiation().max(),
+                        ));
         out.push("".into());
         out.push(format!("{:>10}: {:<10}     Max.WpnSize: {}", "Stature", ent.size(), ent.max_weapon_size()));
         out.push(format!("{:>10}: {:<}", "Faction", ent.faction()));

@@ -26,24 +26,20 @@ mod edit;
 mod environ;
 mod error;
 mod help;
-#[cfg(feature = "use-criterion")] pub mod identity;
-#[cfg(not(feature = "use-criterion"))] mod identity;
+mod identity;
 mod io;
 mod item;
 #[macro_use]
   mod macros;
-#[cfg(feature = "use-criterion")] pub mod mob;// pub for criterion
-#[cfg(not(feature = "use-criterion"))] mod mob;
+mod mob;
 mod password;
 mod player;
-#[cfg(feature = "use-criterion")] pub mod room;// pub for criterion
-#[cfg(not(feature = "use-criterion"))] mod room;
+mod rng;
+mod room;
 mod serial;
 mod string;
-#[cfg(feature = "use-criterion")] pub mod thread;// pub for criterion
-#[cfg(not(feature = "use-criterion"))] pub mod thread;
-#[cfg(feature = "use-criterion")] pub mod traits;// pub for criterion
-#[cfg(not(feature = "use-criterion"))] mod traits;
+mod thread;
+mod traits;
 mod user;
 mod util;
 #[cfg(feature = "use-criterion")] pub mod world;// pub for criterion

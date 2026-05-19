@@ -54,17 +54,18 @@ impl ApproxI32 for StatValue {
 pub enum StatType {
     HP,
     MP,
-    SN,
-    San,
-    Str,
-    Nim,
-    Brn,
-    Rep,
+    SN,// something Stamina'ish
+    San,// Sanity
+    Str,// Strength
+    Nim,// Nimbleness
+    Brn,// Brain
+    Rep,// Reputation
+    Sat,// Satiation
 }
 
 impl StatType {
     pub const fn display_list() -> &'static str {
-        "BRN, HP, MP, NIM, REP, SAN, SN, STR"
+        "BRN, HP, MP, NIM, REP, SAN, SAT, SN, STR"
     }
 }
 
@@ -79,6 +80,7 @@ impl Display for StatType {
             Self::Str => "STR",
             Self::San => "SAN",
             Self::Rep => "REP",
+            Self::Sat => "SAT",
         })
     }
 }
@@ -95,6 +97,7 @@ impl TryFrom<&str> for StatType {
             "nim"|"NIM"|"Nim" => Ok(StatType::Nim),
             "str"|"STR"|"Str" => Ok(StatType::Str),
             "rep"|"REP"|"Rep" => Ok(StatType::Rep),
+            "sat"|"SAT"|"Sat" => Ok(StatType::Sat),
             _ => Err(StatError::NotStat)
         }
     }
@@ -119,6 +122,8 @@ pub enum Stat {
     Nim { curr: StatValue, max: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
     /// Reputation. Rep doesn't have max value, but it does clamp to -100 at bottom range.
     Rep { curr: StatValue },
+    /// Satiation. Food level, etc.
+    Sat { curr: StatValue, max: StatValue, drain: StatValue },
 }
 
 impl Stat {
@@ -132,6 +137,7 @@ impl Stat {
             StatType::MP  => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
             StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0 },
             StatType::SN  => Self::SN { curr: 100.0, max: 100.0, drain: 0.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
+            StatType::Sat => Self::Sat { curr: 100.0, max: 100.0, drain: -(DRAIN_EPSILON*2.5) },
         }
     }
 
@@ -156,6 +162,7 @@ impl AddAssign<StatValue> for Stat {
             Self::Nim { curr, max, ..} |
             Self::Str { curr, max, ..} |
             Self::SN { curr, max, ..}  |
+            Self::Sat { curr, max, ..} |
             Self::San { curr, max, ..} => *curr = (*curr + rhs).clamp(0.0, *max)
         }
     }
@@ -196,7 +203,9 @@ impl Stat {
     /// 
     /// Note that max `value` *cannot* be negative (will be forced to be 0+)
     /// and that it cannot exceed [MAX_STAT_VALUE] (will be clamped if necessary).
-    /// [Stat::San] max value cannot exceed `100.0` (=absolutely clear sane).
+    /// 
+    /// [Stat::San] and [Stat::Sat] max value cannot exceed `100.0`
+    /// (f.ex. 100 San ≡ absolutely sane and 100 Sat ≡ fully sated).
     /// 
     /// We pump current value up by delta between new and old max if max is increased.
     pub fn set_max(&mut self, value: StatValue) -> &mut Self {
@@ -209,6 +218,7 @@ impl Stat {
             Self::Str { max, ..} |
             Self::MP { max, ..}  |
             Self::SN { max, ..}  => *max = value,
+            Self::Sat { max, ..} |
             Self::San { max, ..} => *max = value.min(100.0),
 
             Self::Rep { .. } => ()
@@ -225,6 +235,7 @@ impl Stat {
                 Self::Rep { curr }    |
                 Self::SN { curr, ..}  |
                 Self::San { curr, ..} |
+                Self::Sat { curr, ..} |
                 Self::Str { curr, ..} => *curr } + delta);
         }
 
@@ -248,7 +259,8 @@ impl Stat {
         match self {
             Self::MP { drain, max, ..} |
             Self::San { max, drain, ..}|
-            Self::SN { max, drain, ..}
+            Self::SN { max, drain, ..} |
+            Self::Sat { max, drain, ..}
             => {
                 let abs_drain = value.abs().min(*max / TICKS_BETWEEN_DRAIN);
                 *drain = if value >= 0.0 { abs_drain } else { -abs_drain }
@@ -272,6 +284,7 @@ impl Stat {
             Self::SN { curr, max, ..}  |
             Self::Str { curr, max, ..} |
             Self::Brn { curr, max, ..} |
+            Self::Sat { curr, max, ..} |
             Self::Nim { curr, max, ..} => *curr = value.clamp(0.0, *max),
             Self::Rep { curr } => *curr = value.max(-100.0),
         }
@@ -287,6 +300,7 @@ impl Stat {
             Self::Nim { max, ..} |
             Self::SN { max, ..}  |
             Self::Str { max, ..} |
+            Self::Sat { max, ..} |
             Self::San { max, ..} => *max,
             Self::Rep { .. } => StatValue::MAX,
         }
@@ -302,6 +316,7 @@ impl Stat {
             Self::Rep { curr }    |
             Self::SN { curr, ..}  |
             Self::San { curr, ..} |
+            Self::Sat { curr, ..} |
             Self::Str { curr, ..} => *curr }) >= self.max()
     }
 
@@ -318,6 +333,7 @@ impl Stat {
             Self::SN { curr, ..}  |
             Self::Str { curr, ..} |
             Self::Rep { curr}     |
+            Self::Sat { curr, ..} |
             Self::San { curr, ..} => *curr
         }) + (match self {
             Self::Brn { room_env, ..} => 
@@ -342,6 +358,7 @@ impl Stat {
         match self {
             Self::MP { drain, ..}  |
             Self::SN { drain, ..}  |
+            Self::Sat { drain, ..} |
             Self::San { drain, ..} => Ok(*drain),
             
             _ => Err(StatError::NoDrain)
@@ -364,8 +381,9 @@ impl Stat {
     /// [Stat] tells whether you're unconscious or not, if/when applicable…
     pub fn is_unconscious(&self) -> Result<bool, StatError> {
         match self {
-            Self::HP { curr, ..} => Ok(*curr < UNC_THRESHOLD && !self.is_dead().unwrap()),
-            Self::MP { curr, ..} => Ok(*curr <= 0.0),
+            Self::HP { curr, ..}  => Ok(*curr < UNC_THRESHOLD && !self.is_dead().unwrap()),
+            Self::MP { curr, ..}  |
+            Self::Sat { curr, ..} => Ok(*curr <= 0.0),
             _ => Err(StatError::NotApplicable)
         }
     }
@@ -416,6 +434,14 @@ impl Display for Stat {
                 write!(f, "SN: ({:.0}/{:.0})", curr, max)
             }
 
+            // Sat: (12/34)[-1.1]
+            // Sat: (12/34)
+            Self::Sat { curr, max, drain,.. } => if drain.abs() > DRAIN_EPSILON {
+                write!(f, "Sat: ({:.0}/{:.0})[{:+.1}/t]", curr, max, drain)
+            } else {
+                write!(f, "Sat: ({:.0}/{:.0})", curr, max)
+            }
+
             // San: (12/34)
             // Sun: ($@#?!)
             Self::San { curr, max, ..} => {
@@ -446,6 +472,7 @@ impl Tickable for Stat {
             Self::Rep {..} |
             Self::HP {..}  |
             Self::MP {..}  |
+            Self::Sat {..} |
             Self::San {..} => ()
         }
 
@@ -559,7 +586,7 @@ mod stat_tests {
     /// Enforce that StatType enum count and its display_list() are kept in strict sync.
     #[test]
     fn stat_display_list_is_in_sync() {
-        assert_eq!("BRN, HP, MP, NIM, REP, SAN, SN, STR",
+        assert_eq!("BRN, HP, MP, NIM, REP, SAN, SAT, SN, STR",
             StatType::display_list(),
             "Update StatType::display_list()! Out of sync.");
         trait StatKill {
@@ -575,6 +602,7 @@ mod stat_tests {
                 Self::Nim |
                 Self::Str |
                 Self::Rep |
+                Self::Sat |
                 Self::San => true,
                 }
             }

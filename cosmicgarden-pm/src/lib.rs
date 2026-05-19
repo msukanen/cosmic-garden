@@ -199,17 +199,17 @@ fn generate_mob_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     let Data::Struct(data) = &input.data else { panic!("Struct only!"); };
 
-    if let Some(mwsz) = maybe_field!(data, "max_weapon_size") {
-        quote! {
-            impl crate::mob::traits::Mob for #name {
-                fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { self.#mwsz }
-            }
-        }
+    let mws_field = if let Some(mwsz) = maybe_field!(data, "max_weapon_size") {
+        quote! { self.#mwsz }
     } else {
-        quote! {
-            impl crate::mob::traits::Mob for #name {
-                fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { crate::item::weapon::WeaponSize::Large }
-            }
+        quote! { crate::item::weapon::WeaponSize::Large }
+    };
+    let sat_field = req_field!(data, "satiation");
+
+    quote! {
+        impl crate::mob::traits::Mob for #name {
+            fn max_weapon_size(&self) -> crate::item::weapon::WeaponSize { #mws_field }
+            fn satiation(&self) -> crate::mob::stat::Stat { self.#sat_field }
         }
     }
 }
@@ -235,6 +235,7 @@ pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
     let Data::Struct(data) = input.data else { panic!("Struct only!") };
     let wsz_field = req_field!(data, "max_weapon_size");
     let sz_field = req_field!(data, "size");
+    let sat_field = req_field!(data, "satiation");
     let mut_impl = quote! {
         impl crate::mob::traits::MobMut for #name {
             fn max_weapon_size_mut(&mut self) -> &mut crate::item::weapon::WeaponSize {
@@ -242,6 +243,9 @@ pub fn mob_mut_derive(input: TokenStream) -> TokenStream {
             }
             fn size_mut(&mut self) -> &mut crate::mob::core::EntitySize {
                 &mut self.#sz_field
+            }
+            fn satiation_mut(&mut self) -> &mut crate::mob::stat::Stat {
+                &mut self.#sat_field
             }
         }
     };

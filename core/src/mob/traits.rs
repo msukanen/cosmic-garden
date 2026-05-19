@@ -1,15 +1,17 @@
 //! Mob specific traits.
 
-use crate::{combat::{Combatant, CombatantMut}, identity::IdentityQuery, item::weapon::WeaponSize, mob::core::EntitySize};
+use crate::{combat::{Combatant, CombatantMut}, identity::IdentityQuery, item::weapon::WeaponSize, mob::{Stat, core::EntitySize}};
 
 /// A trait for anything "mobile".
 pub trait Mob : IdentityQuery + Combatant {
     /// Get maximum weapon size the combatant can wield.
     fn max_weapon_size(&self) -> WeaponSize;
+    fn satiation(&self) -> Stat;
 }
 
 /// Mutable variant of [Mob].
 pub trait MobMut : Mob + CombatantMut {
     fn max_weapon_size_mut(&mut self) -> &mut WeaponSize;
     fn size_mut(&mut self) -> &mut EntitySize;
+    fn satiation_mut(&mut self) -> &mut Stat;
 }
