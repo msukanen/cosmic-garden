@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{item::consumable::EffectType, mob::ai::*, room::environ::{SpecialEnvironment, Terrain}};
+use crate::{item::consumable::EffectType, mob::ai::*, room::environ::{EnvironmentEvent, SpecialEnvironment, Terrain}};
 
 /// A trait for anything with (un)steady tick rate.
 #[async_trait]
@@ -26,7 +26,7 @@ pub trait Tickable {
 pub enum TickMeaning {
     General,
     AffectPossessor { kind: EffectType },
-    EnvironmentEffect,// TODO bubble up environment effects
+    EnvironmentEffect { what: EnvironmentEvent },
     AiStateChange { maybe_state: Option<AiState>, maybe_mental_state: Option<AiMentalState>, maybe_action: Option<AiAction> },
 }
 
