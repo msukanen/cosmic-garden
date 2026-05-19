@@ -13,8 +13,8 @@ use crate::{
     help::HelpPage,
     identity::IdentityQuery,
     io::{ClientState, player_save_fp},
-    item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::str_based_dmg_mul},
-    mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::Entity, faction::{EntityFaction, FactionMut}},
+    item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::{WeaponSize, str_based_dmg_mul}},
+    mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::MobMut},
     room::{Room, RoomArc, RoomWeak, environ::{SpecialEnvironment, Terrain}},
     string::UNNAMED,
     thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels},
@@ -72,6 +72,7 @@ pub struct Player {
     #[serde(default = "player_brn_default")] pub brn: Stat,
     #[serde(default = "player_nim_default")] pub nim: Stat,
     #[serde(default = "player_str_default")] pub strn: Stat,
+    #[serde(default = "player_sat_default")] pub satiation: Stat,
     
     #[serde(default)] pub redit_buffer: Option<Room>,
     #[serde(default)] pub iedit_buffer: Option<Item>,
@@ -102,9 +103,10 @@ pub struct Player {
     pub reputation: Stat,
 
     /// Is the character 'hardcore', eligible for perma-death?
-    #[serde(default)]
-    pub hardcore: Option<bool>,
+    #[serde(default)] pub hardcore: Option<bool>,
     gender: GenderType,
+    #[serde(skip, default = "player_no_op_wsz")] _no_op_wsz: WeaponSize,
+    #[serde(skip, default = "player_no_op_esz")] _no_op_esz: EntitySize,
 }
 
 /// Player arc type.
@@ -125,12 +127,15 @@ fn player_san_default() -> Stat { Stat::new(StatType::San) }
 fn player_brn_default() -> Stat { Stat::new(StatType::Brn) }
 fn player_nim_default() -> Stat { Stat::new(StatType::Nim) }
 fn player_str_default() -> Stat { Stat::new(StatType::Str) }
+fn player_sat_default() -> Stat { Stat::new(StatType::Sat) }
 fn player_default_atype() -> ActivityType { ActivityType::default() }
 pub(crate) fn player_inv_default() -> ContainerVariant {
     ContainerVariant::raw(ContainerVariantType::PlayerInventory)
 }
 fn player_faction_default() -> EntityFaction { EntityFaction::Player { pvp: false }}
 fn player_rep_default() -> Stat { Stat::Rep { curr: 0.0 }}
+fn player_no_op_esz() -> EntitySize { EntitySize::Medium }
+fn player_no_op_wsz() -> WeaponSize { WeaponSize::Medium }
 
 impl Player {
     pub fn owner_id<'a>(&'a self) -> &'a str { &self.owner_id }
@@ -219,6 +224,7 @@ impl Player {
             StatType::Nim => *(self.nim_mut()) += drain,
             StatType::SN  => *(self.sn_mut())  += drain,
             StatType::San => *(self.san_mut()) += drain,
+            StatType::Sat => *(self.satiation_mut()) += drain,
             StatType::Str => *(self.str_mut()) += drain,
             StatType::Rep => *(self.rep_mut()) += drain,
         }
@@ -307,6 +313,7 @@ impl Default for Player {
             brn: player_brn_default(),
             nim: player_nim_default(),
             strn: player_str_default(),
+            satiation: player_sat_default(),
             reputation: Stat::Rep { curr: 0.0 },
             config: Config::default(),
             redit_buffer: None,
@@ -321,6 +328,8 @@ impl Default for Player {
             equipped_weapon: None,
             hardcore: None,
             gender: GenderType::Unset,// gender is set later.
+            _no_op_esz: player_no_op_esz(),
+            _no_op_wsz: player_no_op_wsz(),
         }
     }
 }
@@ -384,7 +393,7 @@ impl Tickable for Player {
                             self.apply_effect(kind.clone());
                             false
                         },
-                        TickMeaning::EnvironmentEffect => true,
+                        TickMeaning::EnvironmentEffect {..} => true,
                         _ => false
                     }
                 });
@@ -433,5 +442,20 @@ impl Gender for Player {
             _ => return Err(GenderError::Immutable)
         };
         Ok(())
+    }
+}
+
+impl MobMut for Player {
+    fn max_weapon_size_mut(&mut self) -> &mut WeaponSize {
+        &mut self._no_op_wsz
+    }
+
+    // TODO modifiable entity size for [Player]?
+    fn size_mut(&mut self) -> &mut EntitySize {
+        &mut self._no_op_esz
+    }
+
+    fn satiation_mut(&mut self) -> &mut Stat {
+        &mut self.satiation
     }
 }

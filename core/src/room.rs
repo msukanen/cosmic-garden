@@ -5,9 +5,13 @@ use std::{collections::{HashMap, HashSet, VecDeque}, fmt::Display, fs as sync_fs
 use cosmic_garden_pm::{DescribableMut, IdentityMut};
 use nohash_hasher::BuildNoHashHasher;
 use serde::{Deserialize, Serialize};
-use tokio::{fs as async_fs, sync::{RwLock, Semaphore}};
+use tokio::{fs as async_fs, sync::{RwLock, Semaphore, mpsc}};
 
-use crate::{r#const::{CPU_CORES, PER_CORE_SEMAPHORE_BUCKET_SZ}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, room::{environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SpecialEnvironment, SpecialEnvironmentError, Terrain}, locking::{Exit, ExitState}}, string::slug::Slugger, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World};
+use crate::{
+    combat::Battler, r#const::{CPU_CORES, PER_CORE_SEMAPHORE_BUCKET_SZ}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::{PlayerArc, PlayerWeak}, rng::*, room::{
+        environ::*,
+        locking::{Exit, ExitState}}, string::slug::Slugger, thread::SystemSignal, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World
+};
 
 pub mod environ;
 pub mod locking;
@@ -100,11 +104,9 @@ pub struct Room {
     /// Room's general type.
     #[serde(default)] pub room_type: RoomType,
     #[serde(skip, default = "room_sem_default")] sem: Arc<Semaphore>,
-    #[serde(skip, default = "mock_broadcast")] pub(super) out: tokio::sync::broadcast::Sender<Broadcast>,
-    
-    // Pooling…
-    // #[serde(skip, default)] ent_batch_pool: Vec<Vec<EntityArc>>,
-    // #[serde(skip, default)] ai_pool: Vec<Vec<AiAction>>,
+    #[serde(skip, default = "mock_broadcast")] pub(super) broadcast: tokio::sync::broadcast::Sender<Broadcast>,
+    #[serde(skip, default = "mock_lifempsc")] pub(super) life_out: mpsc::UnboundedSender<SystemSignal>,
+    #[serde(skip, default = "cg_rng_default")] rng: u64,
 }
 /// Room arc type.
 pub type RoomArc = Arc<RwLock<Room>>;
@@ -214,6 +216,11 @@ fn mock_broadcast() -> tokio::sync::broadcast::Sender<Broadcast> {
     tx
 }
 
+fn mock_lifempsc() -> mpsc::UnboundedSender<SystemSignal> {
+    let (tx, _) = mpsc::unbounded_channel::<SystemSignal>();
+    tx
+}
+
 impl Room {
     /// Attempt to load a room.
     /// 
@@ -250,7 +257,9 @@ impl Room {
                     terrain: None,
                     room_type: RoomType::default(),
                     sem: room_sem_default(),
-                    out: mock_broadcast(),
+                    broadcast: mock_broadcast(),
+                    rng: cg_rng_default(),
+                    life_out: mock_lifempsc(),
                 }
             }
         })
@@ -310,6 +319,7 @@ impl Room {
 
     /// Eradicate exit at `dir` if exists.
     pub fn remove_exit(&mut self, dir: &Direction) {
+        self.raw_exits.remove(dir);
         self.exits.remove(dir);
     }
 
@@ -327,12 +337,14 @@ impl Room {
             terrain: self.terrain.clone(),
             room_type: self.room_type.clone(),
             sem: self.sem.clone(),
-            out: self.out.clone(),
+            broadcast: self.broadcast.clone(),
+            life_out: self.life_out.clone(),
             
             // we skip everything else:
             who: HashMap::new(),
             contents: room_inventory(),
             entities: HashMap::default(),
+            rng: 0,
         }
     }
 
@@ -430,22 +442,10 @@ impl Room {
     /// 
     /// # Args
     /// - `mask` to set.
-    /// - `override` old setting(s) in entirety?
-    #[must_use = "Gravity anomalies may result in `Err`."]
-    pub fn set_special_env_bitmask(&mut self, mask: SpecialEnvironment, r#override: bool) -> Result<(), SpecialEnvironmentError> {
-        match ((mask | self.special_environment) & (GRAVITY_ANOMALY_HIGH_H|GRAVITY_ANOMALY_LOW_H|SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY)).count_ones() {
-            0 => (), // normal g
-            1 => return Err(SpecialEnvironmentError::GravityModelMissing),
-            2 => if mask & SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY == 0 { return Err(SpecialEnvironmentError::GravityClash) },
-            _ => return Err(SpecialEnvironmentError::GravityClash)
-        }
-
-        if r#override {
-            self.special_environment = mask;
-        } else {
-            self.special_environment |= mask;
-        }
-        Ok(())
+    #[must_use = "Clashing bitmask may result in `Err`."]
+    #[inline]
+    pub fn set_special_env_bitmask(&mut self, mask: SpecialEnvironment) -> Result<(), SpecialEnvironmentError> {
+        set_special_env_bitmask(&mut self.special_environment, mask)
     }
 
     /// Wipe environmental bitmask.
@@ -593,7 +593,7 @@ impl Room {
                             for m in means {
                                 if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
                                     #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
-                                    ai_acts.push(act);
+                                    ai_acts.push((e.clone(), act));
                                 }
                             }
                         }
@@ -618,7 +618,7 @@ impl Room {
                         for m in means {
                             if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
                                 #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
-                                ai_acts.push(act);
+                                ai_acts.push((e.clone(), act));
                             }
                         }
                     }
@@ -629,28 +629,67 @@ impl Room {
 
         #[cfg(feature = "stresstest")] static mut MIREC: usize = 0;
         let mut emohash: HashMap<&str, (MachineId, usize)> = HashMap::new();
+        let visibility
+            =   (if self.special_environment & SPECIAL_ENVIRONMENT_FOGGED_VISIBILITY != 0 { -0.25 } else { 0.0 }) +
+                (if self.special_environment & SPECIAL_ENVIRONMENT_OBSTRUCTED_VISIBILITY != 0 { -0.6667 } else { 0.0 });
+        self.rng = cg_rng(self.rng);
         while let Some(ai_act_res) = join_set.join_next().await {
             if let Ok(ai_acts) = ai_act_res {
-                for act in ai_acts.into_iter() {
-                    if let AiAction::Emote { ent_m_id, fmt } = act {
-                        #[cfg(feature = "stresstest")] unsafe {
-                            MIREC += 1;
-                            if MIREC < 10 {
-                                log::debug!("BCAST::MIRE");
-                            } else if MIREC % 1_000_000 == 0 {
-                                let mirec = MIREC;
-                                log::debug!("BCAST::MIRE ×{mirec}")
+                for (e, act) in ai_acts.into_iter() {
+                    match act {
+                        AiAction::Emote { ent_m_id, fmt } => {
+                            #[cfg(feature = "stresstest")] unsafe {
+                                MIREC += 1;
+                                if MIREC < 10 {
+                                    log::debug!("BCAST::MIRE");
+                                } else if MIREC % 1_000_000 == 0 {
+                                    let mirec = MIREC;
+                                    log::debug!("BCAST::MIRE ×{mirec}")
+                                }
+                            }
+                            let (_,c) = emohash.entry(fmt).or_insert((ent_m_id, 0));
+                            *c += 1;
+                        }
+
+                        AiAction::Attack => {
+                            let mut vis: Vec<Battler> = self.who.values()
+                                .filter(|_| {
+                                    self.rng = cg_rng(self.rng);
+                                    ai_do(self.rng, 1.0 + visibility)
+                                })
+                                .filter_map(|w| w.upgrade())
+                                .map(|arc| arc as Battler)
+                                .collect();
+                            let vis_ent: Vec<Battler> = self.entities.values()
+                                .filter(|_| {
+                                    self.rng = cg_rng(self.rng);
+                                    ai_do(self.rng, 1.0 + visibility)
+                                })
+                                .cloned()
+                                .map(|arc| arc as Battler)
+                                .collect();
+                            vis.extend(vis_ent);
+                            // no async retain, thus:
+                            let mut filtered = vec![];
+                            for b in vis.drain(..) {
+                                let r = b.read().await;
+                                if r.is_dead() || r.is_unconscious() { continue; }
+                                drop(r);
+                                filtered.push(b);
+                            }
+                            if let Some(vct) = e.read().await.maybe_attack_one(&filtered).await {
+                                self.life_out
+                                    .send(SystemSignal::Attack { atk_arc: e.clone(), vct_arc: vct.clone() })
+                                    .ok();
                             }
                         }
-                        let (_,c) = emohash.entry(fmt).or_insert((ent_m_id, 0));
-                        *c += 1;
                     }
                 }
             }
         }
 
         for (fmt, (ent_m_id, count)) in emohash {
-            self.out.send(Broadcast::MessageInRoomE {
+            self.broadcast.send(Broadcast::MessageInRoomE {
                 room: room.clone(),
                 entity: ent_m_id,
                 message: match count {
@@ -659,6 +698,7 @@ impl Room {
                 }
             }).ok();
         }
+
 
         // no reaction yet to "positive" tick(s)
         let _ = self.contents.tick(curr_tick, self.special_environment, self.terrain);
