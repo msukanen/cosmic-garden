@@ -21,7 +21,7 @@ pub trait Combatant: IdentityQuery + Damager {
     fn brn<'a>(&'a self) -> &'a Stat;
 
     /// Is the combatant unconscious?
-    fn is_unconscious(&self) -> Result<bool, StatError> {
+    fn is_unconscious(&self) -> bool {
         match (
             self.hp().is_unconscious(),
             self.mp().is_unconscious(),
@@ -31,8 +31,8 @@ pub trait Combatant: IdentityQuery + Damager {
             (Ok(true),..)    |
             (_,Ok(true),..)  |
             (_,_,Ok(true),..)|
-            (_,_,_,Ok(true)) => Ok(true),
-            _ => Ok(false)
+            (_,_,_,Ok(true)) => true,
+            _ => false
         }
     }
 
