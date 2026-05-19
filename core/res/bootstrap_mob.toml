@@ -28,6 +28,11 @@ max = 100.0
 drain = 0.0
 room_env = 0
 
+[mobs.satiation.Sat]
+curr = 100.0
+max = 100.0
+drain = -0.0025
+
 [mobs.brn.Brn]
 curr = 100.0
 max = 100.0
