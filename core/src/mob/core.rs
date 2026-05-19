@@ -8,18 +8,9 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 
 use crate::{
-    combat::{Battler, Combatant, CombatantMut, DamageType, Damager},
-    error::CgError,
-    identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}},
-    io::entity_entry_fp,
-    item::{
+    combat::{Battler, Combatant, CombatantMut, DamageType, Damager}, r#const::STAT_PULSE_NTH_TICK, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
         Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
-    },
-    mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiAction, faction::{Demeanor, EntityFaction}},
-    room::{RoomWeak, environ::{SpecialEnvironment, Terrain}},
-    string::UNNAMED,
-    thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels},
-    traits::{TickMeaning, Tickable}
+    }, mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiAction, faction::{Demeanor, EntityFaction}, traits::MobMut}, room::{RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}
 };
 
 /// Generic [Entity] size categories
@@ -298,12 +289,13 @@ impl Damager for Entity {
 impl Tickable for Entity {
     fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         // tick stats at 1/10th of our [Room]'s pace.
-        if self.should_pulse(curr_tick, self.tick_id, 10) {
+        if self.should_pulse(curr_tick, self.tick_id, STAT_PULSE_NTH_TICK) {
             // we tick only drain value having stats.
             self.hp_mut().tick(curr_tick, room_env, room_terrain);
             self.mp_mut().tick(curr_tick, room_env, room_terrain);
             self.sn_mut().tick(curr_tick, room_env, room_terrain);
             self.san_mut().tick(curr_tick, room_env, room_terrain);
+            self.satiation_mut().tick(curr_tick, room_env, room_terrain);
         }
 
         #[cfg(feature = "stresstest")] static mut AIMC: usize = 0;

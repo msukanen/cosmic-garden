@@ -6,7 +6,7 @@ use lazy_static::lazy_static;
 use once_cell::sync::OnceCell;
 use unicode_normalization::UnicodeNormalization;
 
-use crate::{identity::MAX_ID_LEN, io::reserved_names_fp, item::container::storage::StorageSpace, util::escape_hatch::VILLAIN_ID};
+use crate::{identity::{MAX_ID_LEN, MachineId}, io::reserved_names_fp, item::container::storage::StorageSpace, util::escape_hatch::VILLAIN_ID};
 
 /// CPU cores in the server (at least if user so says)…
 pub(crate) const CPU_CORES: usize = match option_env!("GARDEN_CORES") {
@@ -184,3 +184,8 @@ pub const BCAST_FMT_ENTITY_TITLE: &'static str = "~e~";
 const BCAST_REQ_BITS: usize = 12;
 #[cfg(not(feature = "stresstest"))] pub const ESTIMATED_BCAST_REQ_COUNT: usize = 1 << BCAST_REQ_BITS;
 #[cfg(feature = "stresstest")] pub const ESTIMATED_BCAST_REQ_COUNT: usize = 1 << (BCAST_REQ_BITS + 4);
+
+//
+// Tick related consts.
+//
+pub const STAT_PULSE_NTH_TICK: MachineId = 10;
