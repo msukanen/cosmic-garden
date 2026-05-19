@@ -31,14 +31,14 @@ impl Command for WeatherCommand {
             // rainy
             "r"|"R" => {
                 let mut rw = loc.write().await;
-                rw.set_special_env_bitmask(WEATHER_RAIN, false).ok();
+                rw.set_special_env_bitmask(WEATHER_RAIN).ok();
                 tell_user!(ctx.writer, "Weather now: <x info>rainy</x>.\n");
             }
 
             // clear; TODO: cloudy/clear distinction later
             "c"|"C" => {
                 let mut rw = loc.write().await;
-                rw.set_special_env_bitmask(WEATHER_CLEAR, false).ok();
+                rw.set_special_env_bitmask(WEATHER_CLEAR).ok();
                 tell_user!(ctx.writer, "Weather now: <x info>clear</x>.\n");
             }
 
