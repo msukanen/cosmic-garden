@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::MachineId, mob::faction::EntityFaction, room::environ::{SpecialEnvironment, Terrain, WEATHER_RAIN}, traits::TickMeaning};
+use crate::{identity::MachineId, mob::faction::{Demeanor, EntityFaction}, rng::*, room::environ::{SpecialEnvironment, Terrain, WEATHER_RAIN, WEATHER_STORM}, traits::TickMeaning};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
 pub enum AiState {
@@ -19,6 +19,7 @@ impl Default for AiState {
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
 pub enum AiMentalState {
     Happy,
+    Giddy,
     Neutral,
     Grumpy,
     Angry,
@@ -39,25 +40,12 @@ pub enum AiAction {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Ai {
     state: AiState,
-    //tick_id: usize,
     mental_state: AiMentalState,
 
-    #[serde(skip, default = "ai_rng_default")] rng: u64,
+    #[serde(skip, default = "cg_rng_default")] rng: u64,
     p_idle_to_wandering: f32,
     p_wandering_to_idle: f32,
 }
-
-pub(crate) fn ai_rng_default() -> u64 {
-    rand::random::<u64>()
-}
-
-/// `seed` the "RNG"; return the new value.
-#[inline] fn ai_rng(seed: u64) -> u64 { seed.wrapping_mul(6364136223846793005).wrapping_add(1) }
-/// Generate a [0.0, 1.0] range value from give `base`.
-// Perfect 1.0 is rare, but… can happen, thus the range isn't [0.0, 1.0)
-#[inline] const fn ai_probability(base: u64) -> f32 { (base >> 32) as f32 / 4294967296.0 }
-/// Check vs [0.0, 1.0] range whether to do something…
-#[inline] const fn ai_do(base: u64, chance: f32) -> bool { ai_probability(base) <= chance }
 
 impl Default for Ai {
     fn default() -> Self {
@@ -65,7 +53,7 @@ impl Default for Ai {
             state: AiState::default(),
             //tick_id: rand::random::<u64>() as usize,
             mental_state: AiMentalState::default(),
-            rng: ai_rng_default(),
+            rng: cg_rng_default(),
             p_idle_to_wandering: 0.01,
             p_wandering_to_idle: 0.05,
         }
@@ -88,7 +76,7 @@ impl Ai {
         let mut maybe_action = None;
         
         // Idle → Wander → Idle switcharoo.
-        self.rng = ai_rng(self.rng);
+        self.rng = cg_rng(self.rng);
         match self.state {
             AiState::Idle => {
                 if ai_do(self.rng, 0.01) {
@@ -106,9 +94,12 @@ impl Ai {
             }
         }
 
-        self.rng = ai_rng(self.rng);
+        self.rng = cg_rng(self.rng);
         // Some weather related checks…
-        if room_env & WEATHER_RAIN != 0 {
+        if room_env & (WEATHER_RAIN|WEATHER_STORM) != 0 {
+            // storm makes things angsty easier…
+            let storm_mul = if room_env & WEATHER_STORM != 0 { 1.0 + 1.0/3.0 } else { 1.0 };
+            
             match self.mental_state {
                 AiMentalState::Grumpy =>
                     if ai_do(self.rng, 0.005) {
@@ -116,13 +107,13 @@ impl Ai {
                     }
                 ,
                 AiMentalState::Neutral =>
-                    if ai_do(self.rng, 0.2) {
+                    if ai_do(self.rng, 0.2 * storm_mul) {
                         self.mental_state = AiMentalState::Grumpy;
                         maybe_mental_state = self.mental_state.into();
                     }
                 ,
                 AiMentalState::Happy => {
-                    if ai_do(self.rng, 0.05) {
+                    if ai_do(self.rng, 0.05 * storm_mul) {
                         self.mental_state = AiMentalState::Neutral;
                         maybe_mental_state = self.mental_state.into();
                     }
@@ -148,6 +139,12 @@ impl Ai {
                 // no change for Angry
                 _ => ()
             }
+        }
+
+        if  matches!(faction, EntityFaction::NPC { demeanor: Demeanor::Hostile }) &&
+            matches!(self.mental_state, AiMentalState::Angry|AiMentalState::Grumpy) &&
+            maybe_action.is_none() {
+            maybe_action = AiAction::Attack.into()
         }
         
         if  maybe_action.is_none() &&
