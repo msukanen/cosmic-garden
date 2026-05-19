@@ -8,18 +8,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{fs, sync::RwLock};
 
 use crate::{
-    combat::{Combatant, CombatantMut, DamageType, Damager},
-    error::CgError,
-    help::HelpPage,
-    identity::IdentityQuery,
-    io::{ClientState, player_save_fp},
-    item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::{WeaponSize, str_based_dmg_mul}},
-    mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::MobMut},
-    room::{Room, RoomArc, RoomWeak, environ::{SpecialEnvironment, Terrain}},
-    string::UNNAMED,
-    thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels},
-    traits::{TickMeaning, Tickable},
-    util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}
+    combat::{Combatant, CombatantMut, DamageType, Damager}, r#const::STAT_PULSE_NTH_TICK, error::CgError, help::HelpPage, identity::{IdentityQuery, MachineId}, io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::MobMut}, room::{Room, RoomArc, RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -52,8 +41,8 @@ pub struct Player {
     pub(super) owner_id: String,
     
     id: String,
-    #[identity(title)]
-    pub(super) name: String,
+    #[serde(default = "player_fake_tick_id")] tick_id: MachineId,
+    #[identity(title)] pub(super) name: String,
     
     #[serde(default)] pub config: Config,
     #[serde(default)] pub access: Access,
@@ -136,6 +125,7 @@ fn player_faction_default() -> EntityFaction { EntityFaction::Player { pvp: fals
 fn player_rep_default() -> Stat { Stat::Rep { curr: 0.0 }}
 fn player_no_op_esz() -> EntitySize { EntitySize::Medium }
 fn player_no_op_wsz() -> WeaponSize { WeaponSize::Medium }
+fn player_fake_tick_id() -> MachineId { rand::random::<u64>() as MachineId }
 
 impl Player {
     pub fn owner_id<'a>(&'a self) -> &'a str { &self.owner_id }
@@ -330,6 +320,7 @@ impl Default for Player {
             gender: GenderType::Unset,// gender is set later.
             _no_op_esz: player_no_op_esz(),
             _no_op_wsz: player_no_op_wsz(),
+            tick_id: player_fake_tick_id(),
         }
     }
 }
@@ -355,10 +346,14 @@ impl Accessor for Player {
 #[async_trait]
 impl Tickable for Player {
     fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
-        self.hp_mut().tick(curr_tick, room_env, room_terrain);
-        self.mp_mut().tick(curr_tick, room_env, room_terrain);
-        self.sn_mut().tick(curr_tick, room_env, room_terrain);
-        self.san_mut().tick(curr_tick, room_env, room_terrain);
+        if self.should_pulse(curr_tick, self.tick_id, STAT_PULSE_NTH_TICK) {
+            self.hp_mut().tick(curr_tick, room_env, room_terrain);
+            self.mp_mut().tick(curr_tick, room_env, room_terrain);
+            self.sn_mut().tick(curr_tick, room_env, room_terrain);
+            self.san_mut().tick(curr_tick, room_env, room_terrain);
+            self.satiation_mut().tick(curr_tick, room_env, room_terrain);
+        }
+
         let old_affects = std::mem::take(&mut self.affects);
         let mut survivors = HashMap::new();
         for (id, mut affect) in old_affects {
