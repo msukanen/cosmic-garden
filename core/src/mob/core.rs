@@ -1,6 +1,6 @@
 //! Mob core.
 
-use std::fmt::Display;
+use std::{fmt::Display, sync::RwLock};
 
 use async_trait::async_trait;
 use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mob, MobMut};
@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tokio::fs;
 
 use crate::{
-    combat::{Combatant, CombatantMut, DamageType, Damager},
+    combat::{Battler, Combatant, CombatantMut, DamageType, Damager},
     error::CgError,
     identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}},
     io::entity_entry_fp,
@@ -145,6 +145,7 @@ pub struct Entity {
     brn: Stat,
     nim: Stat,
     strn: Stat,
+    satiation: Stat,
     faction: EntityFaction,
     max_weapon_size: WeaponSize,
     size: EntitySize,
@@ -170,6 +171,7 @@ impl Default for Entity {
             brn: Stat::new(StatType::Brn),
             nim: Stat::new(StatType::Nim),
             strn: Stat::new(StatType::Str),
+            satiation: Stat::new(StatType::Sat),
             faction: EntityFaction::NPC { demeanor: Demeanor::default() },
             max_weapon_size: WeaponSize::Large,
             equipped_weapon: None,
@@ -261,6 +263,7 @@ impl Entity {
             StatType::SN => &mut self.sn,
             StatType::Str => &mut self.strn,
             StatType::San => &mut self.san,
+            StatType::Sat => &mut self.satiation,
             StatType::Rep => unimplemented!("Entity do not have 'reputation' stat."),
         }
     }
@@ -269,6 +272,13 @@ impl Entity {
     pub fn set_tick_id(&mut self, self_arc: &EntityArc) -> MachineId {
         self.tick_id = lock2key!(arc self_arc);
         self.tick_id
+    }
+
+    /// Check whether the [Entity] wants to attack one of the [Battler]s.
+    pub async fn maybe_attack_one(&self, vcts: &Vec<Battler>) -> Option<&Battler> {
+        // TODO figure out if any of the victim candidates suit as target practice…
+
+        None
     }
 }
 
@@ -372,11 +382,11 @@ mod entity_tests {
             _ = e.set_id(&old_id.re_uuid(), true);
             assert_ne!(old_id.as_str(), e.id());
             e.mp_mut().set_curr(100.0);
-            while let Ok(false) = e.is_unconscious() {
+            while !e.is_unconscious() {
                 e.tick(tick, 0, None);
                 tick += 1;
             }
-            assert_eq!(Ok(true), e.is_unconscious());
+            assert!(e.is_unconscious(), "Entity should be unconscious!");
         }
         let elapsed = now.elapsed();
         log::debug!("\nPERF: {LOOPS} reuuid + drain, 100 ticks each loop: {elapsed:?}\nPERF: avg per cycle: {:?}\nTOT: {} iterations.", elapsed / LOOPS, LOOPS*100);
