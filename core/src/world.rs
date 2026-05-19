@@ -259,7 +259,7 @@ impl World {
     }
 
     /// Establish links between [Room(s)][Room].
-    pub async fn link_rooms(&mut self, broadcast: tokio::sync::broadcast::Sender<Broadcast>) {
+    pub async fn link_rooms(&mut self) {
         let rooms = self.rooms.clone();
         for room_arc in rooms.values() {
             let mut room = room_arc.write().await;
@@ -272,8 +272,8 @@ impl World {
                 self.root_room = room_arc.clone().into();
             }
             log::trace!("Connecting the phone lines of R#{}…", room.m_id);
-            room.broadcast = broadcast.clone();
             if let Some(ch) = &self.channels {
+                room.broadcast = ch.broadcast.clone();
                 room.life_out = ch.life.clone()
             }
         }

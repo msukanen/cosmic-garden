@@ -86,12 +86,12 @@ async fn main() {
             log::error!("{err:?}");
             panic!("World dead or in fire?! See logs…");
         });
-    // connect some dots…
-    world.link_rooms(priv_chs.out.broadcast.clone()).await;
+    // connect some dots… Note that channels have to be created before calling .link_rooms().
+    world.channels = Some(priv_chs.out.clone());
+    world.link_rooms().await;
 
     // Establish system thread interconnection channels.
     let (done_tx, mut done_rx) = tokio::sync::oneshot::channel::<()>();
-    world.channels = Some(priv_chs.out.clone());
 
     // Shared world, shared fun!
     let world = Arc::new(RwLock::new(world));
