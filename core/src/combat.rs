@@ -1,6 +1,8 @@
 //! Combat (and other bats) rules and stuff.
 
-use crate::mob::StatValue;
+use std::sync::Arc;
+
+use crate::{item::Item, lock2key, mob::StatValue, room::RoomArc, string::DescribableMut, thread::{add_item_to_lnf, life::BattleStage}, traits::Reflector, world::WorldArc};
 
 pub mod combatant; pub use combatant::*;
 pub mod dmg; pub use dmg::*;
@@ -10,8 +12,134 @@ pub type Battler = std::sync::Arc<tokio::sync::RwLock<dyn CombatantMut + Send + 
 
 pub trait Damager {
     /// Get (current) dmg per attack.
-    fn dmg(&self) -> StatValue;
+    fn dmg(&self, battle_tick: usize) -> Option<StatValue>;
     fn dmg_type(&self) -> DamageType;
+}
+
+#[derive(Clone)]
+pub(super) struct BattlerRec {
+    pub combatant: Battler,
+    pub title: std::sync::Arc<str>,
+}
+
+impl BattlerRec {
+    pub(super) async fn loot_pinata(&self, world: &WorldArc) {
+        let mut lock = self.combatant.write().await;
+        if let Some(room) = lock.location().upgrade() {
+            let c_id = lock.tick_id();
+            if !world.read().await.entities.contains_key(&c_id) {
+                // alerady looted, bail.
+                return ;
+            }
+            let mut c_inv = Item::Corpse { loot: lock.inventory().deep_reflect(), size: 50 };
+            let c_title = lock.title().to_string();
+            drop(lock);
+            c_inv.set_desc(&format!("Corpse of '{}'", c_title));
+            {
+                let mut lock = room.write().await;
+                lock.remove_entity(c_id);
+                if let Err(e) = lock.try_insert(c_inv) {
+                    // well shucks, room full…
+                    add_item_to_lnf(e).await;
+                }
+            }
+            world.write().await.entities.remove(&c_id);
+        } else {
+            log::warn!("No piñataing '{}' in the void…", self.title);
+        }
+    }
+}
+
+/// Combat resolutions.
+#[derive(Debug, Clone)]
+pub enum Resolution {
+    Inconclusive { atk_dmg: Option<StatValue>, vct_dmg: Option<StatValue> },
+    AtkRetreat,
+    VctRetreat,
+    AtkVictory { atk_dmg: Option<StatValue> },
+    VctVictory  { vct_dmg: Option<StatValue> },
+    BothDead,
+    AbortDueRealityWarp,
+}
+
+/// Fite!
+/// 
+/// # Args
+/// - `battle_tick` as of right now for…
+/// - `atk` vs.
+/// - `vct`
+/// - …at `room`.
+pub(super) async fn punt(battle_tick: usize, atk: Battler, vct: Battler, room: &RoomArc) -> Resolution {
+    let mut a = atk.write().await;
+    let mut v = vct.write().await;
+    // reality warp just before .writes?
+    let wr = Arc::downgrade(room);
+    if !a.location().ptr_eq(&wr) || !v.location().ptr_eq(&wr) {
+        return Resolution::AbortDueRealityWarp;
+    }
+
+    let atk_dmg = a.dmg(battle_tick);
+    let v_ded = v.take_dmg(atk_dmg);
+    let (a_ded, vct_dmg) = if v_ded {
+        // potential last-breath counter before falling over...
+        //a.take_dmg(v.dmg());
+        (false, 0.0.into())
+    } else {
+        let vct_dmg = v.dmg(battle_tick);
+        (a.take_dmg(vct_dmg), vct_dmg)
+    };
+    let v_flee = if !v_ded {
+        // check potential fleeing state
+        false
+    } else { false };
+    let a_flee = if !a_ded {
+        // check potential fleeing state
+        false
+    } else { false };
+
+    match (a_ded, v_ded, a_flee, v_flee) {
+        (true, true,..) => Resolution::BothDead,
+        (true, false,..) => Resolution::VctVictory {vct_dmg},
+        (false, true,..) => Resolution::AtkVictory {atk_dmg},
+        (_,_, true,..) => Resolution::AtkRetreat,
+        (_,_,_,true) => Resolution::VctRetreat,
+        _ => Resolution::Inconclusive {atk_dmg, vct_dmg}
+    }
+}
+
+/// Register Ok'd battle.
+pub(super) async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: RoomArc, bs: &mut BattleStage) {
+    let a_key = lock2key!(arc &atk.combatant);
+    let v_key = lock2key!(arc &vct.combatant);
+    {
+        let mut a_lock = atk.combatant.write().await;
+        let mut v_lock = vct.combatant.write().await;
+        a_lock.alter_brain_freeze(true);
+        v_lock.alter_brain_freeze(true);
+    }
+    bs.active.insert(a_key, (atk, room.clone()));
+    bs.active.insert(v_key, (vct, room.clone()));
+    
+    // A
+    if let Some(a) = bs.atk.get_mut(&a_key) {
+        if !a.contains(&v_key) {
+            a.push(v_key);
+        }
+    } else {
+        log::trace!("New attacker: {a_key}");
+        bs.atk.insert(a_key, vec![v_key]);
+    }
+
+    // V
+    if let Some(v) = bs.vct.get_mut(&v_key) {
+        if !v.contains(&a_key) {
+            v.push(a_key);
+        }
+    } else {
+        log::trace!("New victim: {v_key}");
+        bs.vct.insert(v_key, vec![a_key]);
+    }
+    log::trace!("LifeworkerSignal::BattleOk!");
 }
 
 #[cfg(test)]

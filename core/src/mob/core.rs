@@ -9,7 +9,7 @@ use tokio::fs;
 
 use crate::{
     combat::{Battler, Combatant, CombatantMut, DamageType, Damager}, r#const::STAT_PULSE_NTH_TICK, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
-        Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
+        Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{DEFAULT_WEAPON_SPEED, WeaponSize, str_based_dmg_mul}
     }, mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiMentalState, faction::{Demeanor, EntityFaction}, traits::MobMut}, room::{RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}
 };
 
@@ -147,6 +147,7 @@ pub struct Entity {
     #[serde(default, skip)] brain_freeze: bool,
     #[serde(default)] ai: Ai,
     // tick scatter…
+    #[serde(skip, default)] last_battle_tick: usize,
     #[serde(skip, default)] last_stat_tick: usize,
     #[serde(skip, default)] last_ai_tick: usize,
     #[serde(skip, default)] last_inv_tick: usize,
@@ -180,6 +181,7 @@ impl Default for Entity {
             last_stat_tick: 0,
             last_ai_tick: 0,
             last_inv_tick: 0,
+            last_battle_tick: 0,
         }
     }
 }
@@ -296,9 +298,15 @@ impl Entity {
 }
 
 impl Damager for Entity {
-    fn dmg(&self) -> StatValue {
-        let Some(Item::Weapon(w)) = &self.equipped_weapon else { return 1.0 * self.str() / 100.0 };
-        w.base_dmg * str_based_dmg_mul(self.str().current(), true) * (self.size.rel_vs_weapon(&w.weapon_size))
+    fn dmg(&self, battle_tick: usize) -> Option<StatValue> {
+        let Some(Item::Weapon(w)) = &self.equipped_weapon else {
+            return if battle_tick % (DEFAULT_WEAPON_SPEED as usize) == 0 {
+                (1.0 * self.str() / 100.0).into()
+            } else { None }
+        };
+        if battle_tick % (w.speed() as usize) == 0 {
+            Some(w.base_dmg * str_based_dmg_mul(self.str().current(), true) * (self.size.rel_vs_weapon(&w.weapon_size)))
+        } else { None }
     }
 
     fn dmg_type(&self) -> crate::combat::DamageType {

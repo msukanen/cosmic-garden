@@ -737,8 +737,10 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
             fn brn_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#brn_field }
             fn nim_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#nim_field }
             fn str_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#str_field }
-            fn take_dmg(&mut self, dmg: crate::mob::StatValue) -> bool {
-                *(self.hp_mut()) -= dmg.abs();// no "healing" with dmg…
+            fn take_dmg(&mut self, dmg: Option<crate::mob::StatValue>) -> bool {
+                if let Some(dmg) = dmg {
+                    *(self.hp_mut()) -= dmg.abs();// no "healing" with dmg…
+                }
                 self.is_dead()
             }
 

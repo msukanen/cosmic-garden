@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use cosmic_garden_pm::{DescribableMut, IdentityMut, VolumeMut, OwnedMut};
 use serde::{Deserialize, Serialize};
 
-use crate::{combat::DamageType, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, StorageError, StorageQueryError, Volumed, consumable::{ConsumableMatter, EffectType}, container::{ContainerSpec, MaxSpaceSpec, StorageSpace, storage::{Storage, StorageMut}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, mob::StatValue, room::environ::{SpecialEnvironment, Terrain}, string::Describable, traits::{Reflector, TickMeaning, Tickable}};
+use crate::{combat::DamageType, identity::{IdentityQuery, uniq::{Uuid, UuidCore}}, item::{Item, StorageError, StorageQueryError, Volumed, consumable::{ConsumableMatter, EffectType}, container::{ContainerSpec, MaxSpaceSpec, StorageSpace, storage::{Storage, StorageMut}, variants::ContainerVariant}, matter::MatterState, ownership::Owner, weapon::{DEFAULT_WEAPON_SPEED, WeaponSize, WeaponSpec}}, mob::StatValue, room::environ::{SpecialEnvironment, Terrain}, string::Describable, traits::{Reflector, TickMeaning, Tickable}};
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum PotentialItemType {
@@ -98,6 +98,7 @@ pub struct PrimordialItem {
     pub weapon_size: Option<WeaponSize>,
     pub base_dmg: Option<StatValue>,
     pub dmg_type: Option<DamageType>,
+    pub speed: Option<u8>,
 }
 
 impl Default for PrimordialItem {
@@ -118,6 +119,7 @@ impl Default for PrimordialItem {
             weapon_size: None,
             base_dmg: None,
             dmg_type: None,
+            speed: None,
         }
     }
 }
@@ -148,6 +150,7 @@ impl PrimordialItem {
     }
 }
 
+// Derive a [PrimordialItem] from [ConsumableMatter].
 impl From<&ConsumableMatter> for PrimordialItem {
     /// Convert [ConsumableMatter] into [PrimordialItem].
     fn from(matter: &ConsumableMatter) -> Self { Self {
@@ -166,13 +169,14 @@ impl From<&ConsumableMatter> for PrimordialItem {
         weapon_size: None,
         base_dmg: None,
         dmg_type: None,
+        speed: None,
     }}
-}
-impl From<ConsumableMatter> for PrimordialItem {
+} impl From<ConsumableMatter> for PrimordialItem {
     /// Convert [ConsumableMatter] into [PrimordialItem].
     fn from(value: ConsumableMatter) -> Self { Self::from(&value) }
 }
 
+// Derive a [PrimordialItem] from [WeaponSpec].
 impl From<&WeaponSpec> for PrimordialItem {
     /// Convert [WeaponSpec] into [PrimordialItem].
     fn from(value: &WeaponSpec) -> Self { Self {
@@ -191,9 +195,9 @@ impl From<&WeaponSpec> for PrimordialItem {
         weapon_size: value.weapon_size.into(),
         base_dmg: value.base_dmg.into(),
         dmg_type: value.dmg_type.into(),
+        speed: value.speed.into(),
     }}
-}
-impl From<WeaponSpec> for PrimordialItem {
+} impl From<WeaponSpec> for PrimordialItem {
     /// Convert [WeaponSpec] into [PrimordialItem].
     fn from(value: WeaponSpec) -> Self { Self::from(&value)}
 }
@@ -244,10 +248,13 @@ impl Storage for PrimordialItem {
 }
 
 pub trait Metamorphize {
+    /// Metamorph something into a real [Item].
     fn metamorph(self) -> Item;
 }
 
 impl Metamorphize for PrimordialItem {
+    /// Metamorph [PrimordialItem] into some [Item]
+    /// based on specs defined in the [PrimordialItem] itself.
     fn metamorph(self) -> Item {
         // figure out the Final Form based on specs…
 
@@ -310,7 +317,11 @@ impl Metamorphize for PrimordialItem {
                             let dmg_type = DamageType::Crush;
                             log::warn!("Builder: weapon '{}' lacks dmg_type. Going \"safe\" with {dmg_type}.", self.id);
                             dmg_type
-                        })
+                        }),
+                        speed: self.speed.unwrap_or_else(|| {
+                            log::warn!("Builder: weapon '{}' lacks speed. Going \"safe\" with basic '{DEFAULT_WEAPON_SPEED}'.", self.id);
+                            DEFAULT_WEAPON_SPEED
+                        }),
                     }),
                 
                 PotentialItemType::Key |

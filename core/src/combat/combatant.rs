@@ -51,7 +51,7 @@ pub trait CombatantMut : Combatant {
     /// 
     /// # Return
     /// Was it a fatal blow?
-    fn take_dmg(&mut self, dmg: StatValue) -> bool;
+    fn take_dmg(&mut self, dmg: Option<StatValue>) -> bool;
     /// Heal.
     /// 
     /// # Args

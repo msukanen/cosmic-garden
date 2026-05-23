@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::{combat::{DamageType, Damager}, r#const::{HUGE_ITEM, LARGE_ITEM, MEDIUM_ITEM, SIZE_BALANCE, SMALL_ITEM, TINY_ITEM}, identity::uniq::Uuid, item::{container::storage::StorageSpace, ownership::Owner}, mob::StatValue, traits::Reflector};
 
+pub const DEFAULT_WEAPON_SPEED: u8 = 100;
+
 /// Weapons tend to come in various sizes, which carries to how they're used + other specs.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize)]
 pub enum WeaponSize {
@@ -81,15 +83,21 @@ pub struct WeaponSpec {
     /// The weapon's base dmg.
     pub(crate) base_dmg: StatValue,
     pub(crate) dmg_type: DamageType,
+
+    #[cfg(not(test))] #[serde(default = "wpn_speed_default")] pub(super) speed: u8,
+    #[cfg(test)] #[serde(default = "wpn_speed_default")]      pub(crate) speed: u8,
 }
 
+fn wpn_speed_default() -> u8 { DEFAULT_WEAPON_SPEED }
+
 impl Damager for WeaponSpec {
-    /// Get the amount of dmg the weapon (theoretically) does.
-    //
-    // TODO involve some randomness…
-    //
-    fn dmg(&self) -> StatValue {
-        self.base_dmg
+    /// Get the amount of dmg the weapon (theoretically) does at given `battle_tick`, if any.
+    fn dmg(&self, battle_tick: usize) -> Option<StatValue> {
+        if battle_tick % (self.speed as usize) == 0 {
+            self.base_dmg.into()
+        } else {
+            None
+        }
     }
 
     /// Get dmg [type][DamageType] of the weapon.
@@ -139,5 +147,12 @@ pub const fn str_based_dmg_mul(strn: StatValue, npc: bool) -> f32 {
         strn / 75.0
     } else {
         strn / 50.0
+    }
+}
+
+impl WeaponSpec {
+    pub fn speed(&self) -> u8 { self.speed }
+    pub fn set_speed(&mut self, speed: u8) {
+        self.speed = speed.max(1);
     }
 }

@@ -8,18 +8,7 @@ use nohash_hasher::BuildNoHashHasher;
 use tokio::{sync::{mpsc, oneshot}, time::{Duration, Instant, MissedTickBehavior, interval}};
 
 use crate::{
-    combat::{Battler, CombatantMut},
-    identity::{IdentityMut, IdentityQuery, MachineId, MachineIdentity, uniq::Uuid},
-    io::Broadcast,
-    item::Item,
-    mob::{EntityArc, StatValue, core::Entity},
-    room::{RoomArc, RoomPayload},
-    string::{DescribableMut, styling::maybe_plural},
-    thread::{SystemSignal, add_item_to_lnf, signal::{SigReceiver, SignalSenderChannels, SpawnType}},
-    traits::Reflector,
-    translocate,
-    util::approx::ApproxI32,
-    world::WorldArc
+    combat::{Battler, BattlerRec, CombatantMut, Resolution, punt, register_ok_battle}, identity::{IdentityMut, IdentityQuery, MachineId, MachineIdentity, uniq::Uuid}, io::Broadcast, item::container::storage::Storage, mob::{EntityArc, core::Entity}, room::{RoomArc, RoomPayload, locking::Exit}, string::styling::maybe_plural, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::{approx::ApproxI32, direction::Direction}, world::WorldArc
 };
 
 lazy_static! {
@@ -38,48 +27,14 @@ macro_rules! get_operational_mock_life {
     };
 }
 
-#[derive(Clone)]
-struct BattlerRec {
-    combatant: Battler,
-    title: std::sync::Arc<str>,
-}
-
-impl BattlerRec {
-    async fn loot_pinata(&self, world: &WorldArc) {
-        let mut lock = self.combatant.write().await;
-        if let Some(room) = lock.location().upgrade() {
-            let c_id = lock.tick_id();
-            if !world.read().await.entities.contains_key(&c_id) {
-                // alerady looted, bail.
-                return ;
-            }
-            let mut c_inv = Item::Corpse { loot: lock.inventory().deep_reflect(), size: 50 };
-            let c_title = lock.title().to_string();
-            drop(lock);
-            c_inv.set_desc(&format!("Corpse of '{}'", c_title));
-            {
-                let mut lock = room.write().await;
-                lock.remove_entity(c_id);
-                if let Err(e) = lock.try_insert(c_inv) {
-                    // well shucks, room full…
-                    add_item_to_lnf(e).await;
-                }
-            }
-            world.write().await.entities.remove(&c_id);
-        } else {
-            log::warn!("No piñataing '{}' in the void…", self.title);
-        }
-    }
-}
-
 type BattleMap = HashMap<MachineId, (BattlerRec, RoomArc), BuildNoHashHasher<MachineId>>;
 type AggroMap = HashMap<MachineId, Vec<MachineId>, BuildNoHashHasher<MachineId>>;
 
 /// Battle stage — the place for all battles.
-struct BattleStage {
-    active: BattleMap,
-    atk: AggroMap,
-    vct: AggroMap,
+pub(crate) struct BattleStage {
+    pub active: BattleMap,
+    pub atk: AggroMap,
+    pub vct: AggroMap,
 }
 
 impl Default for BattleStage {
@@ -142,18 +97,6 @@ impl BattleStage {
         let key = lock2key!(arc &battler);
         self.remove(key).await;
     }
-}
-
-/// Combat resolutions.
-#[derive(Debug, Clone)]
-pub enum Resolution {
-    Inconclusive { atk_dmg: StatValue, vct_dmg: StatValue },
-    AtkRetreat,
-    VctRetreat,
-    AtkVictory { atk_dmg: StatValue },
-    VctVictory  { vct_dmg: StatValue },
-    BothDead,
-    AbortDueRealityWarp,
 }
 
 /// Query seconds-as-ticks.
@@ -324,7 +267,9 @@ pub(crate) async fn life(
             //
             _ = battle_interval.tick() => {
                 if bs.active.is_empty() { continue; }
-                #[allow(dead_code)] static mut C: usize = 1;
+                // "global" battle interval counter
+                static mut C: usize = 1;
+
                 #[cfg(test)]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
                 let mut end_fight_for: Vec<usize> = vec![];
 
@@ -334,7 +279,7 @@ pub(crate) async fn life(
                         // TODO: get 1st victim in line for now, until AoE etc. get brainstormed.
                         if let Some(v_key) = vcts.get(0) {
                             if let Some((vct, _)) = bs.active.get(&v_key) {
-                                let resolution = punt(atk.combatant.clone(), vct.combatant.clone(), &room_arc).await;
+                                let resolution = punt(unsafe {C}, atk.combatant.clone(), vct.combatant.clone(), &room_arc).await;
                                 reporter_out.send(LifeWorkerSignal::BattleMsg {
                                     atk: atk.clone(),
                                     vct: vct.clone(),
@@ -385,7 +330,6 @@ pub(crate) async fn life(
                     bs.remove(d).await;
                 }
 
-                #[cfg(test)]
                 unsafe { C += 1; }
             }
 
@@ -489,18 +433,21 @@ pub(crate) async fn life(
                 SystemSignal::PlayerLogout { player } => bs.remove_b(&(player as Battler)).await,
 
                 //
-                // Public transportation (or denial of such thereof).
+                // Public [Player] transportation (or denial of such thereof).
                 //
                 SystemSignal::WantTransportFromTo { who, from, to, via } => {
                     let who_key = lock2key!(arc &who);
-                    let who_id = who.read().await.id().to_string();
                     if bs.active.contains_key(&who_key) {
                         log::debug!("Combat move rejected.");
                         out.broadcast.send(Broadcast::Message { to: who.clone(), message: "You're in middle of combat! Try <c yellow>flee</c> first…".into() }).ok();
                         continue;
                     }
 
-                    log::trace!("Transport request from {who_id} from {} to {}", from.read().await.id(), to.read().await.id());
+                    log::trace!("Transport request by {} from {} to {}",
+                        who.read().await.id(),
+                        from.read().await.id(),
+                        to.read().await.id()
+                    );
                     translocate!(who, from, to);
 
                     let mut plr = who.write().await;
@@ -515,6 +462,17 @@ pub(crate) async fn life(
                     if let Err(_) = out.broadcast.send(Broadcast::Force {silent: true, command: "look".into(), who: crate::io::ForceTarget::Player { id: who }, by: None, delivery: None }) {
                         log::error!("Broadcast channel(s) out of business – communications blackout?!");
                     };
+                }
+
+                //
+                // Public Entity transportation (or denial of such thereof).
+                //
+                SystemSignal::EntityWantTransportFromTo { who, from, to, via } => {
+                    let who_key = lock2key!(arc &who);
+                    if bs.active.contains_key(&who_key) {
+                        continue;
+                    }
+                    tokio::spawn(async move { transport_entity(who, from, to, via) });
                 }
 
                 // Abort battle for `who`.
@@ -659,81 +617,40 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, num
     false
 }
 
-/// Fite!
-async fn punt(atk: Battler, vct: Battler, room: &RoomArc) -> Resolution {
-    let mut a = atk.write().await;
-    let mut v = vct.write().await;
-    // reality warp just before .writes?
-    let wr = Arc::downgrade(room);
-    if !a.location().ptr_eq(&wr) || !v.location().ptr_eq(&wr) {
-        return Resolution::AbortDueRealityWarp;
-    }
-
-    let atk_dmg = a.dmg();
-    let v_ded = v.take_dmg(atk_dmg);
-    let (a_ded, vct_dmg) = if v_ded {
-        // potential last-breath counter before falling over...
-        //a.take_dmg(v.dmg());
-        (false, 0.0)
-    } else {
-        let vct_dmg = v.dmg();
-        (a.take_dmg(vct_dmg), vct_dmg)
+/// Attempt to transport [Entity] `from` `to` `via`.
+async fn transport_entity(who: EntityArc, from: RoomArc, to: RoomArc, via: Direction) {
+    let (m_id, mut e, r) = {
+        let w = who.write().await;
+        let r = from.read().await;
+        log::trace!("Transport request by {} from {} to {}",
+            w.id(), r.id(),
+            to.read().await.id()
+        );
+        (w.tick_id(), w, r)
     };
-    let v_flee = if !v_ded {
-        // check potential fleeing state
-        false
-    } else { false };
-    let a_flee = if !a_ded {
-        // check potential fleeing state
-        false
-    } else { false };
-
-    match (a_ded, v_ded, a_flee, v_flee) {
-        (true, true,..) => Resolution::BothDead,
-        (true, false,..) => Resolution::VctVictory {vct_dmg},
-        (false, true,..) => Resolution::AtkVictory {atk_dmg},
-        (_,_, true,..) => Resolution::AtkRetreat,
-        (_,_,_,true) => Resolution::VctRetreat,
-        _ => Resolution::Inconclusive {atk_dmg, vct_dmg}
-    }
-}
-
-/// Register Ok'd battle.
-async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: RoomArc, bs: &mut BattleStage) {
-    let a_key = lock2key!(arc &atk.combatant);
-    let v_key = lock2key!(arc &vct.combatant);
-    {
-        let mut a_lock = atk.combatant.write().await;
-        let mut v_lock = vct.combatant.write().await;
-        a_lock.alter_brain_freeze(true);
-        v_lock.alter_brain_freeze(true);
-    }
-    bs.active.insert(a_key, (atk, room.clone()));
-    bs.active.insert(v_key, (vct, room.clone()));
-    if let Some(a) = bs.atk.get_mut(&a_key) {
-        if !a.contains(&v_key) {
-            a.push(v_key);
+    // see if the entity can open a lock, if `via` is locked.
+    if let Some(exit) = r.exits.get(&via) {
+        match exit {
+            Exit::Locked { key_bp,.. }   |
+            Exit::LockedAL { key_bp,.. } => {
+                let Some(_) = e.inventory().find_id_by_name(key_bp) else { return /* no key, no go */;};
+            }
+            _ => ()
         }
     } else {
-        log::trace!("New attacker: {a_key}");
-        bs.atk.insert(a_key, vec![v_key]);
+        log::error!("Where did the exit at '{}' from '{}' go!?", via, r.id());
+        return ;
     }
-    if let Some(v) = bs.vct.get_mut(&v_key) {
-        if !v.contains(&a_key) {
-            v.push(a_key);
-        }
-    } else {
-        log::trace!("New victim: {v_key}");
-        bs.vct.insert(v_key, vec![a_key]);
-    }
-    log::debug!("LifeworkerSignal::BattleOk!");
+
+    drop(e); drop(r);
+    translocate!(ent who, m_id, from, to);
 }
 
 #[cfg(test)]
 mod life_tests {
     use std::{io::Cursor, sync::Arc};
 
-    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, room::environ::WEATHER_RAIN, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::storage::Storage, ownership::Owner, weapon::{DEFAULT_WEAPON_SPEED, WeaponSize, WeaponSpec}}, room::environ::WEATHER_RAIN, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[cfg(all(feature = "obsolete", feature = "stresstest"))]
     #[tokio::test]
@@ -846,6 +763,7 @@ mod life_tests {
                     weapon_size: WeaponSize::Small,
                     base_dmg: 1.9,
                     dmg_type: DamageType::Cut,
+                    speed: DEFAULT_WEAPON_SPEED,
                 };
                 let mut lock = e.write().await;
                 lock.inventory().try_insert(Item::Weapon(spec)).ok();

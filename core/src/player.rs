@@ -15,7 +15,7 @@ use crate::{
     identity::{IdentityQuery, MachineId, MachineIdentity},
     io::{Broadcast, ClientState, player_save_fp},
     item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}},
-    weapon::{WeaponSize, str_based_dmg_mul}},
+    weapon::{DEFAULT_WEAPON_SPEED, WeaponSize, str_based_dmg_mul}},
     mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::MobMut},
     room::{Room, RoomArc, RoomWeak, environ::{SpecialEnvironment, Terrain}},
     string::UNNAMED,
@@ -441,12 +441,16 @@ impl FactionMut for Player {
 }
 
 impl Damager for Player {
-    fn dmg(&self) -> StatValue {
+    fn dmg(&self, battle_tick: usize) -> Option<StatValue> {
         let Some(Item::Weapon(w)) = &self.equipped_weapon else {
-            return self.str() / 100.0;// Str(S)/100; S=100 by default (for human at least).
+            return if battle_tick % (DEFAULT_WEAPON_SPEED as usize) == 0 {
+                Some(self.str() / 100.0)// Str(S)/100; S=100 by default (for human at least).
+            } else { None }
         };
-        // W × Str(S)/50; S=100 by default (for human at least).
-        w.base_dmg * str_based_dmg_mul(self.str().current(), false) * (self.size().rel_vs_weapon(&w.weapon_size))
+        
+        if battle_tick % (w.speed() as usize) == 0 {
+            Some(w.base_dmg * str_based_dmg_mul(self.str().current(), false) * (self.size().rel_vs_weapon(&w.weapon_size)))
+        } else { None }
     }
 
     fn dmg_type(&self) -> DamageType {
