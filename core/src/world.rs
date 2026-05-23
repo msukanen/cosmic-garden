@@ -71,6 +71,7 @@ impl World {
         // create Player#1
         let mut plr = crate::player::Player::default();
         plr.set_id("test-player-1", true).ok();
+        plr.system_ch = sigs.out.clone();
         let plr_id = plr.id().to_string();
         let plr = std::sync::Arc::new(tokio::sync::RwLock::new(plr));
         let mut players_by_id = HashMap::default();

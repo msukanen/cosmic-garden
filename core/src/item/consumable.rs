@@ -117,7 +117,7 @@ impl Affector for ConsumableMatter {
 
 #[async_trait]
 impl Tickable for ConsumableMatter {
-    fn tick(&mut self, curr_tick: usize,  room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         if let Some(t) = &mut self.rots_in_ticks {
             *t = t.saturating_sub(1);
             #[cfg(debug_assertions)]{

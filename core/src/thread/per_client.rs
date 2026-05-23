@@ -1,6 +1,6 @@
 //! Per-client threading.
 
-use std::{net::SocketAddr, sync::Arc};
+use std::{net::SocketAddr, sync::{Arc, Weak}};
 
 use tokio::{io::{AsyncBufReadExt, BufReader}, net::TcpStream, sync::broadcast};
 
@@ -277,6 +277,12 @@ pub(crate) async fn per_client_thread( mut pcd: PerClientData ) {
 
                         Broadcast::Message { to, message } => {
                             if !Arc::ptr_eq(&player, &to) { continue; }// not for us
+                            tell_user!(&mut writer, "\n{}\n", message);
+                            reprompt_playing_user!(writer, state);
+                        }
+
+                        Broadcast::MessageSelf { to, message } => {
+                            if !Weak::ptr_eq(&to, &Arc::downgrade(&player)) { continue; }// not us
                             tell_user!(&mut writer, "\n{}\n", message);
                             reprompt_playing_user!(writer, state);
                         }

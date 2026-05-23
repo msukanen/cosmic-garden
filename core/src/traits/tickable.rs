@@ -8,15 +8,6 @@ use crate::{item::consumable::EffectType, mob::ai::*, room::environ::{Environmen
 #[async_trait]
 pub trait Tickable {
     fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>>;
-    #[inline]
-    fn should_pulse(&self, curr_tick: usize, tick_id: usize, modulo: usize) -> bool {
-        should_pulse(curr_tick.wrapping_add(tick_id), modulo)
-    }
-}
-
-/// Should something pulse?
-#[inline] const fn should_pulse(tick_id: usize, divisor: usize) -> bool {
-    tick_id % divisor == 0
 }
 
 /// - "What it means, what it means?"

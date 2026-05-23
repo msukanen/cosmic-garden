@@ -1,4 +1,4 @@
-use crate::{combat::Battler, identity::MachineId, player::PlayerArc, room::RoomArc};
+use crate::{combat::Battler, identity::MachineId, player::{PlayerArc, PlayerWeak}, room::RoomArc};
 
 /// Various broadcast types.
 #[derive(Clone)]
@@ -34,6 +34,12 @@ pub enum Broadcast {
         to: PlayerArc,
         message: String,
     },
+
+    MessageSelf {
+        to: PlayerWeak,
+        message: String,
+    },
+
 
     /// 'who' is moving 'from' 'to' with message for a) 'to' b) 'from' c) self.
     BiSignal {

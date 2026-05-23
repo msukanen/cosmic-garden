@@ -2,7 +2,7 @@
 
 use serde::{Deserialize, Serialize};
 
-use crate::{identity::MachineId, mob::faction::{Demeanor, EntityFaction}, rng::*, room::environ::{SpecialEnvironment, Terrain, WEATHER_RAIN, WEATHER_STORM}, traits::TickMeaning};
+use crate::{identity::MachineId, mob::faction::{Demeanor, EntityFaction}, rng::{self, *}, room::environ::{SpecialEnvironment, Terrain, WEATHER_RAIN, WEATHER_STORM}, traits::TickMeaning};
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, PartialEq)]
 pub enum AiState {
@@ -40,7 +40,7 @@ pub enum AiAction {
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct Ai {
     state: AiState,
-    mental_state: AiMentalState,
+    pub(super) mental_state: AiMentalState,
 
     #[serde(skip, default = "cg_rng_default")] rng: u64,
     p_idle_to_wandering: f32,
@@ -100,12 +100,18 @@ impl Ai {
             // storm makes things angsty easier…
             let storm_mul = if room_env & WEATHER_STORM != 0 { 1.0 + 1.0/3.0 } else { 1.0 };
             
-            match self.mental_state {
-                AiMentalState::Grumpy =>
+            match &self.mental_state {
+                AiMentalState::Grumpy => {
                     if ai_do(self.rng, 0.005) {
-                        maybe_action = AiAction::Emote { ent_m_id: e_tick_id, fmt: "[~e~] glares at the clouds for a moment." }.into()
+                        maybe_action = AiAction::Emote { ent_m_id: e_tick_id, fmt: "[~e~] glares at the clouds for a moment." }.into();
                     }
-                ,
+                    self.rng = cg_rng(self.rng);
+                    if ai_do(self.rng, 0.15) {
+                        self.mental_state = AiMentalState::Angry;
+                        maybe_mental_state = self.mental_state.into();
+                    }
+                }
+                
                 AiMentalState::Neutral =>
                     if ai_do(self.rng, 0.2 * storm_mul) {
                         self.mental_state = AiMentalState::Grumpy;
@@ -118,6 +124,7 @@ impl Ai {
                         maybe_mental_state = self.mental_state.into();
                     }
                 }
+
                 // a bit of rain doesn't make Angry any angrier…
                 _ => ()
             }

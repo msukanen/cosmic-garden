@@ -137,7 +137,7 @@ impl Stat {
             StatType::MP  => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
             StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0 },
             StatType::SN  => Self::SN { curr: 100.0, max: 100.0, drain: 0.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
-            StatType::Sat => Self::Sat { curr: 100.0, max: 100.0, drain: -(DRAIN_EPSILON*2.5) },
+            StatType::Sat => Self::Sat { curr: 100.0, max: 100.0, drain: -(DRAIN_EPSILON*17.4) },// ≈8h for 100→50
         }
     }
 
@@ -162,8 +162,8 @@ impl AddAssign<StatValue> for Stat {
             Self::Nim { curr, max, ..} |
             Self::Str { curr, max, ..} |
             Self::SN { curr, max, ..}  |
-            Self::Sat { curr, max, ..} |
-            Self::San { curr, max, ..} => *curr = (*curr + rhs).clamp(0.0, *max)
+            Self::San { curr, max, ..} |
+            Self::Sat { curr, max, ..} => *curr = (*curr + rhs).clamp(0.0, *max)
         }
     }
 }
@@ -218,8 +218,8 @@ impl Stat {
             Self::Str { max, ..} |
             Self::MP { max, ..}  |
             Self::SN { max, ..}  => *max = value,
-            Self::Sat { max, ..} |
-            Self::San { max, ..} => *max = value.min(100.0),
+            Self::San { max, ..} |
+            Self::Sat { max, ..} => *max = value.min(100.0),
 
             Self::Rep { .. } => ()
         }
@@ -257,9 +257,9 @@ impl Stat {
         if value.abs() < DRAIN_EPSILON { return self; }
 
         match self {
-            Self::MP { drain, max, ..} |
-            Self::San { max, drain, ..}|
-            Self::SN { max, drain, ..} |
+            Self::MP { max, drain, ..}  |
+            Self::San { max, drain, ..} |
+            Self::SN { max, drain, ..}  |
             Self::Sat { max, drain, ..}
             => {
                 let abs_drain = value.abs().min(*max / TICKS_BETWEEN_DRAIN);
@@ -333,8 +333,8 @@ impl Stat {
             Self::SN { curr, ..}  |
             Self::Str { curr, ..} |
             Self::Rep { curr}     |
-            Self::Sat { curr, ..} |
-            Self::San { curr, ..} => *curr
+            Self::San { curr, ..} |
+            Self::Sat { curr, ..} => *curr
         }) + (match self {
             Self::Brn { room_env, ..} => 
                 (if (*room_env) & SPECIAL_ENVIRONMENT_LOUD != 0 { -15.0 } else { 0.0 })
@@ -358,8 +358,8 @@ impl Stat {
         match self {
             Self::MP { drain, ..}  |
             Self::SN { drain, ..}  |
-            Self::Sat { drain, ..} |
-            Self::San { drain, ..} => Ok(*drain),
+            Self::San { drain, ..} |
+            Self::Sat { drain, ..} => Ok(*drain),
             
             _ => Err(StatError::NoDrain)
         }
@@ -480,7 +480,7 @@ impl Tickable for Stat {
             // no drain, nothing to tick
             return None;
         };
-        if drain.abs() < 0.001 {
+        if drain.abs() < DRAIN_EPSILON {
             // no meaningful drain; nothing to tick
             return None;
         }

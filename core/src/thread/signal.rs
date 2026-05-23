@@ -139,6 +139,21 @@ impl SignalChannels {
             }
         }
     }
+
+    /// NOTE: only for deserializing a Player!
+    pub fn fake_senders() -> SignalSenderChannels {
+        let (tx, _) = broadcast::channel::<Broadcast>(1);
+        let (jtx,_) = mpsc::unbounded_channel::<SystemSignal>();
+        let (ltx,_) = mpsc::unbounded_channel::<SystemSignal>();
+        let (gtx,_) = mpsc::unbounded_channel::<SystemSignal>();
+
+        SignalSenderChannels {
+            broadcast: tx,
+            janitor: jtx,
+            librarian: ltx,
+            life: gtx,
+        }
+    }
 }
 
 /// Spawn types for life-thread signals.

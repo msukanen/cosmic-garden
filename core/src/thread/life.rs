@@ -50,7 +50,6 @@ impl BattlerRec {
         if let Some(room) = lock.location().upgrade() {
             let c_id = lock.tick_id();
             if !world.read().await.entities.contains_key(&c_id) {
-                log::debug!("???");
                 // alerady looted, bail.
                 return ;
             }
@@ -380,7 +379,6 @@ pub(crate) async fn life(
                         // not in active list? WTF?
                         end_fight_for.push(*a_key);
                     }
-
                 }
 
                 for d in end_fight_for {
@@ -579,6 +577,16 @@ async fn spawn_something(out: &SignalSenderChannels, what: SpawnType, room: &Roo
         },_=> false
     }
 }
+
+/// As per [spawn_something], but with `num` [Entity] at once.
+/// # Args
+/// - `what` to spawn.
+/// - `num` of spawns.
+/// - [`room`][RoomPayload] to spawn in.
+/// - [`world`][World].
+/// 
+/// # Returns
+/// Spawned?
 async fn spawn_something_batch(out: &SignalSenderChannels, what: SpawnType, num: usize, room: &RoomPayload, world: &WorldArc) -> bool {
     match &what {
         SpawnType::Mob { id } => {
@@ -727,7 +735,7 @@ mod life_tests {
 
     use sysinfo::System;
 
-use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
+use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, room::environ::WEATHER_RAIN, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[cfg(all(feature = "obsolete", feature = "stresstest"))]
     #[tokio::test]
@@ -764,59 +772,43 @@ use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType},
     #[tokio::test]
     async fn goblin_ocean_batch() {
         #[cfg(feature = "stresstest")]
-        const GOBBOCOUNT: usize = 1_000_000;
+        let gobbocount: usize = 1_000_000;
         #[cfg(not(feature = "stresstest"))]
-        const GOBBOCOUNT: usize = 1_000;// chuck...
+        let gobbocount: usize = std::env::var("GOBBOCOUNT")
+            .unwrap_or_else(|_| "1000".to_string())
+            .parse::<usize>()
+            .unwrap_or_else(|_| 1_000);// chuck...
+        let runtime: u64 = std::env::var("GARDEN_TEST_RUNTIME")
+            .unwrap_or_else(|_| "5000".to_string())
+            .parse::<u64>()
+            .unwrap_or_else(|_| 5_000);
 
         let (w,c,_,j) = get_operational_mock_world().await;
-    // Live RSS reporting:
-    let mut rss_report_interval = tokio::time::interval(Duration::from_secs(2));
-    let mut sys = System::new_all();
-    let pid = sysinfo::get_current_pid().expect("Unable to determine PID?!");
-    let mut peak_mem_kb: u64 = 0;
-    let mut peak_counted = 0;
-    tokio::spawn(async move {
-        loop {
-        tokio::select! {
-            _ = rss_report_interval.tick() => {
-                sys.refresh_memory();
-                if let Some(process) = sys.process(pid) {
-                    peak_counted += 1;
-                    let curr_mem_use = process.memory();
-                    let kib = peak_mem_kb as f64 / 1024.0;
-                    let mib = kib / 1024.0;
-                    let gib = mib / 1024.0;
-                    if curr_mem_use > peak_mem_kb {
-                        peak_mem_kb = curr_mem_use;
-                        log::info!("[TELEMETRY] peak mem usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
-                        if gib > 40.0 {
-                            log::warn!("[CRITICAL] Garden is occupying >40GB RAM.");
-                        }
-                    } else {
-                        if peak_counted % 2 == 0 {
-                            log::trace!("[MEM] usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
-                        }
-                    }
-                }
-            }}}});
         get_operational_mock_janitor!(c,w,j.0);
         get_operational_mock_life!(c,w);
         get_operational_mock_librarian!(c,w);
+        start_mock_broadcast_listener!(c.out);
         let c = c.out;// we don't need the c.recv part anymore here…
-        stabilize_threads!(1000);
+        stabilize_threads!();
         let start_work = std::time::Instant::now();
         let (otx,orx) = tokio::sync::oneshot::channel::<bool>();
-        c.life.send(SystemSignal::SpawnBatch { what: SpawnType::Mob { id: "goblin".into() }, num: GOBBOCOUNT, room: "r-1".into(), reply: otx.into() }).ok();
+        c.life.send(SystemSignal::SpawnBatch { what: SpawnType::Mob { id: "goblin".into() }, num: gobbocount, room: "r-1".into(), reply: otx.into() }).ok();
         // let the dust settle…
         let _ = orx.await;
         log::debug!("Dust?");
         let work_duration = start_work.elapsed();
         
-        #[cfg(feature = "stresstest")]      stabilize_threads!(30_000); // see for 30s what log fox says
-        #[cfg(not(feature = "stresstest"))] stabilize_threads!( 5_000);
+        let r1 = { w.read().await.get_room_by_id("r-1").unwrap().clone() };
+        // maybe stir the hornets' nest...
+        {
+            log::debug!("Setting rain to fall…");
+            r1.write().await.set_special_env_bitmask(WEATHER_RAIN).ok();
+        }
 
-        let spawns_per_sec = GOBBOCOUNT as f64 / work_duration.as_secs_f64();
-        let r1 = w.read().await.get_room_by_id("r-1").unwrap();
+        #[cfg(feature = "stresstest")]      stabilize_threads!(30_000); // see for 30s what log fox says
+        #[cfg(not(feature = "stresstest"))] stabilize_threads!(runtime);
+
+        let spawns_per_sec = gobbocount as f64 / work_duration.as_secs_f64();
         let spawn_c = r1.read().await.entity_count();
 
         log::debug!("--terminated--");

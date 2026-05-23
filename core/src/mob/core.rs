@@ -10,7 +10,7 @@ use tokio::fs;
 use crate::{
     combat::{Battler, Combatant, CombatantMut, DamageType, Damager}, r#const::STAT_PULSE_NTH_TICK, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
         Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
-    }, mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiAction, faction::{Demeanor, EntityFaction}, traits::MobMut}, room::{RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}
+    }, mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::{AiAction, AiMentalState}, faction::{Demeanor, EntityFaction}, traits::MobMut}, room::{RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}
 };
 
 /// Generic [Entity] size categories
@@ -146,6 +146,10 @@ pub struct Entity {
     // AI stuff…
     #[serde(default, skip)] brain_freeze: bool,
     #[serde(default)] ai: Ai,
+    // tick scatter…
+    #[serde(skip, default)] last_stat_tick: usize,
+    #[serde(skip, default)] last_ai_tick: usize,
+    #[serde(skip, default)] last_inv_tick: usize,
 }
 
 impl Default for Entity {
@@ -173,6 +177,9 @@ impl Default for Entity {
             desc: "Some sort of an entity. Use <c yellow>desc =</c> to describe it…".into(),
             gender: GenderType::default(),
             ai: Ai::default(),
+            last_stat_tick: 0,
+            last_ai_tick: 0,
+            last_inv_tick: 0,
         }
     }
 }
@@ -266,9 +273,24 @@ impl Entity {
     }
 
     /// Check whether the [Entity] wants to attack one of the [Battler]s.
-    pub async fn maybe_attack_one(&self, vcts: &Vec<Battler>) -> Option<&Battler> {
+    pub async fn maybe_attack_one<'a>(&self, vcts: &'a Vec<Battler>) -> Option<&'a Battler> {
         // TODO figure out if any of the victim candidates suit as target practice…
-
+        let (hp_threshold_self, hp_threshold_other) = match self.ai.mental_state {
+            AiMentalState::Angry => (0.15, 1.0),
+            AiMentalState::Grumpy => (0.5, 0.75),
+            _ => (0.9, 0.2)
+        };
+        if self.hp.current() / self.hp.max() < hp_threshold_self {
+            // too hurt to want to initiate (new) fight(s)
+            return None;
+        }
+        for v in vcts {
+            let vl = v.read().await;
+            if vl.hp().current() / vl.hp().max() <= hp_threshold_other {
+                log::debug!("Found hurties");
+                return v.into();
+            }
+        }
         None
     }
 }
@@ -289,8 +311,9 @@ impl Damager for Entity {
 impl Tickable for Entity {
     fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         // tick stats at 1/10th of our [Room]'s pace.
-        if self.should_pulse(curr_tick, self.tick_id, STAT_PULSE_NTH_TICK) {
-            // we tick only drain value having stats.
+        if should_pulse!(curr_tick, self.last_stat_tick, self.tick_id, STAT_PULSE_NTH_TICK) {
+            self.last_stat_tick = curr_tick;
+            // we tick just the drainable stats.
             self.hp_mut().tick(curr_tick, room_env, room_terrain);
             self.mp_mut().tick(curr_tick, room_env, room_terrain);
             self.sn_mut().tick(curr_tick, room_env, room_terrain);
@@ -299,8 +322,10 @@ impl Tickable for Entity {
         }
 
         #[cfg(feature = "stresstest")] static mut AIMC: usize = 0;
-        let ai_m =
-        if self.should_pulse(curr_tick, self.tick_id, 15) {
+        // tick AI at 1/15th of our [Room]'s pace.
+        let maybe_ai_meaning =
+        if !self.brain_freeze && should_pulse!(curr_tick, self.last_ai_tick, self.tick_id, 15) {
+            self.last_ai_tick = curr_tick;
             if let Some(ai_means) = self.ai.tick(
                 self.tick_id(),
                 curr_tick,
@@ -308,7 +333,7 @@ impl Tickable for Entity {
                 room_terrain,
                 self.faction,
             ) {
-                if let TickMeaning::AiStateChange { maybe_action: Some(AiAction::Emote { .. }), .. } = &ai_means {
+                if let TickMeaning::AiStateChange { maybe_action: Some(_), .. } = &ai_means {
                     #[cfg(feature = "stresstest")]{
                         unsafe {
                             if AIMC <= 10 {
@@ -323,11 +348,13 @@ impl Tickable for Entity {
         } else { None }
         ;
 
-        let inv_m = if self.should_pulse(curr_tick, self.tick_id, 25) {
+        // tick inventory at 1/25th the [Room]'s pace.
+        let inv_m = if should_pulse!(curr_tick, self.last_inv_tick, self.tick_id, 25) {
+            self.last_inv_tick = curr_tick;
             self.inventory.tick(curr_tick, room_env, room_terrain)
         } else { None };
 
-        match (ai_m, inv_m) {
+        match (maybe_ai_meaning, inv_m) {
             (None, None) => None,
             (Some(a), None) => vec![a].into(),
             (None, Some(b)) => b.into(),
