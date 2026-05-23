@@ -183,9 +183,11 @@ pub const HUGE_ITEM: StorageSpace = 12 * SIZE_BALANCE;
 pub const BCAST_FMT_ENTITY_TITLE: &'static str = "~e~";
 const BCAST_REQ_BITS: usize = 12;
 #[cfg(not(feature = "stresstest"))] pub const ESTIMATED_BCAST_REQ_COUNT: usize = 1 << BCAST_REQ_BITS;
-#[cfg(feature = "stresstest")] pub const ESTIMATED_BCAST_REQ_COUNT: usize = 1 << (BCAST_REQ_BITS + 4);
+#[cfg(feature = "stresstest")]      pub const ESTIMATED_BCAST_REQ_COUNT: usize = 1 << (BCAST_REQ_BITS + 4);
 
 //
 // Tick related consts.
 //
-pub const STAT_PULSE_NTH_TICK: MachineId = 10;
+pub const ROOM_PULSE_NTH_TICK: MachineId = 10;
+#[cfg(not(feature = "stresstest"))] pub const STAT_PULSE_NTH_TICK: MachineId = 10;
+#[cfg(feature = "stresstest")]      pub const STAT_PULSE_NTH_TICK: MachineId = 1;
