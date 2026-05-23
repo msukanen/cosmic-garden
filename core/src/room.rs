@@ -572,8 +572,6 @@ impl Room {
 
         // …then entitites…
         let batch_size: usize = bucket_scaler(self.entities.len());
-        #[cfg(feature = "stresstest")]
-        static mut AISC: usize = 0;
         let mut join_set = tokio::task::JoinSet::new();
         let mut curr_ent_batch = Vec::with_capacity(batch_size);
         for (_, e) in &self.entities {
@@ -595,7 +593,6 @@ impl Room {
                         {
                             for m in means {
                                 if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
-                                    #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
                                     ai_acts.push((e.clone(), act));
                                 }
                             }
@@ -620,7 +617,6 @@ impl Room {
                     if let Some(means) = e.write().await.tick(curr_tick, room_env, room_terrain) {
                         for m in means {
                             if let TickMeaning::AiStateChange { maybe_action: Some(act),.. } = m {
-                                #[cfg(feature = "stresstest")]{ unsafe { AISC += 1; } }
                                 ai_acts.push((e.clone(), act));
                             }
                         }
@@ -630,7 +626,6 @@ impl Room {
             });
         }
 
-        #[cfg(feature = "stresstest")] static mut MIREC: usize = 0;
         let mut emohash: HashMap<&str, (MachineId, usize)> = HashMap::new();
         let visibility
             =   (if self.special_environment & SPECIAL_ENVIRONMENT_FOGGED_VISIBILITY != 0 { -0.25 } else { 0.0 }) +
@@ -641,22 +636,11 @@ impl Room {
                 for (e, act) in ai_acts.into_iter() {
                     match act {
                         AiAction::Emote { ent_m_id, fmt } => {
-                            #[cfg(feature = "stresstest")] unsafe {
-                                MIREC += 1;
-                                if MIREC < 10 {
-                                    log::debug!("BCAST::MIRE");
-                                } else if MIREC % 1_000_000 == 0 {
-                                    let mirec = MIREC;
-                                    log::debug!("BCAST::MIRE ×{mirec}")
-                                }
-                            }
                             let (_,c) = emohash.entry(fmt).or_insert((ent_m_id, 0));
                             *c += 1;
                         }
 
                         AiAction::Attack => {
-                            //#[cfg(test)]{ log::debug!("X wants to bonk someone/something!"); }
-
                             let mut vis: Vec<Battler> = self.who.values()
                                 .filter(|_| {
                                     self.rng = cg_rng(self.rng);
@@ -704,11 +688,7 @@ impl Room {
             }).ok();
         }
 
-
         // no reaction yet to "positive" tick(s)
-        let _ = self.contents.tick(curr_tick, self.special_environment, self.terrain);
-        #[cfg(all(debug_assertions,feature = "stresstest"))]{
-            log::debug!("Room '{}' ticked.", self.id);
-        }
+        _ = self.contents.tick(curr_tick, self.special_environment, self.terrain);
     }
 }
