@@ -2,7 +2,7 @@
 
 use tokio::sync::{broadcast, mpsc};
 
-use crate::{combat::Battler, r#const::ESTIMATED_BCAST_REQ_COUNT, help::HelpPage, io::Broadcast, item::Item, mob::core::Entity, player::PlayerArc, room::{RoomArc, RoomPayload}, thread::librarian::BlueprintType, util::{access::Access, direction::Direction}};
+use crate::{combat::Battler, r#const::ESTIMATED_BCAST_REQ_COUNT, help::HelpPage, io::Broadcast, item::Item, mob::{EntityArc, core::Entity}, player::PlayerArc, room::{RoomArc, RoomPayload}, thread::librarian::BlueprintType, util::{access::Access, direction::Direction}};
 
 pub type SigReceiver = mpsc::UnboundedReceiver<SystemSignal>;
 pub type SigSender = mpsc::UnboundedSender<SystemSignal>;
@@ -86,10 +86,12 @@ pub enum SystemSignal {
     },
     /// Attack call!
     Attack { atk_arc: Battler, vct_arc: Battler },
-    /// Player logging out…
+    /// [Player] logging out…
     PlayerLogout { player: PlayerArc },
-    /// Player requesting transport…
+    /// [Player] requesting transport…
     WantTransportFromTo { who: PlayerArc, from: RoomArc, to: RoomArc, via: Direction },
+    /// [Entity] requesting transport…
+    EntityWantTransportFromTo { who: EntityArc, from: RoomArc, to: RoomArc, via: Direction },
     /// "Halt!" the fite.
     AbortBattleNow { who: Battler },
     /// Abort all combat whatsoever.
