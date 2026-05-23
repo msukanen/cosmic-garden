@@ -13,7 +13,15 @@ use crate::{
     error::CgError,
     help::HelpPage,
     identity::{IdentityQuery, MachineId, MachineIdentity},
-    io::{ClientState, player_save_fp}, item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::{WeaponSize, str_based_dmg_mul}}, mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::MobMut}, room::{Room, RoomArc, RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}, util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}
+    io::{Broadcast, ClientState, player_save_fp},
+    item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}},
+    weapon::{WeaponSize, str_based_dmg_mul}},
+    mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::MobMut},
+    room::{Room, RoomArc, RoomWeak, environ::{SpecialEnvironment, Terrain}},
+    string::UNNAMED,
+    thread::{SystemSignal, janitor::SAVE_ASAP_THRESHOLD, signal::{SignalChannels, SignalSenderChannels}},
+    traits::{TickMeaning, Tickable},
+    util::{access::{Access, Accessor}, activity::ActionWeight, config::Config, direction::Direction}
 };
 
 #[derive(Debug, Clone, PartialEq)]
@@ -48,16 +56,17 @@ pub struct Player {
     id: String,
     #[serde(default = "player_fake_tick_id")] tick_id: MachineId,
     #[identity(title)] pub(super) name: String,
+    /// Weak ref to self for signals/channels use.
+    #[serde(skip, default)] pub(super) weak: PlayerWeak,
     
     #[serde(default)] pub config: Config,
     #[serde(default)] pub access: Access,
+    #[serde(skip, default = "player_fake_system_ch")] pub(super) system_ch: SignalSenderChannels,
     
-    #[serde(default, skip)]
-    pub actions_taken: usize,
-    #[serde(default = "player_location_void")]
-    pub(crate) location_id: String,
-    #[serde(skip)]
-    pub location: RoomWeak,
+    #[serde(default, skip)] pub actions_taken: usize,
+
+    #[serde(default = "player_location_void")] pub(crate) location_id: String,
+    #[serde(skip)] pub location: RoomWeak,
     
     #[serde(default = "player_hp_default")] pub hp: Stat,
     #[serde(default = "player_mp_default")] pub mp: Stat,
@@ -86,6 +95,8 @@ pub struct Player {
     /// Last place in the line of travels…
     #[serde(default, skip)]
     pub last_goto: Option<(Direction, RoomWeak)>,
+    #[serde(skip, default)]
+    last_tick: usize,
 
     #[serde(skip, default = "player_faction_default")]
     pub faction: EntityFaction,
@@ -131,6 +142,7 @@ fn player_rep_default() -> Stat { Stat::Rep { curr: 0.0 }}
 fn player_no_op_esz() -> EntitySize { EntitySize::Medium }
 fn player_no_op_wsz() -> WeaponSize { WeaponSize::Medium }
 fn player_fake_tick_id() -> MachineId { rand::random::<u64>() as MachineId }
+fn player_fake_system_ch() -> SignalSenderChannels { SignalChannels::fake_senders() }
 
 impl Player {
     pub fn owner_id<'a>(&'a self) -> &'a str { &self.owner_id }
@@ -140,15 +152,19 @@ impl Player {
     /// # Args
     /// - `owner_id` of the [user][crate::user::UserInfo].
     /// - `id` of the [Player].
+    /// - `system_ch` for outbound sends to threads.
     /// 
     /// # Returns
     /// `PlayerArc` if successful.
-    pub async fn load(owner_id: &str, id: &str) -> Result<PlayerArc, CgError> {
+    pub async fn load(owner_id: &str, id: &str, system_ch: &SignalSenderChannels) -> Result<PlayerArc, CgError> {
         let mut player: Self = serde_json::from_str(
             &fs::read_to_string(player_save_fp(owner_id, id)).await?
         )?;
         player.activity_type = ActivityType::Playing;
-        Ok(Arc::new(RwLock::new(player)))
+        player.system_ch = system_ch.clone();
+        let player = Arc::new(RwLock::new(player));
+        player.write().await.weak = Arc::downgrade(&player);
+        Ok(player)
     }
 
     /// Attempt to save self…
@@ -292,6 +308,8 @@ impl Player {
 
 impl Default for Player {
     /// Construt a default [Player] instance.
+    /// 
+    /// NOTE: remember to set `weak`!
     fn default() -> Self {
         Self {
             owner_id: UNNAMED.into(),
@@ -326,6 +344,9 @@ impl Default for Player {
             _no_op_esz: player_no_op_esz(),
             _no_op_wsz: player_no_op_wsz(),
             tick_id: player_fake_tick_id(),
+            system_ch: player_fake_system_ch(),
+            weak: Weak::new(),
+            last_tick: 0,
         }
     }
 }
@@ -351,13 +372,20 @@ impl Accessor for Player {
 #[async_trait]
 impl Tickable for Player {
     fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
-        if self.should_pulse(curr_tick, self.tick_id, STAT_PULSE_NTH_TICK) {
+        should_pulse!(if_not None; curr_tick, self.last_tick, self.tick_id, STAT_PULSE_NTH_TICK);
+        {
             self.hp_mut().tick(curr_tick, room_env, room_terrain);
             self.mp_mut().tick(curr_tick, room_env, room_terrain);
             self.sn_mut().tick(curr_tick, room_env, room_terrain);
             self.san_mut().tick(curr_tick, room_env, room_terrain);
+            // see about hunger…
+            let curr_sat = self.satiation.current();
             self.satiation_mut().tick(curr_tick, room_env, room_terrain);
+            if curr_sat > 50.0 && self.satiation.current() < 50.0 {
+                self.system_ch.broadcast.send(Broadcast::MessageSelf { to: self.weak.clone(), message: "You're hungry!".to_string() }).ok();
+            }
         }
+        self.last_tick = curr_tick;
 
         let old_affects = std::mem::take(&mut self.affects);
         let mut survivors = HashMap::new();
@@ -457,5 +485,28 @@ impl MobMut for Player {
 
     fn satiation_mut(&mut self) -> &mut Stat {
         &mut self.satiation
+    }
+}
+
+#[cfg(test)]
+mod player_tests {
+    use std::io::Cursor;
+
+    use crate::{get_operational_mock_life, mob::traits::{Mob, MobMut}, stabilize_threads, world::mock_world::get_operational_mock_world};
+
+    #[tokio::test]
+    async fn hunger_drain() {
+        let mut b: Vec<u8> = vec![];
+        let mut s = Cursor::new(&mut b);
+        let (w,c,(mut state,p),d) = get_operational_mock_world().await;
+        get_operational_mock_life!(c,w);
+        let c = c.out;
+        start_mock_broadcast_listener!(c);
+        stabilize_threads!();
+        log::debug!("pre-set sat curr {}", p.read().await.satiation());
+        p.write().await.satiation_mut().set_curr(50.334).set_drain(-0.2);
+        log::debug!("post-set sat curr {}", p.read().await.satiation());
+        stabilize_threads!(1_000);
+        log::debug!("end sat curr {}", p.read().await.satiation());
     }
 }

@@ -1,6 +1,6 @@
 //! I/O related stuff lives here…
 
-use std::net::SocketAddr;
+use std::{net::SocketAddr, sync::Arc};
 
 use tokio::net::tcp::OwnedWriteHalf;
 
@@ -127,6 +127,7 @@ impl ClientState {
                         return self;
                     }
                     let id = p.id().to_string();
+                    p.system_ch = system_ch.clone().into();
                     p.owner_id = info.id.clone();
                     p.name = input.into();
                     let title = p.name.clone();
@@ -138,6 +139,7 @@ impl ClientState {
 
                     // Final preparations…
                     let p: PlayerArc = p.into();
+                    p.write().await.weak = Arc::downgrade(&p);
                     let state = Self::Playing { player: p.clone() };
                     {
                         tell_user!(&mut writer, "{}", p.read().await.prompt(&state).unwrap_or_default());
@@ -167,7 +169,7 @@ impl ClientState {
                     // Get character ID by (the adjusted) index...
                     let (p_id, _) = &info.players[num];
 
-                    if let Ok(player) = Player::load(&info.id, &p_id).await {
+                    if let Ok(player) = Player::load(&info.id, &p_id, &system_ch).await {
                         let state = Self::Playing { player: player.clone() };
                         
                         let id = {
@@ -180,7 +182,7 @@ impl ClientState {
 
                         return state;
                     } else {
-                        let err = Player::load(&info.id, &p_id).await;
+                        let err = Player::load(&info.id, &p_id, &system_ch).await;
                         log::error!("UserInfo of user '{}' mismatch — Player file '{}' missing (or broken)!: {err:?}", info.id, p_id);
                         tell_user!(&mut writer, "A bit of misplacement error here… Do contact admin ASAP!\n");
                         return self;
@@ -192,7 +194,7 @@ impl ClientState {
                     id == &check_vs || name.to_lowercase() == check_vs
                 }) {
                     // existing character.
-                    return match Player::load(&info.id, id).await {
+                    return match Player::load(&info.id, id, &system_ch).await {
                         Err(e) => {
                             log::error!("UserInfo of user '{}' mismatch — Player file '{}' missing (or broken)! {e:?}", info.id, id);
                             tell_user!(&mut writer, "A bit of misplacement error here… Do contact admin ASAP!");
@@ -230,6 +232,7 @@ impl ClientState {
                     return Self::Logout;
                 }
                 let p: PlayerArc = p.into();
+                p.write().await.weak = Arc::downgrade(&p);
                 let state = Self::Playing { player: p.clone() };
                 {
                     World::insert_player(world.clone(), addr, &id, p.clone()).await;
