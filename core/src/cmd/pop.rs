@@ -29,7 +29,7 @@ impl Command for PopCommand {
                             {
                                 let mut p_lock = plr.write().await;
                                 p_lock.last_goto = None;
-                                p_lock.take_dmg(5.0);
+                                p_lock.take_dmg(5.0.into());
                             }
                             let mut d = dest.write().await;
                             d.exits.retain(|dir,_| if let Direction::Custom(d) = dir {
