@@ -111,10 +111,19 @@ impl EntityLibrary {
     /// 
     /// And, in case of e.g. cloned entities, we'll snip off a) UUID, b) index numbers.
     pub fn get(&self, id: &str) -> Option<Entity> {
-        let (namespaced, rest) = id.split_once(':').unwrap_or((id, ""));
-        // TODO snip off index number if present
-
-        self.bps.get(namespaced.show_uuid(false)).cloned()
+        let (namespaced, _) = id.split_once(':').unwrap_or((id, ""));
+        let post_uuid = namespaced.show_uuid(false);
+        let no_index = if let Some((base, suffix)) = post_uuid.rsplit_once('-') {
+            if !suffix.is_empty() && suffix.chars().all(|c| c.is_ascii_digit()) {
+                base
+            } else {
+                post_uuid
+            }
+        } else {
+            post_uuid
+        };
+        
+        self.bps.get(no_index).cloned()
     }
 
     /// Shelve a new [Entity] blueprint.
