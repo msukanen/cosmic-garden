@@ -1,6 +1,6 @@
 //! Mob core.
 
-use std::{fmt::Display, sync::RwLock};
+use std::fmt::Display;
 
 use async_trait::async_trait;
 use cosmic_garden_pm::{CombatantMut, DescribableMut, FactionMut, IdentityMut, Mob, MobMut};
@@ -10,7 +10,7 @@ use tokio::fs;
 use crate::{
     combat::{Battler, Combatant, CombatantMut, DamageType, Damager}, r#const::STAT_PULSE_NTH_TICK, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidCore}}, io::entity_entry_fp, item::{
         Item, StorageSpace, container::variants::{ContainerVariant, ContainerVariantType}, weapon::{WeaponSize, str_based_dmg_mul}
-    }, mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::{AiAction, AiMentalState}, faction::{Demeanor, EntityFaction}, traits::MobMut}, room::{RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}
+    }, mob::{Ai, EntityArc, Gender, GenderError, GenderType, Stat, StatType, StatValue, ai::AiMentalState, faction::{Demeanor, EntityFaction}, traits::MobMut}, room::{RoomWeak, environ::{SpecialEnvironment, Terrain}}, string::UNNAMED, thread::{librarian::get_entity_blueprint, signal::SignalSenderChannels}, traits::{TickMeaning, Tickable}
 };
 
 /// Generic [Entity] size categories
@@ -321,7 +321,6 @@ impl Tickable for Entity {
             self.satiation_mut().tick(curr_tick, room_env, room_terrain);
         }
 
-        #[cfg(feature = "stresstest")] static mut AIMC: usize = 0;
         // tick AI at 1/15th of our [Room]'s pace.
         let maybe_ai_meaning =
         if !self.brain_freeze && should_pulse!(curr_tick, self.last_ai_tick, self.tick_id, 15) {
@@ -334,14 +333,6 @@ impl Tickable for Entity {
                 self.faction,
             ) {
                 if let TickMeaning::AiStateChange { maybe_action: Some(_), .. } = &ai_means {
-                    #[cfg(feature = "stresstest")]{
-                        unsafe {
-                            if AIMC <= 10 {
-                                AIMC += 1;
-                                log::debug!("Entity@AiStateChange::Emote");
-                            }
-                        }
-                    }
                     ai_means.into()
                 } else { None }
             } else { None }

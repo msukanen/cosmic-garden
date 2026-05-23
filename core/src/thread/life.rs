@@ -731,11 +731,9 @@ async fn register_ok_battle(atk: BattlerRec, vct: BattlerRec, room: RoomArc, bs:
 
 #[cfg(test)]
 mod life_tests {
-    use std::{io::Cursor, sync::Arc, time::Duration};
+    use std::{io::Cursor, sync::Arc};
 
-    use sysinfo::System;
-
-use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, room::environ::WEATHER_RAIN, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
+    use crate::{cmd::look::LookCommand, combat::{Battler, CombatantMut, DamageType}, r#const::SMALL_ITEM, get_operational_mock_janitor, get_operational_mock_librarian, identity::IdentityQuery, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, room::environ::WEATHER_RAIN, stabilize_threads, thread::{SystemSignal, life::BattlerRec, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[cfg(all(feature = "obsolete", feature = "stresstest"))]
     #[tokio::test]

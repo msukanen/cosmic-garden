@@ -1,6 +1,6 @@
 //! "Combatant" traits.
 
-use crate::{combat::Damager, identity::IdentityQuery, item::container::variants::ContainerVariant, mob::{Stat, StatError, StatValue, core::EntitySize}, room::RoomWeak};
+use crate::{combat::Damager, identity::IdentityQuery, item::container::variants::ContainerVariant, mob::{Stat, StatValue, core::EntitySize}, room::RoomWeak};
 
 /// A trait for all "combatants".
 pub trait Combatant: IdentityQuery + Damager {

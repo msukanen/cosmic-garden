@@ -490,15 +490,15 @@ impl MobMut for Player {
 
 #[cfg(test)]
 mod player_tests {
-    use std::io::Cursor;
+    // use std::io::Cursor;
 
     use crate::{get_operational_mock_life, mob::traits::{Mob, MobMut}, stabilize_threads, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn hunger_drain() {
-        let mut b: Vec<u8> = vec![];
-        let mut s = Cursor::new(&mut b);
-        let (w,c,(mut state,p),d) = get_operational_mock_world().await;
+        // let mut b: Vec<u8> = vec![];
+        // let mut s = Cursor::new(&mut b);
+        let (w,c,(_,p),_) = get_operational_mock_world().await;
         get_operational_mock_life!(c,w);
         let c = c.out;
         start_mock_broadcast_listener!(c);
