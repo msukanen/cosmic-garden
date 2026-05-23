@@ -2,7 +2,7 @@
 
 use async_trait::async_trait;
 
-use crate::{cmd::{Command, CommandCtx}, err_tell_user, room::{RoomArc, environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, SPECIAL_ENVIRONMENT_CORROSIVE, SPECIAL_ENVIRONMENT_FOGGED_VISIBILITY, SPECIAL_ENVIRONMENT_FREEZER, SPECIAL_ENVIRONMENT_GAS_TRAP, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SPECIAL_ENVIRONMENT_INFERNO, SPECIAL_ENVIRONMENT_LOUD, SPECIAL_ENVIRONMENT_OBSTRUCTED_VISIBILITY, SPECIAL_ENVIRONMENT_STINKY, SPECIAL_ENVIRONMENT_TOXIC}}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, validate_access, validate_editor_mode};
+use crate::{cmd::{Command, CommandCtx}, err_tell_user, room::{RoomArc, environ::{GRAVITY_ANOMALY_HIGH_H, GRAVITY_ANOMALY_LOW_H, MemoryFogType, SPECIAL_ENVIRONMENT_CORROSIVE, SPECIAL_ENVIRONMENT_FOGGED_VISIBILITY, SPECIAL_ENVIRONMENT_FREEZER, SPECIAL_ENVIRONMENT_GAS_TRAP, SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY, SPECIAL_ENVIRONMENT_INFERNO, SPECIAL_ENVIRONMENT_LOUD, SPECIAL_ENVIRONMENT_OBSTRUCTED_VISIBILITY, SPECIAL_ENVIRONMENT_STINKY, SPECIAL_ENVIRONMENT_TOXIC}}, roomloc_or_bust, show_help, show_help_if_needed, tell_user, validate_access, validate_editor_mode};
 
 pub struct SetCommand;
 
@@ -93,7 +93,18 @@ async fn set_spec_env(ctx: &mut CommandCtx<'_>, room: &RoomArc, args: &str) {
 
 /// Set [memory fog][MemoryFogType]…
 async fn set_mem_fog(ctx: &mut CommandCtx<'_>, room: &RoomArc, args: &str) {
+    if args.is_empty() {
+        show_help!(ctx, "q special-mem-fog");
+    }
 
+    let fog = match &args[..1] {
+        "j" => Some(MemoryFogType::Jail),
+        "m" => Some(MemoryFogType::Mystic),
+        // none, false, etc.
+        "n"|"f" => None,
+        _ => show_help!(ctx, "q special-mem-fog")
+    };
+    room.write().await.set_mem_fog(fog);
 }
 
 /// Set the major [terrain][Terrain] type…
