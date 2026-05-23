@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{fs as async_fs, sync::{RwLock, Semaphore, mpsc}};
 
 use crate::{
-    combat::Battler, r#const::{CPU_CORES, PER_CORE_SEMAPHORE_BUCKET_SZ}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::{PlayerArc, PlayerWeak}, rng::*, room::{
+    combat::Battler, r#const::{CPU_CORES, PER_CORE_SEMAPHORE_BUCKET_SZ, ROOM_PULSE_NTH_TICK}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::{PlayerArc, PlayerWeak}, rng::*, room::{
         environ::*,
         locking::{Exit, ExitState}}, string::slug::Slugger, thread::SystemSignal, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World
 };
@@ -107,6 +107,7 @@ pub struct Room {
     #[serde(skip, default = "mock_broadcast")] pub(super) broadcast: tokio::sync::broadcast::Sender<Broadcast>,
     #[serde(skip, default = "mock_lifempsc")] pub(super) life_out: mpsc::UnboundedSender<SystemSignal>,
     #[serde(skip, default = "cg_rng_default")] rng: u64,
+    #[serde(skip, default)] last_tick: usize,
 }
 /// Room arc type.
 pub type RoomArc = Arc<RwLock<Room>>;
@@ -260,6 +261,7 @@ impl Room {
                     broadcast: mock_broadcast(),
                     rng: cg_rng_default(),
                     life_out: mock_lifempsc(),
+                    last_tick: 0,
                 }
             }
         })
@@ -345,6 +347,7 @@ impl Room {
             contents: room_inventory(),
             entities: HashMap::default(),
             rng: 0,
+            last_tick: 0,
         }
     }
 
@@ -556,7 +559,7 @@ impl Room {
     /// 
     /// By default we try to tick at 1/10th of the main core speed.
     pub async fn tick(&mut self, curr_tick: usize, room: RoomArc) {
-        if self.m_id.wrapping_add(curr_tick) % 10 != 0 { return ;}
+        should_pulse!(ret curr_tick, self.last_tick, self.m_id, ROOM_PULSE_NTH_TICK);
         
         // Deal with players first…
         for p_weak in self.who.values() {
@@ -608,10 +611,10 @@ impl Room {
             let room_env = self.special_environment;
             let room_terrain = self.terrain.clone();
             let curr_tick = curr_tick;
-            let batch_len = curr_ent_batch.len();
+            let batch_size = curr_ent_batch.len();
             join_set.spawn(async move {
                 let _permit = sem_clone.acquire_owned().await.unwrap();
-                let mut ai_acts = Vec::with_capacity(batch_len);
+                let mut ai_acts = Vec::with_capacity(batch_size);
                 // TODO see case #1 higher above about macro…
                 for e in curr_ent_batch {
                     if let Some(means) = e.write().await.tick(curr_tick, room_env, room_terrain) {
@@ -652,6 +655,8 @@ impl Room {
                         }
 
                         AiAction::Attack => {
+                            //#[cfg(test)]{ log::debug!("X wants to bonk someone/something!"); }
+
                             let mut vis: Vec<Battler> = self.who.values()
                                 .filter(|_| {
                                     self.rng = cg_rng(self.rng);
