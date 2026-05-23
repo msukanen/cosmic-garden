@@ -49,6 +49,13 @@ impl ApproxI32 for StatValue {
     }
 }
 
+impl ApproxI32 for Option<StatValue> {
+    fn approx_i32(&self) -> i32 {
+        let Some(v) = self else { return 0 };
+        (*v).approx_i32()
+    }
+}
+
 /// Stat types for [Stat::new].
 #[derive(Debug, Clone, Copy, Deserialize, Serialize, Hash, PartialEq, Eq)]
 pub enum StatType {
