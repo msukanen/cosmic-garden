@@ -675,3 +675,17 @@ context, but generally - as it stands for "investigate existence" - it shows
 various data about whatever is under scrutiny.
 """
 see_also = ["medit-iex", "iedit-iex"]
+[[help_pages]]
+id = "special-mem-fog"
+alias = ["special-mem-fog", "memory fog", "memfog"]
+access = "any_builder"
+title = "memory fog"
+contents = """
+"Memory fog" is something that affects e.g. player navigation (and possibly
+entity AI to some degree).
+
+1) "Jail" fog disables backtracking.
+2) "Mystic" fog scrambles directions. Essentially persistent confusion.
+
+Try keep usage of "jail" fog to the name implied environments...
+"""

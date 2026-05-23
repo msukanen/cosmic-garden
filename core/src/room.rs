@@ -422,13 +422,18 @@ impl Room {
         nearby.values().into_iter().map(|w| w.clone()).collect::<Vec<Weak<RwLock<Room>>>>()
     }
 
-    /// Get the [Room]'s [memory fog][MemoryFog], if any.
+    /// Get the [Room]'s [memory fog][MemoryFogType], if any.
     /// 
     // NOTE: Although one of the many special environments,
     //       MemoryFog "needs" a bit different treatment when
     //       dealing with e.g. city jail exits.
     pub fn memory_fog(&self) -> Option<MemoryFogType> {
         self.memory_fog.clone()
+    }
+
+    /// Set the [Room]'s [memory fog][MemoryFogType], if any.
+    pub fn set_mem_fog(&mut self, fog: Option<MemoryFogType>) {
+        self.memory_fog = fog;
     }
 
     /// Check if we have an [Exit] at [`dir`][Direction].
