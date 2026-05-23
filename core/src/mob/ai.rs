@@ -105,6 +105,7 @@ impl Ai {
                     if ai_do(self.rng, 0.005) {
                         maybe_action = AiAction::Emote { ent_m_id: e_tick_id, fmt: "[~e~] glares at the clouds for a moment." }.into();
                     }
+                    
                     self.rng = cg_rng(self.rng);
                     if ai_do(self.rng, 0.15) {
                         self.mental_state = AiMentalState::Angry;
