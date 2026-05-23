@@ -3,6 +3,6 @@ resolver = "3"
 members = ["core", "cosmicgarden-pm"]
 
 [profile.release]
-lto = "fat"
-codegen-units = 1
+#lto = "fat"
+#codegen-units = 1
 panic = "abort"
