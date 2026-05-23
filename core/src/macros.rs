@@ -129,3 +129,93 @@ macro_rules! lock2key {
         std::sync::Weak::as_ptr($weak) as *const() as usize
     }
 }
+
+/// Start a mock broadcast and such listener.
+#[cfg(test)]
+#[macro_export]
+macro_rules! start_mock_broadcast_listener {
+    ($sigs:expr) => {{
+        // report RSS every 2nd sec
+        let mut rss_report_interval = tokio::time::interval(std::time::Duration::from_secs(2));
+        let mut sys = sysinfo::System::new_all();
+        let pid = sysinfo::get_current_pid().expect("Unable to determine PID?!");
+        let mut peak_mem_kb: u64 = 0;
+        let mut peak_counted = 0;
+        let mut rx = $sigs.broadcast.subscribe();
+        tokio::spawn(async move {
+            log::debug!("Broadcast listener starting…");
+            loop {
+                tokio::select! {
+                    res = rx.recv() => match res {
+                        Ok(b) => match b {
+                            crate::io::broadcast::Broadcast::MessageInRoom2
+                                { message_actor, message_other, .. } => {
+                                    log::debug!("\n  → {message_actor}\n  → {message_other}");
+                                },
+                            crate::io::broadcast::Broadcast::BattleMessage3
+                                { message_atk, message_other, message_vct, ..} => {
+                                    log::debug!("  atk: \"{message_atk}\"");
+                                    log::debug!("  vct: \"{message_vct}\"");
+                                    log::debug!("other: \"{message_other}\"");
+                                },
+                            crate::io::broadcast::Broadcast::MessageSelf
+                                { to, message } => {
+                                    log::debug!("\nhunger: {to:?}\n{message}");
+                                }
+                            _ => {},
+                        }
+                        _ => {/* ignore errors */}
+                    },
+
+                    _ = rss_report_interval.tick() => {
+                        sys.refresh_memory();
+                        if let Some(process) = sys.process(pid) {
+                            peak_counted += 1;
+                            let curr_mem_use = process.memory();
+                            let kib = peak_mem_kb as f64 / 1024.0;
+                            let mib = kib / 1024.0;
+                            let gib = mib / 1024.0;
+                            if curr_mem_use > peak_mem_kb {
+                                peak_mem_kb = curr_mem_use;
+                                log::info!("[TELEMETRY] peak mem usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
+                                if gib > 40.0 {
+                                    log::warn!("[CRITICAL] Garden is occupying >40GB RAM.");
+                                }
+                            } else {
+                                if peak_counted % 2 == 0 {
+                                    log::trace!("[MEM] usage: {gib:.2}GB ({mib:.2}MB; {kib:.2}KB)");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        })
+    }};
+}
+
+/// Should something pulse?
+#[macro_export]
+macro_rules! should_pulse {
+    // true|false
+    ($now:ident, $earlier:expr, $tick_id:expr, $modulo:expr) => {{
+        ($tick_id.wrapping_add($now) % $modulo == 0)
+            || ($now - $earlier > $modulo)
+    }};
+
+    // ()-return, record matching pulse
+    (ret $now:ident, $earlier:expr, $tick_id:expr, $modulo:expr) => {{
+        crate::should_pulse!(if_not (); $now, $earlier, $tick_id, $modulo)
+    }};
+
+    // $val return; record matching pulse
+    (if_not $val:expr; $now:ident, $earlier:expr, $tick_id:expr, $modulo:expr) => {{
+        if ($tick_id.wrapping_add($now) % $modulo == 0)
+            || ($now - $earlier > $modulo) {
+            $earlier = $now;
+            true
+        } else {
+            return $val;
+        }
+    }};
+}

@@ -18,7 +18,7 @@ pub trait Damager {
 mod combatant_tests {
     use std::{io::Cursor, time::Duration};
 
-    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, translocate, world::mock_world::get_operational_mock_world};
+    use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, stabilize_threads, start_mock_broadcast_listener, thread::{SystemSignal, signal::SpawnType}, translocate, world::mock_world::get_operational_mock_world};
 
     /// Simulate 100 players' "gank squad" vs 1 (tough) goblin.
     /// 
@@ -93,31 +93,13 @@ mod combatant_tests {
         let jt = get_operational_mock_janitor!(c,w,d.0);
         let lt = get_operational_mock_librarian!(c,w);
         let gt = get_operational_mock_life!(c,w);
-        let c = c.out;// we don't need the c.recv part anymore here…
+        let c = c.out;
+        start_mock_broadcast_listener!(c);
         stabilize_threads!();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(25);
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(25);
-        let mut rx = c.broadcast.subscribe();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    Ok(b) = rx.recv() => match b {
-                        Broadcast::MessageInRoom2 { message_actor, message_other, .. } => {
-                            log::debug!("\n  → {message_actor}\n  → {message_other}");
-                        }
-                        Broadcast::BattleMessage3 { message_atk, message_other, message_vct, ..} => {
-                            log::debug!("  atk: \"{message_atk}\"");
-                            log::debug!("  vct: \"{message_vct}\"");
-                            log::debug!("other: \"{message_other}\"");
-                        }
-                        _ => {}
-                    }
-                }
-            }
-        });
-        stabilize_threads!(50);
         {
             tokio::spawn({async move {
                 let mut b: Vec<u8> = vec![];
@@ -148,22 +130,10 @@ mod combatant_tests {
         let gt = get_operational_mock_life!(c,w);
         let lt = get_operational_mock_librarian!(c,w);
         let c = c.out;// we don't need the c.recv part anymore here…
+        start_mock_broadcast_listener!(c);
         stabilize_threads!();
         c.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
-        let mut rx = c.broadcast.subscribe();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    Ok(b) = rx.recv() => match b {
-                        Broadcast::MessageInRoom2 { message_actor, message_other, .. } => {
-                            log::debug!("\n  → {message_actor}\n  → {message_other}");
-                        },
-                        _ => {}
-                    }
-                }
-            }
-        });
 
         // Get combat rolling…
         tokio::spawn({
