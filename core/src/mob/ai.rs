@@ -66,9 +66,9 @@ impl Ai {
     // By default we (usually) run AI at some fraction of the parent's [Room]'s Hz.
     pub fn tick(&mut self,
             e_tick_id: MachineId,
-            curr_tick: usize,
+            _curr_tick: usize,
             room_env: SpecialEnvironment,
-            room_ter: Option<Terrain>,
+            _room_ter: Option<Terrain>,
             faction: EntityFaction,
     ) -> Option<TickMeaning> {
         let mut maybe_state = None;
@@ -105,7 +105,7 @@ impl Ai {
                     if ai_do(self.rng, 0.005) {
                         maybe_action = AiAction::Emote { ent_m_id: e_tick_id, fmt: "[~e~] glares at the clouds for a moment." }.into();
                     }
-                    
+
                     self.rng = cg_rng(self.rng);
                     if ai_do(self.rng, 0.15) {
                         self.mental_state = AiMentalState::Angry;
