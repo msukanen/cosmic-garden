@@ -504,9 +504,9 @@ mod player_tests {
         // let mut s = Cursor::new(&mut b);
         let (w,c,(_,p),_) = get_operational_mock_world().await;
         get_operational_mock_life!(c,w);
-        let c = c.out;
         start_mock_broadcast_listener!(c);
         stabilize_threads!();
+        let c = c.out;
         log::debug!("pre-set sat curr {}", p.read().await.satiation());
         p.write().await.satiation_mut().set_curr(50.334).set_drain(-0.2);
         log::debug!("post-set sat curr {}", p.read().await.satiation());

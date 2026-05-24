@@ -149,36 +149,21 @@ mod combatant_tests {
     use crate::{cmd::{attack::AttackCommand, get::GetCommand, look::LookCommand, wield::WieldCommand}, ctx, get_operational_mock_janitor, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityMut, IdentityQuery}, io::{Broadcast, ClientState}, mob::core::Entity, stabilize_threads, start_mock_broadcast_listener, thread::{SystemSignal, signal::SpawnType}, translocate, world::mock_world::get_operational_mock_world};
 
     /// Simulate 100 players' "gank squad" vs 1 (tough) goblin.
-    /// 
-    /// Estimated runtime in debug mode exactly 4.05s (including all the sleeps).
     #[tokio::test]
     async fn simple_combat() {
         let (w, mut c,(_, p),_) = get_operational_mock_world().await;
-        // let's accommodate the 100+ "players"…
+        // default broadcast is 16, so let's accommodate the 100+ "players" instead…
         (c.out.broadcast, _) = tokio::sync::broadcast::channel::<Broadcast>( 128 );
         get_operational_mock_librarian!(c,w);
         get_operational_mock_life!(c,w);
-
+        start_mock_broadcast_listener!(c);
         stabilize_threads!();
 
         // Spawn a lil gobbo.
         let Ok(_) = Entity::new("goblin", &c.out).await else { panic!("Where'd the lil goblin's blueprint go?!"); };
         let _ = c.out.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None });
         stabilize_threads!(25);
-      
-        let mut rx = c.out.broadcast.subscribe();
-        tokio::spawn(async move {
-            loop {
-                tokio::select! {
-                    Ok(b) = rx.recv() => match b {
-                        Broadcast::MessageInRoom2 { message_actor, message_other, .. } => {
-                            log::debug!("\n  → {message_actor}\n  → {message_other}");
-                        },
-                        _ => {}
-                    }
-                }
-            }
-        });
+        // p1
         {
             let c = c.out.clone();
             let w = w.clone();
@@ -192,6 +177,7 @@ mod combatant_tests {
                 let _ = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("corpse"));
             });
         }
+        // p2..p100
         for x in 2..=100 {
         {
             let mut p2 = crate::player::Player::default();
@@ -215,17 +201,17 @@ mod combatant_tests {
         log::debug!("--terminated--")
     }
 
+    /// Knife fite - gobbo vs knife.
     #[tokio::test(flavor="multi_thread")]
     async fn knife_fite() {
         let (w,c,(_, p),d) = get_operational_mock_world().await;
         let jt = get_operational_mock_janitor!(c,w,d.0);
         let lt = get_operational_mock_librarian!(c,w);
         let gt = get_operational_mock_life!(c,w);
-        let c = c.out;
         start_mock_broadcast_listener!(c);
         stabilize_threads!();
+        let c = c.out;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
-        stabilize_threads!(25);
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
         stabilize_threads!(25);
         {
@@ -257,9 +243,9 @@ mod combatant_tests {
         let jt = get_operational_mock_janitor!(c,w,d.0);
         let gt = get_operational_mock_life!(c,w);
         let lt = get_operational_mock_librarian!(c,w);
-        let c = c.out;// we don't need the c.recv part anymore here…
         start_mock_broadcast_listener!(c);
         stabilize_threads!();
+        let c = c.out;// we don't need the c.recv part anymore here…
         c.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
 

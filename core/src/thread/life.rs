@@ -684,6 +684,11 @@ mod life_tests {
         log::debug!("Duration: {work_duration:?} | Throughput: {spawns_per_sec:.2} ent/sec | Entities: {spawn_c}");
     }
 
+    /// Goblin ocean
+    /// 
+    /// # Env vars
+    /// - `GOBBOCOUNT` (non-stresstest) to define count of gobbos.
+    /// - `GARDEN_TEST_RUNTIME` for runtime in millis within \[1_000, 30_000\].
     #[tokio::test]
     async fn goblin_ocean_batch() {
         #[cfg(feature = "stresstest")]
@@ -696,13 +701,14 @@ mod life_tests {
         let runtime: u64 = std::env::var("GARDEN_TEST_RUNTIME")
             .unwrap_or_else(|_| "5000".to_string())
             .parse::<u64>()
-            .unwrap_or_else(|_| 5_000);
+            .unwrap_or_else(|_| 5_000)// 5s default
+            .clamp(1_000, 30_000);// clamp between 1s and 30s
 
         let (w,c,_,j) = get_operational_mock_world().await;
         get_operational_mock_janitor!(c,w,j.0);
         get_operational_mock_life!(c,w);
         get_operational_mock_librarian!(c,w);
-        start_mock_broadcast_listener!(c.out);
+        start_mock_broadcast_listener!(c);
         let c = c.out;// we don't need the c.recv part anymore here…
         stabilize_threads!();
         let start_work = std::time::Instant::now();

@@ -141,7 +141,7 @@ macro_rules! start_mock_broadcast_listener {
         let pid = sysinfo::get_current_pid().expect("Unable to determine PID?!");
         let mut peak_mem_kb: u64 = 0;
         let mut peak_counted = 0;
-        let mut rx = $sigs.broadcast.subscribe();
+        let mut rx = $sigs.out.broadcast.subscribe();
         tokio::spawn(async move {
             log::debug!("Broadcast listener starting…");
             loop {
