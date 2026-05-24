@@ -736,6 +736,7 @@ mod life_tests {
         log::debug!("Duration: {work_duration:?} | Throughput: {spawns_per_sec:.2} ent/sec | Entities: {spawn_c}");
     }
 
+    /// See about loot!
     #[tokio::test]
     async fn loot_pinata() {
         let mut b: Vec<u8> = vec![];
@@ -789,6 +790,7 @@ mod life_tests {
         } else {
             panic!("Ok, where did the room vanish?");
         }
+        // little pause before final `look`.
         stabilize_threads!(100);
         p.write().await.access = Access::Builder;
         p.write().await.config.show_id = true;
