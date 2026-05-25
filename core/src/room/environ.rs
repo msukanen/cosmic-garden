@@ -34,14 +34,16 @@ pub const SPECIAL_ENVIRONMENT_SOUNDLESS: SpecialEnvironment = 1 << 6;// utterly 
             SPECIAL_ENVIRONMENT_SOUNDLESS;
 pub const SPECIAL_ENVIRONMENT_STINKY: SpecialEnvironment    = 1 << 8;// well beyond "just bad smelling"; not quite Gas Trap, but close enough…
 pub const SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY: SpecialEnvironment = 1 << 9;// generally high/low gravity notably differing from ye olde 1 g.
-    pub const GRAVITY_ANOMALY_HIGH_H: SpecialEnvironment = 1 << 10;
-    pub const GRAVITY_ANOMALY_LOW_H: SpecialEnvironment  = 1 << 11;
+    pub const GRAVITY_ANOMALY_HIGH_G: SpecialEnvironment = 1 << 10;
+    pub const GRAVITY_ANOMALY_LOW_G: SpecialEnvironment  = 1 << 11;
+    pub const GRAVITY_ANOMALY_ZERO_G: SpecialEnvironment = 1 << 12;
     pub const MASK_SP_ENV_GRAVITY: SpecialEnvironment
         =   SPECIAL_ENVIRONMENT_GRAVITY_ANOMALY|
-            GRAVITY_ANOMALY_HIGH_H|
-            GRAVITY_ANOMALY_LOW_H;
-pub const SPECIAL_ENVIRONMENT_OBSTRUCTED_VISIBILITY: SpecialEnvironment = 1 << 12;
-pub const SPECIAL_ENVIRONMENT_FOGGED_VISIBILITY: SpecialEnvironment     = 1 << 13;
+            GRAVITY_ANOMALY_HIGH_G|
+            GRAVITY_ANOMALY_LOW_G|
+            GRAVITY_ANOMALY_ZERO_G;
+pub const SPECIAL_ENVIRONMENT_OBSTRUCTED_VISIBILITY: SpecialEnvironment = 1 << 13;
+pub const SPECIAL_ENVIRONMENT_FOGGED_VISIBILITY: SpecialEnvironment     = 1 << 14;
 // Weather stuff…
 pub const WEATHER_RAIN: SpecialEnvironment = 1 << 32;
 pub const WEATHER_CLEAR: SpecialEnvironment = 1 << 33;
