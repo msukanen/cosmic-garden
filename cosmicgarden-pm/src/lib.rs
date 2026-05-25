@@ -679,6 +679,16 @@ fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     } else {
         quote! { crate::mob::core::EntitySize::Medium }
     };
+    let nat_atk_mul_content = if let Some(nam) = maybe_field!(data, "natural_atk_mul") {
+        quote! { self.#nam }
+    } else {
+        quote! { 1.0 }
+    };
+    let nat_atk_speed_content = if let Some(nas) = maybe_field!(data, "natural_atk_speed") {
+        quote! { self.#nas }
+    } else {
+        quote! { crate::item::weapon::DEFAULT_WEAPON_SPEED as u8 }
+    };
     quote! {
         impl crate::combat::Combatant for #name {
             fn hp(&self) -> &crate::mob::stat::Stat { &self.#hp_field }
@@ -690,6 +700,8 @@ fn generate_combatant_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
             fn str(&self) -> &crate::mob::stat::Stat { &self.#str_field }
             fn location(&self) -> std::sync::Weak<tokio::sync::RwLock<crate::room::Room>> { self.#loc_field.clone() }
             fn size(&self) -> crate::mob::core::EntitySize { #sz_content }
+            fn natural_atk_mul(&self) -> f32 { #nat_atk_mul_content }
+            fn natural_atk_speed(&self) -> u8 { #nat_atk_speed_content }
         }
     }
 }
@@ -703,7 +715,7 @@ pub fn combatant_derive(input: TokenStream) -> TokenStream {
     TokenStream::from(generate_combatant_impl(&input))
 }
 
-/// Derive read-only [Combatant] and mutable [Mut] both at once.
+/// Derive read-only [Combatant] and mutable [CombatantMut] both at once.
 #[proc_macro_derive(CombatantMut)]
 pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DeriveInput);
@@ -721,9 +733,18 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
     let str_field = req_field!(data, "strn");
     let inv_field = req_field!(data, "inventory");
     let loc_field = req_field!(data, "location");
-    let freeza_field = maybe_field!(data, "brain_freeze");
-    let brain_freeze_logic = if let Some(field) = freeza_field {
+    let brain_freeze_logic = if let Some(field) = maybe_field!(data, "brain_freeze") {
         quote! { self.#field = freeze; }
+    } else {
+        quote! {}
+    };
+    let nat_atk_mul_logic = if let Some(nam) = maybe_field!(data, "natural_atk_mul") {
+        quote! { self.#nam = multi }
+    } else {
+        quote! {}
+    };
+    let nat_atk_speed_logic = if let Some(nas) = maybe_field!(data, "natural_atk_speed") {
+        quote! { self.#nas = speed.max(10) }
     } else {
         quote! {}
     };
@@ -739,26 +760,18 @@ pub fn combatant_mut_derive(input: TokenStream) -> TokenStream {
             fn str_mut(&mut self) -> &mut crate::mob::stat::Stat { &mut self.#str_field }
             fn take_dmg(&mut self, dmg: Option<crate::mob::StatValue>) -> bool {
                 if let Some(dmg) = dmg {
-                    *(self.hp_mut()) -= dmg.abs();// no "healing" with dmg…
+                    // no "healing" with dmg…
+                    *(self.hp_mut()) -= dmg.abs();
                 }
                 self.is_dead()
             }
-
-            fn heal(&mut self, dmg: crate::mob::StatValue) {
-                *(self.hp_mut()) += dmg.abs();// no "dmg" with healing…
-            }
-
-            fn inventory(&mut self) -> &mut crate::item::container::variants::ContainerVariant {
-                &mut self.#inv_field
-            }
-
-            fn alter_brain_freeze(&mut self, freeze: bool) {
-                #brain_freeze_logic
-            }
-
-            fn location_mut(&mut self) -> &mut std::sync::Weak<tokio::sync::RwLock<crate::room::Room>> {
-                &mut self.#loc_field
-            }
+            fn set_natural_atk_mul(&mut self, multi: f32) { #nat_atk_mul_logic }
+            fn set_natural_atk_speed(&mut self, speed: u8) { #nat_atk_speed_logic }
+            // no "dmg" with healing…
+            fn heal(&mut self, dmg: crate::mob::StatValue) { *(self.hp_mut()) += dmg.abs(); }
+            fn inventory(&mut self) -> &mut crate::item::container::variants::ContainerVariant { &mut self.#inv_field }
+            fn alter_brain_freeze(&mut self, freeze: bool) { #brain_freeze_logic }
+            fn location_mut(&mut self) -> &mut std::sync::Weak<tokio::sync::RwLock<crate::room::Room>> { &mut self.#loc_field }
         }
     };
     TokenStream::from(quote! {

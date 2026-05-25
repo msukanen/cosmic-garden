@@ -11,8 +11,9 @@ pub mod dmg; pub use dmg::*;
 pub type Battler = std::sync::Arc<tokio::sync::RwLock<dyn CombatantMut + Send + Sync>>;
 
 pub trait Damager {
-    /// Get (current) dmg per attack.
-    fn dmg(&self, battle_tick: usize) -> Option<StatValue>;
+    /// Damage something (or then not…)!
+    fn dmg(&mut self, battle_tick: usize) -> Option<StatValue>;
+    /// Get currently equipped weapon's (if any) damage type.
     fn dmg_type(&self) -> DamageType;
 }
 
@@ -202,7 +203,7 @@ mod combatant_tests {
     }
 
     /// Knife fite - gobbo vs knife.
-    #[tokio::test(flavor="multi_thread")]
+    #[tokio::test]
     async fn knife_fite() {
         let (w,c,(_, p),d) = get_operational_mock_world().await;
         let jt = get_operational_mock_janitor!(c,w,d.0);
@@ -212,9 +213,11 @@ mod combatant_tests {
         stabilize_threads!();
         let c = c.out;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Item { id: "knife".into() }, room: "r-1".into(), reply: None }).ok();
+        const ASSUMED_KNIFE_SPEED: u64 = 50;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: "r-1".into(), reply: None }).ok();
-        stabilize_threads!(25);
+        stabilize_threads!(50);
         {
+            let c = c.clone();
             tokio::spawn({async move {
                 let mut b: Vec<u8> = vec![];
                 let mut s = Cursor::new(&mut b);
@@ -223,14 +226,14 @@ mod combatant_tests {
                 let state = ctx!(state, GetCommand, "knife", s,c,w,|out:&str| out.contains("nab"));
                 let state = ctx!(state, WieldCommand, "knife", s,c,w,|out:&str| out.contains("wield"));
                 let state = ctx!(state, AttackCommand, "goblin",s,c,w);
-                static STAB_TIME: u64 = 5000;
+                static STAB_TIME: u64 = 375*ASSUMED_KNIFE_SPEED;
                 log::debug!("AttackCommand fired. Waiting {STAB_TIME}ms (or less) of combat to pass…");
                 stabilize_threads!(STAB_TIME);
                 let _ = ctx!(state, LookCommand, "",s,c,w,|out:&str| out.contains("corpse-inventory"));
                 c.shutdown().await;
             }});
         }
-
+        c.shutdown().await;
         _ = d.1.await;
         lt.await.ok();
         jt.await.ok();

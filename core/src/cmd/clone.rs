@@ -80,7 +80,7 @@ impl Command for CloneCommand {
 mod cmd_clone_tests {
     use std::io::Cursor;
 
-    use crate::{cmd::{clone::CloneCommand, inventory::InventoryCommand, look::LookCommand}, combat::DamageType, r#const::SMALL_ITEM, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityQuery, uniq::Uuid}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{WeaponSize, WeaponSpec}}, roomloc_or_bust, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
+    use crate::{cmd::{clone::CloneCommand, inventory::InventoryCommand, look::LookCommand}, combat::DamageType, r#const::SMALL_ITEM, ctx, get_operational_mock_librarian, get_operational_mock_life, identity::{IdentityQuery, uniq::Uuid}, item::{Item, container::storage::Storage, ownership::Owner, weapon::{DEFAULT_WEAPON_SPEED, WeaponSize, WeaponSpec}}, roomloc_or_bust, stabilize_threads, thread::{SystemSignal, signal::SpawnType}, util::access::Access, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn cmd_clone_knife() {
@@ -99,6 +99,7 @@ mod cmd_clone_tests {
             weapon_size: WeaponSize::Small,
             base_dmg: 1.0,
             dmg_type: DamageType::Cut,
+            speed: DEFAULT_WEAPON_SPEED,
         });
         let real_id = item.id().to_string();
         p.write().await.inventory.try_insert(item).expect("Seriously? No space for a sm0l knife?");

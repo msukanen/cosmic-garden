@@ -1,6 +1,6 @@
 [package]
 name = "cosmic-garden"
-version = "0.1.29"
+version = "0.1.30"
 edition = "2024"
 authors = ["Markku Sukanen <markku.sukanen@gmail.com>"]
 license = "MIT OR Apache-2.0"
@@ -54,12 +54,13 @@ maintenance = { status = "experimental" }
 
 [features]
 default = []
-localtest = []
-obsolete = []
+localtest = ["default"]
+obsolete = ["default"]
 no-hibp = ["localtest"]
 stresstest_ai = ["localtest"]
 stresstest = ["localtest", "stresstest_ai"]
 use-criterion = ["localtest"]
+super-verbose = ["localtest"]
 
 [[bench]]
 name = "room_bench"

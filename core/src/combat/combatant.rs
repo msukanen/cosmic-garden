@@ -1,6 +1,6 @@
 //! "Combatant" traits.
 
-use crate::{combat::Damager, identity::IdentityQuery, item::container::variants::ContainerVariant, mob::{Stat, StatValue, core::EntitySize}, room::RoomWeak};
+use crate::{combat::Damager, identity::IdentityQuery, item::{container::variants::ContainerVariant, weapon::DEFAULT_WEAPON_SPEED}, mob::{Stat, StatValue, core::EntitySize}, room::RoomWeak};
 
 /// A trait for all "combatants".
 pub trait Combatant: IdentityQuery + Damager {
@@ -37,9 +37,20 @@ pub trait Combatant: IdentityQuery + Damager {
     }
 
     /// Is the [Combatant] dead?
-    fn is_dead(&self) -> bool { self.hp().is_dead().ok().unwrap() }
+    #[inline(always)]
+    fn is_dead(&self) -> bool {
+        // HP always reports proper bool in Ok().
+        self.hp().is_dead().unwrap()
+    }
     fn location(&self) -> RoomWeak;
     fn size(&self) -> EntitySize;
+    /// Natural attacks' dmg multiplier.
+    #[inline(always)]
+    fn natural_atk_mul(&self) -> f32 { 1.0 }
+
+    /// Natural attacks' speed.
+    #[inline(always)]
+    fn natural_atk_speed(&self) -> u8 { DEFAULT_WEAPON_SPEED }
 }
 
 /// Mutable trait for all "combatants".
@@ -75,4 +86,6 @@ pub trait CombatantMut : Combatant {
     fn inventory(&mut self) -> &mut ContainerVariant;
     fn alter_brain_freeze(&mut self, freeze: bool);
     fn location_mut(&mut self) -> &mut RoomWeak;
+    fn set_natural_atk_mul(&mut self, multi: f32);
+    fn set_natural_atk_speed(&mut self, speed: u8);
 }

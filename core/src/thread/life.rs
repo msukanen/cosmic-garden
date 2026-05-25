@@ -165,6 +165,10 @@ pub(crate) async fn life(
                         //       ...something like that, depending on dmg deliver type...
                         let (message_atk, message_vct, message_other) = match resolution {
                             Resolution::Inconclusive{atk_dmg, vct_dmg} => {
+                                match (atk_dmg, vct_dmg) {
+                                    (None, None) => continue,
+                                    _ => ()
+                                }
                                 let d_a = atk_dmg.approx_i32();
                                 let d_v = vct_dmg.approx_i32();
                                 (
@@ -270,7 +274,7 @@ pub(crate) async fn life(
                 // "global" battle interval counter
                 static mut C: usize = 1;
 
-                #[cfg(test)]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
+                #[cfg(all(test, feature = "super-verbose"))]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
                 let mut end_fight_for: Vec<usize> = vec![];
 
                 // navigate the aggro swamp…
@@ -285,7 +289,7 @@ pub(crate) async fn life(
                                     vct: vct.clone(),
                                     resolution: resolution.clone()
                                 }).ok();
-                                #[cfg(test)]{log::debug!("resolution = {resolution:?}");}
+                                #[cfg(all(test, feature = "super-verbose"))]{log::debug!("resolution = {resolution:?}");}
                                 match resolution {
                                     Resolution::AtkRetreat => { end_fight_for.push(*a_key);},
                                     Resolution::AtkVictory {..} => {
@@ -344,13 +348,13 @@ pub(crate) async fn life(
                 },
 
                 // Re-send item spawns to Librarian.
-                SystemSignal::Spawn {what: SpawnType::Item {id}, room, reply} => {
+                SystemSignal::Spawn { what: SpawnType::Item {id}, room, reply } => {
                     log::warn!("Routing SystemSignal::Spawn{{Item}} to Librarian. FIX the source, should go straight to Librarian and not via Life.");
-                    out.librarian.send(SystemSignal::Spawn { what: SpawnType::Item { id }, room, reply }).ok();
+                    out.librarian.send( SystemSignal::Spawn { what: SpawnType::Item { id }, room, reply }).ok();
                 }
 
                 // Spawn some [Entity].
-                SystemSignal::Spawn {what, room, reply} => {
+                SystemSignal::Spawn { what, room, reply } => {
                     #[cfg(test)]
                     {
                         spawn_count = spawn_count.saturating_sub(1);

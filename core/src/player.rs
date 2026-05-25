@@ -95,8 +95,9 @@ pub struct Player {
     /// Last place in the line of travels…
     #[serde(default, skip)]
     pub last_goto: Option<(Direction, RoomWeak)>,
-    #[serde(skip, default)]
-    last_tick: usize,
+    
+    #[serde(skip, default)] last_tick: usize,
+    #[serde(skip, default)] last_battle_tick: usize,
 
     #[serde(skip, default = "player_faction_default")]
     pub faction: EntityFaction,
@@ -112,6 +113,9 @@ pub struct Player {
     gender: GenderType,
     #[serde(skip, default = "player_no_op_wsz")] _no_op_wsz: WeaponSize,
     #[serde(skip, default = "player_no_op_esz")] _no_op_esz: EntitySize,
+    
+    #[cfg(test)]
+    #[serde(skip, default = "test_player_nat_atk_mul")] pub(crate) natural_atk_mul: f32,
 }
 
 /// Player arc type.
@@ -143,6 +147,7 @@ fn player_no_op_esz() -> EntitySize { EntitySize::Medium }
 fn player_no_op_wsz() -> WeaponSize { WeaponSize::Medium }
 fn player_fake_tick_id() -> MachineId { rand::random::<u64>() as MachineId }
 fn player_fake_system_ch() -> SignalSenderChannels { SignalChannels::fake_senders() }
+#[cfg(test)] fn test_player_nat_atk_mul() -> f32 { 20.0 }
 
 impl Player {
     pub fn owner_id<'a>(&'a self) -> &'a str { &self.owner_id }
@@ -347,6 +352,8 @@ impl Default for Player {
             system_ch: player_fake_system_ch(),
             weak: Weak::new(),
             last_tick: 0,
+            last_battle_tick: 0,
+            #[cfg(test)] natural_atk_mul: test_player_nat_atk_mul(),
         }
     }
 }
@@ -441,16 +448,8 @@ impl FactionMut for Player {
 }
 
 impl Damager for Player {
-    fn dmg(&self, battle_tick: usize) -> Option<StatValue> {
-        let Some(Item::Weapon(w)) = &self.equipped_weapon else {
-            return if battle_tick % (DEFAULT_WEAPON_SPEED as usize) == 0 {
-                Some(self.str() / 100.0)// Str(S)/100; S=100 by default (for human at least).
-            } else { None }
-        };
-        
-        if battle_tick % (w.speed() as usize) == 0 {
-            Some(w.base_dmg * str_based_dmg_mul(self.str().current(), false) * (self.size().rel_vs_weapon(&w.weapon_size)))
-        } else { None }
+    fn dmg(&mut self, battle_tick: usize) -> Option<StatValue> {
+        combat_dmg!(self, battle_tick)
     }
 
     fn dmg_type(&self) -> DamageType {
@@ -466,7 +465,7 @@ impl Gender for Player {
     /// Set initial gender.
     //
     // Gender for [Player] characters cannot be changed once set,
-    // no matter what "opinion" WOKE has about it - it's DNA, not psychological.
+    // no matter what "opinion" WOKE has about it — it's DNA, not psychological.
     //
     fn set_gender(&mut self, gender: GenderType) -> Result<(), GenderError> {
         self.gender = match self.gender {

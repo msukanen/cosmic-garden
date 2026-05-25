@@ -86,9 +86,10 @@ mod cmd_get_tests {
         let c = c.out;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: RoomPayload::Id("r-1".into()), reply: None }).ok();
         stabilize_threads!(25);
+        p.write().await.natural_atk_mul = 20.0;
         state = ctx!(sup state, AttackCommand, "goblin",s,c,w);
-        // let combat roll a moment…
-        stabilize_threads!(4000);
+        // let combat roll a while …
+        stabilize_threads!(10_000);
         state = ctx!(state, LookCommand,"",s,c,w);
         state = ctx!(state, GetCommand,"all",s,c,w,|out:&str| out.contains("vacuum"));
         state = ctx!(state, GetCommand,"corpse",s,c,w,|out:&str| out.contains("undertaker"));

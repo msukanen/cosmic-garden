@@ -219,3 +219,29 @@ macro_rules! should_pulse {
         }
     }};
 }
+
+/// "To dmg or to not dmg"…
+macro_rules! combat_dmg {
+    ($self:ident, $battle_tick:ident) => {{
+        use crate::combat::combatant::Combatant;
+        // already acted?
+        if $self.last_battle_tick == $battle_tick { return None; }
+
+        let (w, w_sz) = {
+            // is it time to hit…?
+            let Some(Item::Weapon(w)) = &mut $self.equipped_weapon else {
+                // bare hands
+                return if $battle_tick % ($self.natural_atk_speed() as usize) == 0 {
+                    Some(($self.str() / 100.0) * $self.natural_atk_mul())// Str(S)/100; S=100 by default (for human at least).
+                } else { None }
+            };
+            let w_sz = w.weapon_size;
+            (w, w_sz)
+        };
+        // …with a weapon:
+        if let Some(dmg) = w.dmg($battle_tick) {
+            $self.last_battle_tick = $battle_tick;
+            Some(dmg * crate::item::weapon::str_based_dmg_mul($self.str().current(), false) * ($self.size().rel_vs_weapon(&w_sz)))
+        } else { None }
+    }};
+}

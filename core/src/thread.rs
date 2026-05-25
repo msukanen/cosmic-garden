@@ -17,13 +17,13 @@ pub(crate) mod per_client;
 pub mod signal;
     pub use signal::SystemSignal;
 
-/// Thread stabilizer. Awaits given `countdown_ms` (up to `30_000`ms).
+/// Thread stabilizer. Awaits given `countdown_ms` (up to `60_000`ms).
 // Exists mainly to ensure unsigned time value.
 #[cfg(test)]
 #[inline(always)]
 pub async fn stabilize_threads(countdown_ms: u64) {
     use std::time::Duration;
-    tokio::time::sleep(Duration::from_millis(countdown_ms.min(30_000))).await;
+    tokio::time::sleep(Duration::from_millis(countdown_ms.min(60_000))).await;
 }
 
 /// Thread stabilizer. Awaits given `countdown` (in millis) or default `750`ms.

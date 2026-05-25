@@ -140,11 +140,13 @@ pub struct Entity {
     faction: EntityFaction,
     max_weapon_size: WeaponSize,
     size: EntitySize,
+    #[serde(default = "entity_nat_atk_mul_default")]   natural_atk_mul: f32,
+    #[serde(default = "entity_nat_atk_speed_default")] natural_atk_speed: u8,
     pub(crate) equipped_weapon: Option<Item>,
     #[serde(default = "entity_inv_default")] inventory: ContainerVariant,
     
     // AI stuff…
-    #[serde(default, skip)] brain_freeze: bool,
+    #[serde(skip, default)] brain_freeze: bool,
     #[serde(default)] ai: Ai,
     // tick scatter…
     #[serde(skip, default)] last_battle_tick: usize,
@@ -182,12 +184,25 @@ impl Default for Entity {
             last_ai_tick: 0,
             last_inv_tick: 0,
             last_battle_tick: 0,
+            natural_atk_mul: entity_nat_atk_mul_default(),
+            natural_atk_speed: entity_nat_atk_speed_default(),
         }
     }
 }
 
+#[inline(always)]
 fn entity_inv_default() -> ContainerVariant {
     ContainerVariant::raw(ContainerVariantType::Corpse)
+}
+
+#[inline(always)]
+fn entity_nat_atk_mul_default() -> f32 {
+    1.0
+}
+
+#[inline(always)]
+fn entity_nat_atk_speed_default() -> u8 {
+    DEFAULT_WEAPON_SPEED
 }
 
 #[derive(Debug)]
@@ -298,19 +313,14 @@ impl Entity {
 }
 
 impl Damager for Entity {
-    fn dmg(&self, battle_tick: usize) -> Option<StatValue> {
-        let Some(Item::Weapon(w)) = &self.equipped_weapon else {
-            return if battle_tick % (DEFAULT_WEAPON_SPEED as usize) == 0 {
-                (1.0 * self.str() / 100.0).into()
-            } else { None }
-        };
-        if battle_tick % (w.speed() as usize) == 0 {
-            Some(w.base_dmg * str_based_dmg_mul(self.str().current(), true) * (self.size.rel_vs_weapon(&w.weapon_size)))
-        } else { None }
+    fn dmg(&mut self, battle_tick: usize) -> Option<StatValue> {
+        combat_dmg!(self, battle_tick)
     }
 
     fn dmg_type(&self) -> crate::combat::DamageType {
-        let Some(Item::Weapon(w)) = &self.equipped_weapon else { return DamageType::Crush; };
+        let Some(Item::Weapon(w)) = &self.equipped_weapon else {
+            return DamageType::Crush;
+        };
         w.dmg_type()
     }
 }
