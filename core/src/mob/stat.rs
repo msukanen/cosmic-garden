@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use serde::{Deserialize, Serialize};
 use dicebag::InclusiveRandomRange;
 
-use crate::{r#const::SIZE_BALANCE, item::{container::storage::StorageSpace, weapon::WeaponSize}, room::environ::{SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_LOUD, SPECIAL_ENVIRONMENT_STINKY, SpecialEnvironment, Terrain}, traits::{TickMeaning, Tickable}, util::approx::ApproxI32};
+use crate::{r#const::SIZE_BALANCE, item::{container::storage::StorageSpace, weapon::WeaponSize}, room::environ::{GRAVITY_ANOMALY_HIGH_G, GRAVITY_ANOMALY_LOW_G, GRAVITY_ANOMALY_ZERO_G, SPECIAL_ENVIRONMENT_DEFAULT, SPECIAL_ENVIRONMENT_FREEZER, SPECIAL_ENVIRONMENT_INFERNO, SPECIAL_ENVIRONMENT_LOUD, SPECIAL_ENVIRONMENT_STINKY, SpecialEnvironment, Terrain}, traits::{TickMeaning, Tickable}, util::approx::ApproxI32};
 
 pub const MAX_STAT_VALUE: StatValue = 1000.0;
 // TODO: convert raw TICKS_BETWEEN_DRAIN into some runtime calibrateable type.
@@ -118,13 +118,13 @@ pub enum Stat {
     /// Mental power. Also "mana" in some contexts.
     MP { curr: StatValue, max: StatValue, drain: StatValue },
     /// Sanity, or insanity…
-    San { curr: StatValue, max: StatValue, drain: StatValue },
+    San { curr: StatValue, max: StatValue, drain: StatValue, room_env: SpecialEnvironment },
     /// Stamina.
     SN { curr: StatValue, max: StatValue, drain: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
     /// Braininess, IQ, etc.
     Brn { curr: StatValue, max: StatValue, room_env: SpecialEnvironment },
     /// Strength.
-    Str { curr: StatValue, max: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
+    Str { curr: StatValue, max: StatValue, room_env: SpecialEnvironment },
     /// Nimbleness, dexterity, etc.
     Nim { curr: StatValue, max: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
     /// Reputation. Rep doesn't have max value, but it does clamp to -100 at bottom range.
@@ -139,10 +139,10 @@ impl Stat {
             StatType::Brn => Self::Brn { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT },
             StatType::HP  => Self::HP { curr: 100.0, max: 100.0 },
             StatType::Nim => Self::Nim { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
-            StatType::Str => Self::Str { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
+            StatType::Str => Self::Str { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT },
             StatType::Rep => Self::Rep { curr: 100.0 },
             StatType::MP  => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
-            StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0 },
+            StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT },
             StatType::SN  => Self::SN { curr: 100.0, max: 100.0, drain: 0.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
             StatType::Sat => Self::Sat { curr: 100.0, max: 100.0, drain: -(DRAIN_EPSILON*17.4) },// ≈8h for 100→50
         }
@@ -346,16 +346,75 @@ impl Stat {
             Self::Brn { room_env, ..} => 
                 (if (*room_env) & SPECIAL_ENVIRONMENT_LOUD != 0 { -15.0 } else { 0.0 })
                     +
-                (if (*room_env) & SPECIAL_ENVIRONMENT_STINKY != 0 { -5.0 } else { 0.0 }),
+                (if (*room_env) & SPECIAL_ENVIRONMENT_STINKY != 0 { -5.0 } else { 0.0 })
+                    +
+                (if (*room_env) & SPECIAL_ENVIRONMENT_INFERNO != 0 { -15.0 } else { 0.0 })
+                ,
+
             Self::Nim { room_env, room_ter, ..} => {
-                0.0 // TODO how environ affects Nim
-            },
-            Self::SN { room_env, room_ter, ..} => {
-                0.0 // TODO how environ affects SN
-            },
-            Self::Str { room_env, room_ter, ..} => {
-                0.0 // TODO how environ affects Str
+                let f_mod = if (*room_env) & SPECIAL_ENVIRONMENT_FREEZER != 0 { -10.0 } else { 0.0 };
+                let terrain = room_ter.as_ref();
+                let is_underwater = matches!(terrain, Some(Terrain::Underwater));
+                let g_mod = if (*room_env) & GRAVITY_ANOMALY_HIGH_G != 0 {
+                    if is_underwater { -5.0 } else { -50.0 }
+                } else if (*room_env) & GRAVITY_ANOMALY_LOW_G != 0 {
+                    if is_underwater { -10.0 } else { -33.0 }
+                } else { 0.0 };
+
+                let t_mod = match room_ter {
+                    None => 0.0,
+                    Some(t) => match t {
+                        Terrain::DeepMud => -40.0,
+                        Terrain::PartialSubmerge => -66.0,
+                        Terrain::Sand => -20.0,
+                        Terrain::Sharp => -33.0,
+                        Terrain::Slippery => -20.0,
+                        Terrain::Underwater => -75.0,
+                    }
+                };
+
+                f_mod + g_mod + t_mod
             }
+
+            Self::SN { room_env, room_ter, ..} => {
+                let i_mod = if (*room_env) & SPECIAL_ENVIRONMENT_INFERNO != 0 { -66.0 } else { 0.0 };
+                let f_mod = if (*room_env) & SPECIAL_ENVIRONMENT_FREEZER != 0 { -5.0 } else { 0.0 };
+                let is_underwater = matches!(room_ter, Some(Terrain::Underwater));
+                let g_mod =
+                    if (*room_env) & GRAVITY_ANOMALY_HIGH_G != 0 {
+                        if is_underwater { -2.0 }
+                        else { -50.0 }
+                    } else { 0.0 };
+                let t_mod = match room_ter {
+                    None => 0.0,
+                    Some(t) => match t {
+                        Terrain::Underwater => -15.0,
+                        Terrain::PartialSubmerge => -12.5,
+                        Terrain::DeepMud => -10.0,
+                        Terrain::Sand => -7.5,
+                        _ => 0.0
+                    }
+                };
+                
+                i_mod + f_mod + g_mod + t_mod
+            }
+
+            Self::Str { room_env, ..} => {
+                if (*room_env) & GRAVITY_ANOMALY_HIGH_G != 0 {
+                    -30.0
+                } else { 0.0 }
+            }
+
+            Self::San { room_env, .. } => {
+                (if (*room_env) & SPECIAL_ENVIRONMENT_INFERNO != 0 { -20.0 } else { 0.0 })
+                    +
+                (if (*room_env) & GRAVITY_ANOMALY_ZERO_G != 0 {
+                    -25.0
+                } else if (*room_env) & GRAVITY_ANOMALY_HIGH_G != 0 {
+                    -10.0
+                } else { 0.0 })
+            }
+
             _ => 0.0
         })
     }
@@ -466,14 +525,17 @@ impl Display for Stat {
 
 #[async_trait]
 impl Tickable for Stat {
-    // NOTE stat ticks don't have global effects…
+    /// Tick a [Stat].
+    /// 
+    /// # Returns
+    /// `None` — stat ticks don't carry meaning for outside world.
     fn tick(&mut self, _: usize, r_env: SpecialEnvironment, r_ter: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         // apply environment and terrain effects, if any (for this [Stat]).
         match self {
+            Self::Str {room_env,..} |
             Self::Brn {room_env,..} => *room_env = r_env,
 
             Self::Nim {room_env, room_ter, ..} |
-            Self::Str {room_env, room_ter, ..} |
             Self::SN {room_env, room_ter, ..}  => { *room_env = r_env; *room_ter = r_ter.clone() },
             
             Self::Rep {..} |
