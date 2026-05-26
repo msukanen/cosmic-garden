@@ -1,6 +1,6 @@
 # Cosmic Garden AI Language
 
-```cgai
+```cgail
 ai_tick {
     if behavior is Aggressive {
         scan room.who and if [vct] {
