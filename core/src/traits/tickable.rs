@@ -7,7 +7,7 @@ use crate::{item::consumable::EffectType, mob::ai::*, room::environ::{Environmen
 /// A trait for anything with (un)steady tick rate.
 #[async_trait]
 pub trait Tickable {
-    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>>;
+    fn tick(&mut self, curr_tick: u64, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>>;
 }
 
 /// - "What it means, what it means?"

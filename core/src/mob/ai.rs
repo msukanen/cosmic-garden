@@ -66,7 +66,7 @@ impl Ai {
     // By default we (usually) run AI at some fraction of the parent's [Room]'s Hz.
     pub fn tick(&mut self,
             e_tick_id: MachineId,
-            _curr_tick: usize,
+            _curr_tick: u64,
             room_env: SpecialEnvironment,
             _room_ter: Option<Terrain>,
             faction: EntityFaction,

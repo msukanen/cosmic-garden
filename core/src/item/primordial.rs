@@ -333,7 +333,7 @@ impl Metamorphize for PrimordialItem {
 
 #[async_trait]
 impl Tickable for PrimordialItem {
-    fn tick(&mut self, _: usize, _: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, _: u64, _: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         #[cfg(all(debug_assertions, feature = "stresstest"))]{
             use crate::general_tick;
 

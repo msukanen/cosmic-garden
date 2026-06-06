@@ -361,8 +361,8 @@ impl World {
 
 impl World {
     /// Tick the world!
-    pub async fn tick(&mut self, curr_tick: usize) {
-        #[allow(dead_code)] static mut WC: usize = 0;
+    pub async fn tick(&mut self, curr_tick: u64) {
+        #[allow(dead_code)] static mut WC: u64 = 0;
         
         let mut join_set = JoinSet::new();
 

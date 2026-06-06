@@ -107,7 +107,7 @@ pub struct Room {
     #[serde(skip, default = "mock_broadcast")] pub(super) broadcast: tokio::sync::broadcast::Sender<Broadcast>,
     #[serde(skip, default = "mock_lifempsc")] pub(super) life_out: mpsc::UnboundedSender<SystemSignal>,
     #[serde(skip, default = "cg_rng_default")] rng: u64,
-    #[serde(skip, default)] last_tick: usize,
+    #[serde(skip, default)] last_tick: u64,
 }
 /// Room arc type.
 pub type RoomArc = Arc<RwLock<Room>>;
@@ -563,7 +563,7 @@ impl Room {
     /// Tick the [Room].
     /// 
     /// By default we try to tick at 1/10th of the main core speed.
-    pub async fn tick(&mut self, curr_tick: usize, room: RoomArc) {
+    pub async fn tick(&mut self, curr_tick: u64, room: RoomArc) {
         should_pulse!(ret curr_tick, self.last_tick, self.m_id, ROOM_PULSE_NTH_TICK);
         
         // Deal with players first…

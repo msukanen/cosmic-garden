@@ -149,10 +149,10 @@ pub struct Entity {
     #[serde(skip, default)] brain_freeze: bool,
     #[serde(default)] ai: Ai,
     // tick scatter…
-    #[serde(skip, default)] last_battle_tick: usize,
-    #[serde(skip, default)] last_stat_tick: usize,
-    #[serde(skip, default)] last_ai_tick: usize,
-    #[serde(skip, default)] last_inv_tick: usize,
+    #[serde(skip, default)] last_battle_tick: u64,
+    #[serde(skip, default)] last_stat_tick: u64,
+    #[serde(skip, default)] last_ai_tick: u64,
+    #[serde(skip, default)] last_inv_tick: u64,
 }
 
 impl Default for Entity {
@@ -313,7 +313,7 @@ impl Entity {
 }
 
 impl Damager for Entity {
-    fn dmg(&mut self, battle_tick: usize) -> Option<StatValue> {
+    fn dmg(&mut self, battle_tick: u64) -> Option<StatValue> {
         combat_dmg!(self, battle_tick)
     }
 
@@ -327,7 +327,7 @@ impl Damager for Entity {
 
 #[async_trait]
 impl Tickable for Entity {
-    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, curr_tick: u64, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         // tick stats at 1/10th of our [Room]'s pace.
         if should_pulse!(curr_tick, self.last_stat_tick, self.tick_id, STAT_PULSE_NTH_TICK) {
             self.last_stat_tick = curr_tick;

@@ -25,7 +25,7 @@ impl Affect {
 
 #[async_trait]
 impl Tickable for Affect {
-    fn tick(&mut self, _: usize, _: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, _: u64, _: SpecialEnvironment, _: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         match self {
             // Decays:
             Self::Effect { remaining: Some(1), kind } => {

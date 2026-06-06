@@ -199,8 +199,8 @@ macro_rules! start_mock_broadcast_listener {
 macro_rules! should_pulse {
     // true|false
     ($now:ident, $earlier:expr, $tick_id:expr, $modulo:expr) => {{
-        ($tick_id.wrapping_add($now) % $modulo == 0)
-            || ($now - $earlier > $modulo)
+        ($tick_id.wrapping_add($now as usize) % ($modulo as usize) == 0)
+            || (($now as usize) - ($earlier as usize) > ($modulo as usize))
     }};
 
     // ()-return, record matching pulse
@@ -210,9 +210,9 @@ macro_rules! should_pulse {
 
     // $val return; record matching pulse
     (if_not $val:expr; $now:ident, $earlier:expr, $tick_id:expr, $modulo:expr) => {{
-        if ($tick_id.wrapping_add($now) % $modulo == 0)
-            || ($now - $earlier > $modulo) {
-            $earlier = $now;
+        if ($tick_id.wrapping_add($now as usize) % ($modulo as usize) == 0)
+            || (($now as usize) - ($earlier as usize) > ($modulo as usize)) {
+            $earlier = ($now as u64);
             true
         } else {
             return $val;
@@ -231,7 +231,7 @@ macro_rules! combat_dmg {
             // is it time to hit…?
             let Some(Item::Weapon(w)) = &mut $self.equipped_weapon else {
                 // bare hands
-                return if $battle_tick % ($self.natural_atk_speed() as usize) == 0 {
+                return if $battle_tick % ($self.natural_atk_speed() as u64) == 0 {
                     Some(($self.str() / 100.0) * $self.natural_atk_mul())// Str(S)/100; S=100 by default (for human at least).
                 } else { None }
             };

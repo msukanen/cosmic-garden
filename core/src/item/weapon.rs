@@ -92,8 +92,8 @@ fn wpn_speed_default() -> u8 { DEFAULT_WEAPON_SPEED }
 
 impl Damager for WeaponSpec {
     /// Get the amount of dmg the weapon (theoretically) does at given `battle_tick`, if any.
-    fn dmg(&mut self, battle_tick: usize) -> Option<StatValue> {
-        if battle_tick % (self.speed as usize) == 0 {
+    fn dmg(&mut self, battle_tick: u64) -> Option<StatValue> {
+        if battle_tick % (self.speed as u64) == 0 {
             self.base_dmg.into()
         } else {
             None

@@ -96,8 +96,8 @@ pub struct Player {
     #[serde(default, skip)]
     pub last_goto: Option<(Direction, RoomWeak)>,
     
-    #[serde(skip, default)] last_tick: usize,
-    #[serde(skip, default)] last_battle_tick: usize,
+    #[serde(skip, default)] last_tick: u64,
+    #[serde(skip, default)] last_battle_tick: u64,
 
     #[serde(skip, default = "player_faction_default")]
     pub faction: EntityFaction,
@@ -378,7 +378,7 @@ impl Accessor for Player {
 
 #[async_trait]
 impl Tickable for Player {
-    fn tick(&mut self, curr_tick: usize, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, curr_tick: u64, room_env: SpecialEnvironment, room_terrain: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         should_pulse!(if_not None; curr_tick, self.last_tick, self.tick_id, STAT_PULSE_NTH_TICK);
         {
             self.hp_mut().tick(curr_tick, room_env, room_terrain);
@@ -448,7 +448,7 @@ impl FactionMut for Player {
 }
 
 impl Damager for Player {
-    fn dmg(&mut self, battle_tick: usize) -> Option<StatValue> {
+    fn dmg(&mut self, battle_tick: u64) -> Option<StatValue> {
         combat_dmg!(self, battle_tick)
     }
 

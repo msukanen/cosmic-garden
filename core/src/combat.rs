@@ -12,7 +12,7 @@ pub type Battler = std::sync::Arc<tokio::sync::RwLock<dyn CombatantMut + Send + 
 
 pub trait Damager {
     /// Damage something (or then not…)!
-    fn dmg(&mut self, battle_tick: usize) -> Option<StatValue>;
+    fn dmg(&mut self, battle_tick: u64) -> Option<StatValue>;
     /// Get currently equipped weapon's (if any) damage type.
     fn dmg_type(&self) -> DamageType;
 }
@@ -70,7 +70,7 @@ pub enum Resolution {
 /// - `atk` vs.
 /// - `vct`
 /// - …at `room`.
-pub(super) async fn punt(battle_tick: usize, atk: Battler, vct: Battler, room: &RoomArc) -> Resolution {
+pub(super) async fn punt(battle_tick: u64, atk: Battler, vct: Battler, room: &RoomArc) -> Resolution {
     let mut a = atk.write().await;
     let mut v = vct.write().await;
     // reality warp just before .writes?

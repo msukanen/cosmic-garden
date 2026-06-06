@@ -529,7 +529,7 @@ impl Tickable for Stat {
     /// 
     /// # Returns
     /// `None` — stat ticks don't carry meaning for outside world.
-    fn tick(&mut self, _: usize, r_env: SpecialEnvironment, r_ter: Option<Terrain>) -> Option<Vec<TickMeaning>> {
+    fn tick(&mut self, _: u64, r_env: SpecialEnvironment, r_ter: Option<Terrain>) -> Option<Vec<TickMeaning>> {
         // apply environment and terrain effects, if any (for this [Stat]).
         match self {
             Self::Str {room_env,..} |

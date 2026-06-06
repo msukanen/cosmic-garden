@@ -98,7 +98,7 @@ pub enum SystemSignal {
     AbortAllBattle,
     
     #[cfg(test)]
-    CountSpawns { num: usize, out: tokio::sync::oneshot::Sender<()> },
+    CountSpawns { num: u64, out: tokio::sync::oneshot::Sender<()> },
 }
 
 #[derive(Debug, Clone)]

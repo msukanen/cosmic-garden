@@ -234,11 +234,11 @@ pub(crate) async fn life(
 
     log::info!("Life thread firing up…");
     #[cfg(test)]
-    let mut spawn_count: usize = usize::MAX;
+    let mut spawn_count: u64 = u64::MAX;
     #[cfg(test)]
     let mut spawn_out: Option<tokio::sync::oneshot::Sender<()>> = None;
 
-    let mut tick = 0;
+    let mut tick: u64 = 0;
     #[cfg(debug_assertions)]
     let start_time = Instant::now();
     loop {
@@ -272,7 +272,7 @@ pub(crate) async fn life(
             _ = battle_interval.tick() => {
                 if bs.active.is_empty() { continue; }
                 // "global" battle interval counter
-                static mut C: usize = 1;
+                static mut C: u64 = 1;
 
                 #[cfg(all(test, feature = "super-verbose"))]{ log::debug!("Battle-tick… {}", unsafe {C} ); }
                 let mut end_fight_for: Vec<usize> = vec![];
