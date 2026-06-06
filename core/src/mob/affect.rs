@@ -10,10 +10,10 @@ use crate::{general_tick, identity::uniq::Uuid, item::consumable::EffectType, ro
 /// All sorts of affects from good to bad to something else…
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub enum Affect {
-    Effect { kind: EffectType, remaining: Option<usize> },
-    DelayedEffect { kind: EffectType, remaining: Option<usize>, delay: Option<usize> },
-    RushNCrash { kind: EffectType, remaining: Option<usize>, crash_kind: EffectType, delay: Option<usize>, crash_remain: Option<usize> },
-    HardcorePending { remaining: Option<usize> },
+    Effect { kind: EffectType, remaining: Option<u64> },
+    DelayedEffect { kind: EffectType, remaining: Option<u64>, delay: Option<u64> },
+    RushNCrash { kind: EffectType, remaining: Option<u64>, crash_kind: EffectType, delay: Option<u64>, crash_remain: Option<u64> },
+    HardcorePending { remaining: Option<u64> },
     Expired,
 }
 

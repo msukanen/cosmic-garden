@@ -91,8 +91,8 @@ pub struct PrimordialItem {
     
     // Item::Consumable -specific:
     pub nutrition: Option<EffectType>,
-    pub affect_ticks: Option<usize>,
-    pub rots_in_ticks: Option<usize>,
+    pub affect_ticks: Option<u64>,
+    pub rots_in_ticks: Option<u64>,
     pub matter_state: Option<MatterState>,
     // Item::Weapon -specific:
     pub weapon_size: Option<WeaponSize>,

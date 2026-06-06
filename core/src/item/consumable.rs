@@ -56,8 +56,8 @@ pub struct ConsumableMatter {
     /// * `None` as [uses]; technically same as ∞.
     pub(crate) uses: Option<usize>,
     /// How many ticks each use lasts, if any.
-    pub(crate) affect_ticks: Option<usize>,
-    pub(crate) rots_in_ticks: Option<usize>,
+    pub(crate) affect_ticks: Option<u64>,
+    pub(crate) rots_in_ticks: Option<u64>,
 }
 
 impl Matter for ConsumableMatter {
