@@ -34,6 +34,7 @@ mod item;
 mod mob;
 mod password;
 mod player;
+mod quest;
 mod rng;
 mod room;
 mod serial;

@@ -1,3 +1,4 @@
+//! "lib" version; for Criterion-based tests only.
 #[cfg(feature = "use-criterion")] pub mod identity;
 #[cfg(feature = "use-criterion")] pub mod mob;
 #[cfg(feature = "use-criterion")] pub mod room;
