@@ -1,4 +1,7 @@
-use criterion::{criterion_group, criterion_main, Criterion};
+#[cfg(feature = "use-criterion")]
+mod criterion_benchmarking {
+
+    use criterion::{criterion_group, criterion_main, Criterion};
 use std::sync::Arc;
 use tokio::sync::{RwLock, broadcast};
 use cosmic_garden::room::{Room, environ::SPECIAL_ENVIRONMENT_DEFAULT};
@@ -70,3 +73,7 @@ fn bench_room_tick(c: &mut Criterion) {
 
 criterion_group!(benches, bench_room_tick);
 criterion_main!(benches);
+
+}
+#[cfg(not(feature = "use-criterion"))]
+fn main() {}
