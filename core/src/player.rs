@@ -14,8 +14,7 @@ use crate::{
     help::HelpPage,
     identity::{IdentityQuery, MachineId, MachineIdentity},
     io::{Broadcast, ClientState, player_save_fp},
-    item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}},
-    weapon::{DEFAULT_WEAPON_SPEED, WeaponSize, str_based_dmg_mul}},
+    item::{Item, consumable::EffectType, container::{storage::{Storage, StorageError}, variants::{ContainerVariant, ContainerVariantType}}, weapon::WeaponSize},
     mob::{Gender, GenderError, GenderType, Stat, StatType, StatValue, affect::Affect, core::{Entity, EntitySize}, faction::{EntityFaction, FactionMut}, traits::MobMut},
     room::{Room, RoomArc, RoomWeak, environ::{SpecialEnvironment, Terrain}},
     string::UNNAMED,
@@ -495,21 +494,31 @@ impl MobMut for Player {
 mod player_tests {
     // use std::io::Cursor;
 
-    use crate::{get_operational_mock_life, mob::traits::{Mob, MobMut}, stabilize_threads, world::mock_world::get_operational_mock_world};
+    use crate::{get_operational_mock_life, mob::traits::{Mob, MobMut}, stabilize_threads, thread::life::CORE_HZ, world::mock_world::get_operational_mock_world};
 
     #[tokio::test]
     async fn hunger_drain() {
-        // let mut b: Vec<u8> = vec![];
-        // let mut s = Cursor::new(&mut b);
         let (w,c,(_,p),_) = get_operational_mock_world().await;
         get_operational_mock_life!(c,w);
         start_mock_broadcast_listener!(c);
         stabilize_threads!();
-        let c = c.out;
-        log::debug!("pre-set sat curr {}", p.read().await.satiation());
+
+        let sat_c = p.read().await.satiation().current();
+        assert!(sat_c > 99.94, "Pre-set satiation ({}%) is not ~100%!", sat_c);
+        
         p.write().await.satiation_mut().set_curr(50.334).set_drain(-0.2);
-        log::debug!("post-set sat curr {}", p.read().await.satiation());
-        stabilize_threads!(1_000);
-        log::debug!("end sat curr {}", p.read().await.satiation());
+
+        let mut sat_threshold_ok = false;
+        for x in 0..1_000 {
+            if p.read().await.satiation().current() < 50.0 {
+                sat_threshold_ok = true;
+                log::debug!("Satiation threshold reached in ~{x} ticks.");
+                break;
+            }
+            stabilize_threads!(1000 / unsafe { *CORE_HZ.get_unchecked() } as u64);
+        }
+        if !sat_threshold_ok {
+            panic!("Satiation did not fall below 50% within 1,000 ticks!");
+        }
     }
 }
