@@ -8,7 +8,7 @@ use nohash_hasher::BuildNoHashHasher;
 use tokio::{sync::{mpsc, oneshot}, time::{Duration, Instant, MissedTickBehavior, interval}};
 
 use crate::{
-    combat::{Battler, BattlerRec, CombatantMut, Resolution, punt, register_ok_battle}, identity::{IdentityMut, IdentityQuery, MachineId, MachineIdentity, uniq::Uuid}, io::Broadcast, item::container::storage::Storage, mob::{EntityArc, core::Entity}, room::{RoomArc, RoomPayload, locking::Exit}, string::styling::maybe_plural, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::{approx::ApproxI32, direction::Direction}, world::WorldArc
+    combat::{Battler, BattlerRec, CombatantMut, Resolution, punt, register_ok_battle}, identity::{IdentityMut, IdentityQuery, MachineId, MachineIdentity, uniq::Uuid}, io::Broadcast, item::container::storage::Storage, mob::{EntityArc, core::Entity}, room::{RoomArc, RoomPayload, locking::Exit}, string::styling::maybe_plural, thread::{SystemSignal, signal::{SigReceiver, SignalSenderChannels, SpawnType}}, translocate, util::{approx::ApproxI32, direction::Direction, time::hz2ms}, world::WorldArc
 };
 
 lazy_static! {
@@ -100,11 +100,11 @@ impl BattleStage {
 }
 
 /// Query seconds-as-ticks.
-pub fn sec_as_ticks(sec: u32, tick_type: TickType) -> usize {
+pub fn sec_as_ticks(sec: u32, tick_type: TickType) -> u64 {
     (sec * *(match tick_type {
         TickType::Core => CORE_HZ.get().expect("Core Hz not set?!"),
         TickType::Battle => BATTLE_HZ.get().expect("Battle Hz not set?!"),
-    }) as u32) as usize
+    }) as u32) as u64
 }
 
 enum LifeWorkerSignal {
@@ -129,12 +129,9 @@ pub(crate) async fn life(
     world: WorldArc,
     (core_hz, battle_hz) : (u8, u8),
 ) {
-    const fn core_hz_ms(core_hz: u8) -> u64 { 1000/ core_hz as u64 }
-    const fn battle_hz_ms(battle_hz: u8) -> u64 { 1_000/ battle_hz as u64 }
-
-    let mut tick_interval = interval(Duration::from_millis(core_hz_ms(core_hz)));
+    let mut tick_interval = interval(Duration::from_millis(hz2ms(core_hz)));
             tick_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    let mut battle_interval = interval(Duration::from_millis(battle_hz_ms(battle_hz)));
+    let mut battle_interval = interval(Duration::from_millis(hz2ms(battle_hz)));
             battle_interval.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
     // Battle stage & reporter for it…
