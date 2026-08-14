@@ -620,30 +620,32 @@ async fn direct_spawn_something(out: &SignalSenderChannels, what: SpawnType, num
 
 /// Attempt to transport [Entity] `from` `to` `via`.
 async fn transport_entity(who: EntityArc, from: RoomArc, to: RoomArc, via: Direction) {
-    let (m_id, mut e, r) = {
-        let w = who.write().await;
-        let r = from.read().await;
-        log::trace!("Transport request by {} from {} to {}",
-            w.id(), r.id(),
-            to.read().await.id()
-        );
-        (w.tick_id(), w, r)
-    };
-    // see if the entity can open a lock, if `via` is locked.
-    if let Some(exit) = r.exits.get(&via) {
-        match exit {
-            Exit::Locked { key_bp,.. }   |
-            Exit::LockedAL { key_bp,.. } => {
-                let Some(_) = e.inventory().find_id_by_name(key_bp) else { return /* no key, no go */;};
+    let m_id = {
+        let (m_id, mut e, r) = {
+            let w = who.write().await;
+            let r = from.read().await;
+            log::trace!("Transport request by {} from {} to {}",
+                w.id(), r.id(),
+                to.read().await.id()
+            );
+            (w.tick_id(), w, r)
+        };
+        // see if the entity can open a lock, if `via` is locked.
+        if let Some(exit) = r.exits.get(&via) {
+            match exit {
+                Exit::Locked { key_bp,.. }   |
+                Exit::LockedAL { key_bp,.. } => {
+                    let Some(_) = e.inventory().find_id_by_name(key_bp) else { return /* no key, no go */;};
+                }
+                _ => ()
             }
-            _ => ()
+        } else {
+            log::error!("Where did the exit at '{}' from '{}' go!?", via, r.id());
+            return ;
         }
-    } else {
-        log::error!("Where did the exit at '{}' from '{}' go!?", via, r.id());
-        return ;
-    }
+        m_id
+    };
 
-    drop(e); drop(r);
     translocate!(ent who, m_id, from, to);
 }
 
