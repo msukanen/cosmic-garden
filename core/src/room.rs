@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use tokio::{fs as async_fs, sync::{RwLock, Semaphore, mpsc}};
 
 use crate::{
-    combat::Battler, r#const::{CPU_CORES, PER_CORE_SEMAPHORE_BUCKET_SZ, ROOM_PULSE_NTH_TICK}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, rng::*, room::{
+    combat::Battler, r#const::{CPU_CORES, PER_CORE_SEMAPHORE_BUCKET_SZ, ROOM_PULSE_NTH_TICK}, error::CgError, identity::{IdentityQuery, MachineId, MachineIdentity, uniq::{StrUuid, UuidValidator}}, io::{Broadcast, room_fp}, item::{Item, container::{ContainerIterator, storage::{Storage, StorageError, StorageMut, StorageQueryError, StorageSpace}, variants::{ContainerVariant, ContainerVariantType}}}, mob::{EntityArc, ai::AiAction}, player::PlayerWeak, rng::*, room::{
         environ::*,
         locking::{Exit, ExitState}}, string::slug::Slugger, thread::SystemSignal, traits::{TickMeaning, Tickable}, util::direction::Direction, world::World
 };
@@ -520,7 +520,7 @@ impl Room {
 
 impl<'a> IntoIterator for &'a Room {
     type Item = (&'a String, &'a Item);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+    type IntoIter = ContainerIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         self.contents.into_iter()
