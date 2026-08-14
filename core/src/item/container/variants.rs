@@ -7,12 +7,9 @@ pub mod corpse; pub use corpse::{CorpseSpec, bulk_transfer};
 use crate::{
     r#const::SIZE_BALANCE, identity::uniq::Uuid, item::{
         Item, VolumeMut, Volumed, container::{
-            ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageMut, StorageSpace
+            ContainerIterator, ContainerSpec, DEFAULT_BACKPACK_SPEC, DEFAULT_CHEST_SPEC, DEFAULT_PLR_INV_SPEC, DEFAULT_POUCH_SPEC, DEFAULT_ROOM_SPACE_SPEC, StorageMut, StorageSpace
         }
-    },
-    room::environ::{SpecialEnvironment, Terrain},
-    string::{Describable, DescribableMut},
-    traits::{Reflector, TickMeaning, Tickable}
+    }, room::environ::{SpecialEnvironment, Terrain}, string::{Describable, DescribableMut}, traits::{Reflector, TickMeaning, Tickable}
 };
 
 #[derive(Debug, Clone, Copy, Deserialize, Serialize)]
@@ -194,7 +191,7 @@ impl StorageMut for ContainerVariant {
 
 impl<'a> IntoIterator for &'a ContainerVariant {
     type Item = (&'a String, &'a Item);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+    type IntoIter = ContainerIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
         match self {
