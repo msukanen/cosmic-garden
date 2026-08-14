@@ -337,12 +337,25 @@ impl StorageMut for ContainerSpec {
     }
 }
 
+pub struct ContainerIterator<'a> {
+    inner: std::collections::hash_map::Iter<'a, String, Item>,
+}
+
+impl<'a> Iterator for ContainerIterator<'a> {
+    type Item = (&'a String, &'a Item);
+    fn next(&mut self) -> Option<Self::Item> {
+        self.inner.next()
+    }
+}
+
 impl<'a> IntoIterator for &'a ContainerSpec {
     type Item = (&'a String, &'a Item);
-    type IntoIter = Box<dyn Iterator<Item = Self::Item> + 'a>;
+    type IntoIter = ContainerIterator<'a>;
 
     fn into_iter(self) -> Self::IntoIter {
-        Box::new(self.contents.iter())
+        ContainerIterator {
+            inner: self.contents.iter(),
+        }
     }
 }
 
