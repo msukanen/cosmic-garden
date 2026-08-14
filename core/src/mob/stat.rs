@@ -118,32 +118,52 @@ pub enum Stat {
     /// Mental power. Also "mana" in some contexts.
     MP { curr: StatValue, max: StatValue, drain: StatValue },
     /// Sanity, or insanity…
-    San { curr: StatValue, max: StatValue, drain: StatValue, room_env: SpecialEnvironment },
+    San { curr: StatValue, max: StatValue, drain: StatValue,
+        #[serde(skip, default = "stat_env_def")]
+        room_env: SpecialEnvironment
+    },
     /// Stamina.
-    SN { curr: StatValue, max: StatValue, drain: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
+    SN { curr: StatValue, max: StatValue, drain: StatValue,
+        #[serde(skip, default = "stat_env_def")]
+        room_env: SpecialEnvironment,
+        #[serde(skip, default)]
+        room_ter: Option<Terrain> },
     /// Braininess, IQ, etc.
-    Brn { curr: StatValue, max: StatValue, room_env: SpecialEnvironment },
+    Brn { curr: StatValue, max: StatValue,
+        #[serde(skip, default = "stat_env_def")]
+        room_env: SpecialEnvironment
+    },
     /// Strength.
-    Str { curr: StatValue, max: StatValue, room_env: SpecialEnvironment },
+    Str { curr: StatValue, max: StatValue,
+        #[serde(skip, default = "stat_env_def")]
+        room_env: SpecialEnvironment
+    },
     /// Nimbleness, dexterity, etc.
-    Nim { curr: StatValue, max: StatValue, room_env: SpecialEnvironment, room_ter: Option<Terrain> },
+    Nim { curr: StatValue, max: StatValue,
+        #[serde(skip, default = "stat_env_def")]
+        room_env: SpecialEnvironment,
+        #[serde(skip, default)]
+        room_ter: Option<Terrain>
+    },
     /// Reputation. Rep doesn't have max value, but it does clamp to -100 at bottom range.
     Rep { curr: StatValue },
     /// Satiation. Food level, etc.
     Sat { curr: StatValue, max: StatValue, drain: StatValue },
 }
 
+const fn stat_env_def() -> SpecialEnvironment { SPECIAL_ENVIRONMENT_DEFAULT }
+
 impl Stat {
     pub fn new(typ: StatType) -> Self {
         match typ {
-            StatType::Brn => Self::Brn { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT },
+            StatType::Brn => Self::Brn { curr: 100.0, max: 100.0, room_env: stat_env_def() },
             StatType::HP  => Self::HP { curr: 100.0, max: 100.0 },
-            StatType::Nim => Self::Nim { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
-            StatType::Str => Self::Str { curr: 100.0, max: 100.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT },
+            StatType::Nim => Self::Nim { curr: 100.0, max: 100.0, room_env: stat_env_def(), room_ter: None },
+            StatType::Str => Self::Str { curr: 100.0, max: 100.0, room_env: stat_env_def() },
             StatType::Rep => Self::Rep { curr: 100.0 },
             StatType::MP  => Self::MP { curr: 100.0, max: 100.0, drain: 0.0 },
-            StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT },
-            StatType::SN  => Self::SN { curr: 100.0, max: 100.0, drain: 0.0, room_env: SPECIAL_ENVIRONMENT_DEFAULT, room_ter: None },
+            StatType::San => Self::San { curr: 100.0, max: 100.0, drain: 0.0, room_env: stat_env_def() },
+            StatType::SN  => Self::SN { curr: 100.0, max: 100.0, drain: 0.0, room_env: stat_env_def(), room_ter: None },
             StatType::Sat => Self::Sat { curr: 100.0, max: 100.0, drain: -(DRAIN_EPSILON*17.4) },// ≈8h for 100→50
         }
     }
