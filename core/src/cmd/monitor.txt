@@ -1,0 +1,48 @@
+//! Monitor command - a snapshot dashboard for the engine.
+//!
+//! Because this is a MUD, we don't stream UI updates; we provide
+//! a clean, ANSI-formatted snapshot.
+
+use async_trait::async_trait;
+use crate::{
+    cmd::{Command, CommandCtx},
+    player_or_bust, tell_user,
+};
+
+pub struct MonitorCommand;
+
+#[async_trait]
+impl Command for MonitorCommand {
+    async fn exec(&self, ctx: &mut CommandCtx<'_>) {
+        let plr = player_or_bust!(ctx);
+        
+        // Clear screen (ANSI: ESC [ 2J) and Home cursor (ANSI: ESC [ H)
+        // Only if the client explicitly requests it (e.g., 'monitor clear')
+        if ctx.args == "clear" {
+            let _ = ctx.writer.write_all(b"\x1b[2J\x1b[H").await;
+        }
+
+        let mut out = String::from("<c cyan>=== MUD Engine Monitor ===</c>\n");
+        
+        // Snapshot the registry and room metrics
+        // (Assuming you have a way to query your world/registry)
+        // Here, we just output the structure of the data we'd pull.
+        out.push_str(&format!(
+            "{:<20} | {:<10} | {:<10}\n",
+            "Component", "Status", "Load"
+        ));
+        out.push_str(&"-".repeat(45));
+        out.push('\n');
+
+        // You'd inject your actual stat-gathering calls here.
+        // Example:
+        // for room in world.rooms() { ... }
+        out.push_str(&format!("{:<20} | {:<10} | {:<10}\n", "Room Registry", "OK", "0.02ms"));
+        out.push_str(&format!("{:<20} | {:<10} | {:<10}\n", "LifeThread (Tick)", "Active", "0.15ms"));
+        out.push_str(&format!("{:<20} | {:<10} | {:<10}\n", "Ent. Count", "1402", "N/A"));
+
+        out.push_str("\n<c yellow>Tip: Use 'monitor clear' to refresh in-place.</c>\n");
+
+        tell_user!(ctx.writer, "{}", out);
+    }
+}
