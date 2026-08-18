@@ -30,7 +30,7 @@ impl Display for PasswordError {
             Self::NetworkFailure(e) => write!(f, "Network failure: {:?}", e),
             Self::NoDigit => write!(f, "Password must contain at least one digit"),
             Self::NoLowercase => write!(f, "Password must contain at least one lowercase letter"),
-            Self::NoSpecial => write!(f, "Password must contain at leasat one special character"),
+            Self::NoSpecial => write!(f, "Password must contain at least one special character"),
             Self::NoUppercase => write!(f, "Password must contain at least one uppercase letter"),
             Self::TooShort => write!(f, "Password too short, minimum length is {MIN_PASSWD_LENGTH} characters"),
         }
