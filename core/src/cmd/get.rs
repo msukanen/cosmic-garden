@@ -82,14 +82,18 @@ mod cmd_get_tests {
         let (w,c,(mut state,p),_) = get_operational_mock_world().await;
         get_operational_mock_librarian!(c,w);
         get_operational_mock_life!(c,w);
-        stabilize_threads!();
+        stabilize_threads!(250);
         let c = c.out;
         c.life.send(SystemSignal::Spawn { what: SpawnType::Mob { id: "goblin".into() }, room: RoomPayload::Id("r-1".into()), reply: None }).ok();
         stabilize_threads!(25);
         p.write().await.natural_atk_mul = 20.0;
         state = ctx!(sup state, AttackCommand, "goblin",s,c,w);
-        // let combat roll a while …
-        stabilize_threads!(10_000);
+        let r = w.read().await.get_room_by_id("r-1").unwrap();
+        loop {
+            if r.read().await.get_entity_by_id("goblin").await.is_none() {
+                break;
+            }
+        }
         state = ctx!(state, LookCommand,"",s,c,w);
         state = ctx!(state, GetCommand,"all",s,c,w,|out:&str| out.contains("vacuum"));
         state = ctx!(state, GetCommand,"corpse",s,c,w,|out:&str| out.contains("undertaker"));

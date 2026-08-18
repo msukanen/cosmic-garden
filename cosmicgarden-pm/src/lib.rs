@@ -1,5 +1,5 @@
 //! Garden's proc-macro(s)…
-use mshc::{get_tagged_ident, maybe_field, pm_gen_container_match_method_to_field, req_field};
+use mshc::{get_tagged_ident, maybe_field, pm_gen_container_match, pm_gen_container_match_method_to_field, req_field};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{Data, DeriveInput, parse_macro_input};
@@ -9,9 +9,9 @@ fn generate_identity_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
         Data::Enum(data) => {
-            let ids = pm_gen_container_match_method_to_field(&data, &format_ident!("id"), 0);
-            let titles = pm_gen_container_match_method_to_field(&data, &format_ident!("title"), 0);
-            let tick_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("tick_id"), 0);
+            let ids = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("id"), 0);
+            let titles = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("title"), 0);
+            let tick_ids = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("tick_id"), 0);
             
             quote! {
                 impl crate::identity::IdentityQuery for #name {
@@ -80,9 +80,9 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
     let mut_impl =
     match &input.data {
         Data::Enum(data) => {
-            let set_id = pm_gen_container_match_method_to_field(&data, &format_ident!("set_id"), 2);
-            let title_mut = pm_gen_container_match_method_to_field(&data, &format_ident!("title_mut"), 0);
-            let set_title = pm_gen_container_match_method_to_field(&data, &format_ident!("set_title"), 1);
+            let set_id = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("set_id"), 2);
+            let title_mut = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("title_mut"), 0);
+            let set_title = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("set_title"), 1);
             quote! {
                 impl crate::identity::IdentityMut for #name {
                     fn set_id(&mut self, a: &str, b: bool) -> Result<(), crate::identity::IdError> { match self {#(#set_id),*} }
@@ -383,9 +383,9 @@ fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     match &input.data {
         Data::Enum(data) => {
-            let owner_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("owner"), 0);
-            let last_user_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("last_users"), 0);
-            let sources = pm_gen_container_match_method_to_field(&data, &format_ident!("source"), 0);
+            let owner_ids = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("owner"), 0);
+            let last_user_ids = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("last_users"), 0);
+            let sources = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("source"), 0);
             
             quote! {
                 impl crate::item::ownership::Owned for #name {
@@ -445,13 +445,13 @@ fn generate_ownedmut_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     match &input.data {
         Data::Enum(data) => {
-            let set_owner_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("change_owner"), 1);
-            let set_last_user_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("set_last_user"), 1);
-            let set_sources = pm_gen_container_match_method_to_field(&data, &format_ident!("set_source"), 3);
+            let set_owner_ids = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("change_owner"), 1);
+            let set_last_user_ids = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("set_last_user"), 1);
+            let set_sources = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("set_source"), 3);
 
-            let e_owner_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("erase_owner_r"), 0);
-            let e_last_user_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("erase_last_user_r"), 0);
-            let u_sources = pm_gen_container_match_method_to_field(&data, &format_ident!("unify_source_r"), 3);
+            let e_owner_ids = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("erase_owner_r"), 0);
+            let e_last_user_ids = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("erase_last_user_r"), 0);
+            let u_sources = pm_gen_container_match(&data, &format_ident!("loot"), &format_ident!("unify_source_r"), 3);
             quote! {
                 impl crate::item::ownership::OwnedMut for #name {
                     fn change_owner(&mut self, a: &str) { match self {#(#set_owner_ids),*}}
