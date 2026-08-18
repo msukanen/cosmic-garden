@@ -9,6 +9,7 @@ license = "MIT OR Apache-2.0"
 proc-macro = true
 
 [dependencies]
+mshc = "0.1.11"
 parse = "0.1.2"
 proc-macro2 = "1.0.107"
 quote = "1.0.47"

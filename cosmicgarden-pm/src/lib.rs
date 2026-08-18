@@ -1,110 +1,17 @@
 //! Garden's proc-macro(s)…
+use mshc::{get_tagged_ident, maybe_field, pm_gen_container_match_method_to_field, req_field};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
-use syn::{Attribute, Data, DataEnum, DeriveInput, Fields, Ident, parse_macro_input};
-
-fn is_tagged_attr(attr: &Attribute, what: &str, goal: &str) -> bool {
-    if attr.path().is_ident(what) {
-        let mut found = false;
-        let _ = attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident(goal) {
-                found = true;
-            }
-            Ok(())
-        });
-        return found;
-    }
-
-    false
-}
-
-fn gen_container_match(data: &DataEnum, method: &Ident, num_arg: u32) -> Vec<proc_macro2::TokenStream> {
-    data.variants.iter().map(|variant| {
-        let arg = match num_arg {
-            0 => quote!(),
-            1 => quote!(a),
-            2 => quote!(a,b),
-            3 => quote!(a,b,c),
-            _ => quote!(a,b,c,d),
-        };
-        let var_ident = &variant.ident;
-        match &variant.fields {
-            Fields::Unnamed(_) => {
-                quote! {
-                    Self::#var_ident(inner) => inner.#method(#arg)
-                }
-            }
-
-            Fields::Named(_) => {
-                quote! {
-                    Self::#var_ident { loot, ..} => loot.#method(#arg)
-                }
-            }
-
-            Fields::Unit => { quote! { Self::#var_ident => panic!("No Storage for weird stuff!") }}
-        }
-    }).collect()
-}
-
-macro_rules! get_tagged_ident {
-    ($data:ident, $tag:literal, $name:literal) => {
-        $data.fields.iter().find(|f| {
-            f.attrs.iter().any(|attr| is_tagged_attr(attr, $tag, $name)) ||
-            f.ident.as_ref().map_or(false, |i| i == $name)
-        })  .map(|f| f.ident.as_ref().unwrap())
-            .expect(&format!("Field '{}' not found in #name", $name))
-    };
-}
-
-macro_rules! req_field {
-    (named $data:ident, $field:literal) => {
-        $data.named.iter().find(|f| {
-            f.ident.as_ref().map_or(false, |i| i == $field)
-        })  .map(|f| f.ident.as_ref().unwrap())
-            .expect(&format!("No '{}' field found in #name", $field))
-    };
-
-    ($data:ident, $field:literal) => {
-        $data.fields.iter().find(|f| {
-            f.ident.as_ref().map_or(false, |i| i == $field)
-        })  .map(|f| f.ident.as_ref().unwrap())
-            .expect(&format!("No '{}' field found in #name", $field))
-    };
-}
-
-macro_rules! maybe_field {
-    (named $data:ident, $field:literal) => {
-        $data.named.iter().find(|f| {
-            f.ident.as_ref().map_or(false, |i| i == $field)
-        })  .map(|f| f.ident.as_ref().unwrap())
-    };
-
-    ($data:ident, $field:literal) => {
-        $data.fields.iter().find(|f| {
-            f.ident.as_ref().map_or(false, |i| i == $field)
-        })  .map(|f| f.ident.as_ref().unwrap())
-    };
-}
-
-fn get_struct_fields(input: &DeriveInput) -> &syn::FieldsNamed {
-    match &input.data {
-        Data::Struct(data) => match &data.fields {
-            syn::Fields::Named(fields) => fields,
-            _ => unimplemented!("Only named fields supported.")
-        },
-
-        _ => unimplemented!("Only structs supported.")
-    }
-}
+use syn::{Data, DeriveInput, parse_macro_input};
 
 /// Generate read-only [IdentityQuery] variant's internals.
 fn generate_identity_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
         Data::Enum(data) => {
-            let ids = gen_container_match(&data, &format_ident!("id"), 0);
-            let titles = gen_container_match(&data, &format_ident!("title"), 0);
-            let tick_ids = gen_container_match(&data, &format_ident!("tick_id"), 0);
+            let ids = pm_gen_container_match_method_to_field(&data, &format_ident!("id"), 0);
+            let titles = pm_gen_container_match_method_to_field(&data, &format_ident!("title"), 0);
+            let tick_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("tick_id"), 0);
             
             quote! {
                 impl crate::identity::IdentityQuery for #name {
@@ -173,9 +80,9 @@ pub fn identity_mut_derive(input: TokenStream) -> TokenStream {
     let mut_impl =
     match &input.data {
         Data::Enum(data) => {
-            let set_id = gen_container_match(&data, &format_ident!("set_id"), 2);
-            let title_mut = gen_container_match(&data, &format_ident!("title_mut"), 0);
-            let set_title = gen_container_match(&data, &format_ident!("set_title"), 1);
+            let set_id = pm_gen_container_match_method_to_field(&data, &format_ident!("set_id"), 2);
+            let title_mut = pm_gen_container_match_method_to_field(&data, &format_ident!("title_mut"), 0);
+            let set_title = pm_gen_container_match_method_to_field(&data, &format_ident!("set_title"), 1);
             quote! {
                 impl crate::identity::IdentityMut for #name {
                     fn set_id(&mut self, a: &str, b: bool) -> Result<(), crate::identity::IdError> { match self {#(#set_id),*} }
@@ -284,7 +191,7 @@ fn generate_volumed_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
         Data::Enum(data) => {
-            let sizes = gen_container_match(&data, &format_ident!("size"), 0);
+            let sizes = pm_gen_container_match_method_to_field(&data, &format_ident!("size"), 0);
             quote! {
                 impl crate::util::Volumed for #name {
                     fn size(&self) -> crate::item::StorageSpace { match self {#(#sizes),*}}
@@ -321,7 +228,7 @@ pub fn volume_mut_derive(input: TokenStream) -> TokenStream {
     let mut_impl = match &input.data
     {
         Data::Enum(data) => {
-            let set_sizes = gen_container_match(&data, &format_ident!("set_size"), 1);
+            let set_sizes = pm_gen_container_match_method_to_field(&data, &format_ident!("set_size"), 1);
 
             quote! {
                 impl crate::util::VolumeMut for #name {
@@ -357,18 +264,18 @@ pub fn storage_derive(input: TokenStream) -> TokenStream {
     let name = input.ident;
 
     if let Data::Enum(data) = input.data {
-        let can_holds = gen_container_match(&data, &format_ident!("can_hold"), 1);
-        let max_spaces = gen_container_match(&data, &format_ident!("max_space"), 0);
-        let req_spaces = gen_container_match(&data, &format_ident!("required_space"), 0);
-        let spaces = gen_container_match(&data, &format_ident!("space"), 0);
-        let try_inserts = gen_container_match(&data, &format_ident!("try_insert"), 1);
-        let contains = gen_container_match(&data, &format_ident!("contains"), 1);
-        let peek_ats = gen_container_match(&data, &format_ident!("peek_at"), 1);
-        let peek_at_muts = gen_container_match(&data, &format_ident!("peek_at_mut"), 1);
-        let takes = gen_container_match(&data, &format_ident!("take"), 1);
-        let take_bys = gen_container_match(&data, &format_ident!("take_by_name"), 1);
-        let find_id_by_names = gen_container_match(&data, &format_ident!("find_id_by_name"), 1);
-        let ejects = gen_container_match(&data, &format_ident!("eject_all"), 0);
+        let can_holds = pm_gen_container_match_method_to_field(&data, &format_ident!("can_hold"), 1);
+        let max_spaces = pm_gen_container_match_method_to_field(&data, &format_ident!("max_space"), 0);
+        let req_spaces = pm_gen_container_match_method_to_field(&data, &format_ident!("required_space"), 0);
+        let spaces = pm_gen_container_match_method_to_field(&data, &format_ident!("space"), 0);
+        let try_inserts = pm_gen_container_match_method_to_field(&data, &format_ident!("try_insert"), 1);
+        let contains = pm_gen_container_match_method_to_field(&data, &format_ident!("contains"), 1);
+        let peek_ats = pm_gen_container_match_method_to_field(&data, &format_ident!("peek_at"), 1);
+        let peek_at_muts = pm_gen_container_match_method_to_field(&data, &format_ident!("peek_at_mut"), 1);
+        let takes = pm_gen_container_match_method_to_field(&data, &format_ident!("take"), 1);
+        let take_bys = pm_gen_container_match_method_to_field(&data, &format_ident!("take_by_name"), 1);
+        let find_id_by_names = pm_gen_container_match_method_to_field(&data, &format_ident!("find_id_by_name"), 1);
+        let ejects = pm_gen_container_match_method_to_field(&data, &format_ident!("eject_all"), 0);
 
         TokenStream::from(quote! {
             impl crate::item::container::Storage for #name {
@@ -398,7 +305,7 @@ fn generate_describable_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
     let name = &input.ident;
     match &input.data {
         Data::Enum(data) => {
-            let descs = gen_container_match(&data, &format_ident!("desc"), 0);
+            let descs = pm_gen_container_match_method_to_field(&data, &format_ident!("desc"), 0);
             quote! {
                 impl crate::string::description::Describable for #name {
                     fn desc<'a>(&'a self) -> &'a str { match self {#(#descs),*}}
@@ -439,7 +346,7 @@ pub fn describable_mut_derive(input: TokenStream) -> TokenStream {
     let mut_impl = match &input.data
     {
         Data::Enum(data) => {
-            let set_descs = gen_container_match(&data, &format_ident!("set_desc"), 1);
+            let set_descs = pm_gen_container_match_method_to_field(&data, &format_ident!("set_desc"), 1);
             quote! {
                 impl crate::string::description::DescribableMut for #name {
                     fn set_desc(&mut self, a: &str) -> bool { match self {#(#set_descs),*}}
@@ -476,9 +383,9 @@ fn generate_owned_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     match &input.data {
         Data::Enum(data) => {
-            let owner_ids = gen_container_match(&data, &format_ident!("owner"), 0);
-            let last_user_ids = gen_container_match(&data, &format_ident!("last_users"), 0);
-            let sources = gen_container_match(&data, &format_ident!("source"), 0);
+            let owner_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("owner"), 0);
+            let last_user_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("last_users"), 0);
+            let sources = pm_gen_container_match_method_to_field(&data, &format_ident!("source"), 0);
             
             quote! {
                 impl crate::item::ownership::Owned for #name {
@@ -538,13 +445,13 @@ fn generate_ownedmut_impl(input: &DeriveInput) -> proc_macro2::TokenStream {
 
     match &input.data {
         Data::Enum(data) => {
-            let set_owner_ids = gen_container_match(&data, &format_ident!("change_owner"), 1);
-            let set_last_user_ids = gen_container_match(&data, &format_ident!("set_last_user"), 1);
-            let set_sources = gen_container_match(&data, &format_ident!("set_source"), 3);
+            let set_owner_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("change_owner"), 1);
+            let set_last_user_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("set_last_user"), 1);
+            let set_sources = pm_gen_container_match_method_to_field(&data, &format_ident!("set_source"), 3);
 
-            let e_owner_ids = gen_container_match(&data, &format_ident!("erase_owner_r"), 0);
-            let e_last_user_ids = gen_container_match(&data, &format_ident!("erase_last_user_r"), 0);
-            let u_sources = gen_container_match(&data, &format_ident!("unify_source_r"), 3);
+            let e_owner_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("erase_owner_r"), 0);
+            let e_last_user_ids = pm_gen_container_match_method_to_field(&data, &format_ident!("erase_last_user_r"), 0);
+            let u_sources = pm_gen_container_match_method_to_field(&data, &format_ident!("unify_source_r"), 3);
             quote! {
                 impl crate::item::ownership::OwnedMut for #name {
                     fn change_owner(&mut self, a: &str) { match self {#(#set_owner_ids),*}}
