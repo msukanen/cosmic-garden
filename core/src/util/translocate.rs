@@ -1,5 +1,5 @@
 //! Hauling things.
-/// Translocate player to another place.
+/// Translocate player or an entity to another place, likely not another time though, but who knows for certain…
 /// 
 /// # Args
 /// - `$plr`— [Player] arc<rwlock>
